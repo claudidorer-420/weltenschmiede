@@ -1,0 +1,136 @@
+rules_version = '2';
+
+// Weltenschmiede – Firestore-Sicherheitsregeln
+// In der Firebase-Konsole unter Firestore → Regeln komplett einfügen und „Veröffentlichen“.
+//
+// Prinzip:
+//  - Jede Kampagne hat Mitglieder (campaigns/{cid}/members/{uid}) mit Rolle 'gm' oder 'player'.
+//  - Spieler sehen nur Inhalte mit visibility == 'players'. SL-Geheimnisse liegen in eigenen Sammlungen.
+//  - Persönliche Daten (Tagebuch, Charaktere, KI-Archiv, Einstellungen) gehören allein dem Nutzer.
+//  - Beitritt nur mit gültigem Einladungscode (invites/{code}), den nur die SL erzeugen kann.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function memberPath(cid) { return /databases/$(database)/documents/campaigns/$(cid)/members/$(request.auth.uid); }
+    function isMember(cid) { return signedIn() && exists(memberPath(cid)); }
+    function isGM(cid) { return isMember(cid) && get(memberPath(cid)).data.role == 'gm'; }
+    function campaignDoc(cid) { return get(/databases/$(database)/documents/campaigns/$(cid)).data; }
+    function inviteDoc(code) { return get(/databases/$(database)/documents/invites/$(code)).data; }
+    function playerVisible() { return resource.data.visibility == 'players'; }
+
+    // ── Nutzer ──────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && me() == userId;
+    }
+    match /users/{userId}/{document=**} {
+      allow read, write: if signedIn() && me() == userId;
+    }
+    // Charakterbögen: Mitglieder der verknüpften Kampagne dürfen lesen, deren SL darf sie (z. B. TP) ändern.
+    match /users/{userId}/characters/{charId} {
+      allow read: if signedIn() && resource.data.campaignId is string && isMember(resource.data.campaignId);
+      allow update: if signedIn() && resource.data.campaignId is string && isGM(resource.data.campaignId)
+                    && request.resource.data.campaignId == resource.data.campaignId;
+    }
+
+    // ── Einladungscodes (nur per exaktem Code abrufbar, nicht auflistbar) ──
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow create, update: if signedIn() && isGM(request.resource.data.campaignId);
+      allow delete: if signedIn() && isGM(resource.data.campaignId);
+    }
+
+    // ── Kampagnen ───────────────────────────────────────────────────────
+    match /campaigns/{cid} {
+      allow create: if signedIn() && request.resource.data.ownerUid == me();
+      allow read: if isMember(cid) || (signedIn() && resource.data.ownerUid == me());
+      // SL darf alles; Spieler dürfen sich nur selbst aus der „Wer ist dran?“-Liste (Play-by-Post) austragen.
+      allow update: if isGM(cid)
+        || (isMember(cid)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pbpWaiting'])
+            && request.resource.data.pbpWaiting.toSet().difference(resource.data.pbpWaiting.toSet()).size() == 0);
+      allow delete: if signedIn() && resource.data.ownerUid == me();
+
+      match /members/{memberId} {
+        allow read: if isMember(cid);
+        allow create: if signedIn() && memberId == me() && (
+          (request.resource.data.role == 'gm' && campaignDoc(cid).ownerUid == me())
+          || (request.resource.data.inviteCode is string
+              && inviteDoc(request.resource.data.inviteCode).campaignId == cid
+              && inviteDoc(request.resource.data.inviteCode).role == request.resource.data.role)
+        );
+        allow update: if isGM(cid) || (signedIn() && memberId == me() && request.resource.data.role == resource.data.role);
+        allow delete: if isGM(cid) || (signedIn() && memberId == me());
+      }
+
+      // Inhalte mit Sichtbarkeit
+      match /notes/{id}    { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
+      match /sessions/{id} { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
+      match /quests/{id}   { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
+      match /maps/{id}     { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
+      match /pins/{id}     { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
+      match /handouts/{id} { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
+
+      // Tokens: Spieler dürfen ihre eigenen Tokens verschieben (nur x/y).
+      match /tokens/{id} {
+        allow read: if isGM(cid) || (isMember(cid) && playerVisible());
+        allow create, delete: if isGM(cid);
+        allow update: if isGM(cid)
+          || (isMember(cid) && resource.data.ownerUid == me()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['x', 'y']));
+      }
+
+      // Anhänge (Bilder), in Stücken gespeichert
+      match /files/{fid} {
+        allow read: if isGM(cid) || (isMember(cid) && playerVisible());
+        allow create: if isGM(cid) || (isMember(cid) && request.resource.data.createdBy == me() && request.resource.data.visibility == 'players');
+        allow update, delete: if isGM(cid) || (isMember(cid) && resource.data.createdBy == me());
+        match /chunks/{n} {
+          allow read: if isGM(cid) || (isMember(cid) && get(/databases/$(database)/documents/campaigns/$(cid)/files/$(fid)).data.visibility == 'players');
+          allow write: if isGM(cid) || (isMember(cid) && getAfter(/databases/$(database)/documents/campaigns/$(cid)/files/$(fid)).data.createdBy == me());
+        }
+      }
+
+      // Nur Spielleitung
+      match /secrets/{id}    { allow read, write: if isGM(cid); }
+      match /gm/{id}         { allow read, write: if isGM(cid); }
+      match /trash/{id}      { allow read, write: if isGM(cid); }
+      match /monsters/{id}   { allow read, write: if isGM(cid); }
+      match /encounters/{id} { allow read, write: if isGM(cid); }
+
+      // Kampf: vollständiger Zustand nur SL, öffentliche Projektion für alle Mitglieder
+      match /combat/{id} {
+        allow read: if isGM(cid) || (isMember(cid) && id == 'public');
+        allow write: if isGM(cid);
+      }
+
+      // Spieltisch
+      match /chat/{id} {
+        allow read: if isMember(cid);
+        allow create: if isMember(cid) && request.resource.data.uid == me();
+        allow delete: if isGM(cid);
+      }
+      match /whispers/{id} {
+        allow read: if isGM(cid) || (isMember(cid) && me() in resource.data.participants);
+        allow create: if isMember(cid) && request.resource.data.from == me() && me() in request.resource.data.participants;
+        allow delete: if isGM(cid);
+      }
+      match /posts/{id} {
+        allow read: if isMember(cid);
+        allow create: if isMember(cid) && request.resource.data.uid == me()
+                      && (request.resource.data.kind != 'narration' || isGM(cid));
+        allow update, delete: if isGM(cid) || (isMember(cid) && resource.data.uid == me());
+      }
+      match /signals/{uid} {
+        allow read: if isGM(cid) || (signedIn() && uid == me());
+        allow write: if isMember(cid) && uid == me();
+      }
+      match /party/{id} {
+        allow read, write: if isMember(cid);
+      }
+    }
+  }
+}

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>Weltenschmiede</title>
+  <meta name="description" content="D&D 5e Kampagnen-Werkstatt: Codex, KI-Weltenbau, Encounter, Karten und Online-Spieltisch.">
+  <meta name="theme-color" content="#1e1e1e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "preact": "https://cdn.jsdelivr.net/npm/preact@10.29.8/dist/preact.module.js",
+      "preact/hooks": "https://cdn.jsdelivr.net/npm/preact@10.29.8/hooks/dist/hooks.module.js",
+      "htm": "https://cdn.jsdelivr.net/npm/htm@3.1.1/dist/htm.module.js"
+    }
+  }
+  </script>
+  <script src="js/config.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div class="boot">
+      <svg viewBox="0 0 512 512" width="72" height="72" aria-hidden="true"><use href="icons/icon.svg#emblem"/></svg>
+      <div class="boot-title">Weltenschmiede</div>
+      <div class="boot-sub">Die Esse wird angeheizt …</div>
+    </div>
+  </div>
+  <noscript>Die Weltenschmiede benötigt JavaScript.</noscript>
+  <script type="module" src="js/main.js"></script>
+  <script>
+    // Fallback, falls ES-Module / Import-Maps nicht unterstützt werden (sehr alte Browser)
+    setTimeout(function () {
+      if (!window.__WS_BOOTED) {
+        var el = document.querySelector('.boot-sub');
+        if (el) el.textContent = 'Lädt ungewöhnlich lange … Prüfe die Internetverbindung (beim ersten Start nötig) oder aktualisiere den Browser.';
+      }
+    }, 9000);
+  </script>
+</body>
+</html>
