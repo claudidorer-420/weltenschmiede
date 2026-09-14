@@ -60,6 +60,12 @@ for (const file of files) {
   for (const m of src.matchAll(/import\(\s*['"`](\.[^'"`$]+)['"`]\s*\)/g)) {
     try { statSync(resolve(dirname(file), m[1])); } catch { fail(`${rel}: dynamischer Import fehlt: ${m[1]}`); }
   }
+  // Komponenten in htm-Vorlagen (<${Name} …>) müssen importiert oder in der Datei definiert sein
+  const used = new Set([...src.matchAll(/<\$\{([A-Z][A-Za-z0-9_]*)\}/g)].map((m) => m[1]));
+  for (const name of used) {
+    const rest = src.replace(new RegExp(`<\\$\\{${name}\\}`, 'g'), '').replace(new RegExp(`<\\/\\$\\{${name}\\}>`, 'g'), '');
+    if (!new RegExp(`\\b${name}\\b`).test(rest)) fail(`${rel}: Komponente „${name}“ wird benutzt, ist aber weder importiert noch definiert`);
+  }
 }
 
 // Ansichten-Registrierung in shell.js prüfen

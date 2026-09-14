@@ -4,12 +4,12 @@ import { useStore } from '../core/store.js';
 import {
   app, vault, isGM, isRealGM, myUid, getIndex, noteById, updateNote, renameNote, moveNote, deleteNote, duplicateNote,
   createNote, createFolder, renameFolder, deleteFolder, allFolders, watchSecret, saveSecret, searchNotes, restoreNote,
-  purgeNote, setNoteVisibility, col,
+  purgeNote, setNoteVisibility, col, setFolderMeta,
 } from '../core/app.js';
 import { ws, openNote, openView, setEditMode, forgetNote, openSearch, currentOf, isMobile } from '../core/workspace.js';
 import { settings, updateSettings } from '../core/settings.js';
 import {
-  Icon, IconBtn, Btn, MarkdownView, openMenu, confirmDialog, promptDialog, toast, Empty, VisibilityBadge, openModal,
+  Icon, IconBtn, Btn, Field, MarkdownView, openMenu, confirmDialog, promptDialog, toast, Empty, VisibilityBadge, openModal,
   DictateButton, scrollToHeading, handleMarkdownClick, pickFiles, openLightbox, AutoTextarea,
 } from '../ui/components.js';
 import { ViewFrame } from '../ui/frame.js';
@@ -107,7 +107,7 @@ export function noteMenu(e, n) {
     gm && { label: 'Duplizieren', icon: 'copy', onClick: async () => { const c = await duplicateNote(n.id); if (c) openNote(c.id); } },
     gm && { label: 'Als Handout an Spieler senden', icon: 'scroll', onClick: () => shareAsHandout(n) },
     { divider: true },
-    { label: bm ? 'Lesezeichen entfernen' : 'Lesezeichen setzen', icon: 'bookmark', onClick: () => toggleBookmark(n.id) },
+    { label: bm ? 'Nicht mehr anheften' : 'Oben im Explorer anheften', icon: 'bookmark', onClick: () => toggleBookmark(n.id) },
     { label: '[[Link]] kopieren', icon: 'link', onClick: () => { copyText(`[[${n.title}]]`); toast('Link kopiert'); } },
     { label: 'Im Graph zeigen', icon: 'graph', onClick: () => openView('graph', { focus: n.id }) },
     { label: 'Als Markdown herunterladen', icon: 'download', onClick: () => download(`${n.title}.md`, n.body || '', 'text/markdown;charset=utf-8') },
@@ -117,9 +117,52 @@ export function noteMenu(e, n) {
   ]);
 }
 
+// ── Ordner markieren: Farbe, Symbol und Etikett (wie die Spalten bei den Quests) ──
+export const FOLDER_COLORS = [['Rot', '#ef5a5f'], ['Orange', '#ff9a3c'], ['Gelb', '#f5c542'], ['Grün', '#3dd68c'], ['Türkis', '#2ec7c9'], ['Blau', '#4d8dff'], ['Lila', '#a78bfa'], ['Pink', '#ff7ab6'], ['Gold', '#e0b24a'], ['Grau', '#9a9a9a']];
+const FOLDER_ICONS = ['folder', 'castle', 'crown', 'landmark', 'map-pin', 'map', 'globe', 'mountain', 'trees', 'ship', 'store', 'beer', 'users', 'user', 'mask', 'ghost', 'skull', 'swords', 'shield', 'gem', 'coins', 'scroll', 'book', 'feather', 'calendar', 'list-checks', 'target', 'compass', 'sparkles', 'flame', 'star', 'key', 'lock', 'anvil'];
+const FOLDER_LABELS = ['Aktuell', 'Wichtig', 'In Arbeit', 'Fertig', 'Idee', 'Geheim', 'Archiv'];
+const KIND_ICON = {
+  npc: 'user', person: 'user', charakter: 'user', ort: 'map-pin', stadt: 'castle', dorf: 'castle', region: 'globe', reich: 'crown', land: 'globe',
+  laden: 'store', geschaeft: 'store', taverne: 'beer', gasthaus: 'beer', quest: 'target', auftrag: 'target', monster: 'ghost', kreatur: 'ghost',
+  fraktion: 'shield', organisation: 'shield', gott: 'sparkles', gottheit: 'sparkles', gegenstand: 'gem', item: 'gem', artefakt: 'gem',
+  sitzung: 'calendar', session: 'calendar', abenteuer: 'compass', handout: 'scroll', dungeon: 'skull', schiff: 'ship', ereignis: 'flame',
+};
+
+function FolderStyleForm({ close, path, cur }) {
+  const [f, setF] = useState({ color: cur.color || '', icon: cur.icon || '', label: cur.label || '' });
+  const name = path.split('/').pop();
+  return html`<div class="modal-body stack">
+    <div class="tree-row folder preview-row" style=${f.color ? { '--fc': f.color } : {}}>
+      <span class="chev"><${Icon} name="chevron-right" size=${14} /></span><span class="f-icon"><${Icon} name=${f.icon || 'folder'} size=${15} /></span>
+      <span class="name folder-name">${name}</span>${f.label ? html`<span class="f-label">${f.label}</span>` : null}<span class="f-count">12</span>
+    </div>
+    <${Field} label="Farbe"><div class="color-pick">
+      <button type="button" title="Keine" class=${!f.color ? 'active' : ''} style="background:var(--bg-3)" onClick=${() => setF({ ...f, color: '' })}></button>
+      ${FOLDER_COLORS.map(([n, c]) => html`<button type="button" title=${n} class=${f.color === c ? 'active' : ''} style=${{ background: c }} onClick=${() => setF({ ...f, color: c })}></button>`)}
+    </div><//>
+    <${Field} label="Symbol"><div class="icon-pick">${FOLDER_ICONS.map((ic) => html`<button type="button" title=${ic} class=${(f.icon || 'folder') === ic ? 'active' : ''} onClick=${() => setF({ ...f, icon: ic === 'folder' ? '' : ic })}><${Icon} name=${ic} size=${17} /></button>`)}</div><//>
+    <${Field} label="Etikett (optional)" hint="Kurzer Marker wie bei den Quest-Spalten, z. B. „Aktuell“ für das Gebiet, in dem die Gruppe gerade ist.">
+      <input class="input" value=${f.label} maxlength="16" onInput=${(e) => setF({ ...f, label: e.target.value })} placeholder="z. B. Aktuell" />
+      <div class="chips" style="margin-top:6px">${FOLDER_LABELS.map((l) => html`<button type="button" class=${`chip${f.label === l ? ' selected' : ' suggest'}`} onClick=${() => setF({ ...f, label: f.label === l ? '' : l })}>${l}</button>`)}</div>
+    <//>
+  </div>
+  <div class="modal-foot">
+    <${Btn} kind="ghost" onClick=${() => close({ color: '', icon: '', label: '' })}>Zurücksetzen<//><span class="grow"></span>
+    <${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" icon="check" onClick=${() => close(f)}>Speichern<//>
+  </div>`;
+}
+
+async function folderStyleDialog(path) {
+  const cur = app.get().campaign?.folderMeta?.[path] || {};
+  const r = await openModal(({ close }) => html`<${FolderStyleForm} close=${close} path=${path} cur=${cur} />`, { title: `Ordner „${path.split('/').pop()}“ markieren`, icon: 'palette' });
+  if (r) await setFolderMeta(path, r);
+}
+
 function folderMenu(e, path) {
   const inside = () => Object.values(vault.get().notes).filter((n) => (n.folder || '') === path || (n.folder || '').startsWith(`${path}/`));
   openMenu(e, [
+    { label: 'Farbe, Symbol & Etikett …', icon: 'palette', onClick: () => folderStyleDialog(path) },
+    { divider: true },
     { label: 'Neue Notiz hier', icon: 'file-plus', onClick: () => newNoteQuick(path) },
     { label: 'Aus Vorlage …', icon: 'file-text', onClick: () => templateMenu(e, path) },
     { label: 'Neuer Unterordner …', icon: 'folder-plus', onClick: () => newFolderDialog(path) },
@@ -220,14 +263,14 @@ function VaultFooter() {
 }
 
 function buildTree(notes, files, folders) {
-  const root = { name: '', path: '', folders: new Map(), notes: [], files: [] };
+  const root = { name: '', path: '', folders: new Map(), notes: [], files: [], count: 0 };
   const ensure = (path) => {
     if (!path) return root;
     let node = root;
     let p = '';
     for (const part of path.split('/')) {
       p = p ? `${p}/${part}` : part;
-      if (!node.folders.has(part)) node.folders.set(part, { name: part, path: p, folders: new Map(), notes: [], files: [] });
+      if (!node.folders.has(part)) node.folders.set(part, { name: part, path: p, folders: new Map(), notes: [], files: [], count: 0 });
       node = node.folders.get(part);
     }
     return node;
@@ -235,6 +278,11 @@ function buildTree(notes, files, folders) {
   folders.forEach(ensure);
   notes.forEach((n) => ensure(n.folder || '').notes.push(n));
   files.forEach((f) => ensure(f.folder || '').files.push(f));
+  const tally = (node) => {
+    node.count = node.notes.length + [...node.folders.values()].reduce((a, c) => a + tally(c), 0);
+    return node.count;
+  };
+  tally(root);
   return root;
 }
 
@@ -253,14 +301,34 @@ function FileExplorer() {
     try { return JSON.parse(localStorage.getItem(`ws.expanded.${cid}`) || '{}'); } catch { return {}; }
   });
   const [dragOver, setDragOver] = useState(null);
+  const [q, setQ] = useState('');
+  const bookmarks = useStore(settings, (s) => s.bookmarks || []);
+  const meta = campaign?.folderMeta || {};
+  const query = q.trim().toLowerCase();
   const persistExp = (next) => {
     setExpanded(next);
     localStorage.setItem(`ws.expanded.${cid}`, JSON.stringify(next));
   };
   const tree = useMemo(() => {
     const idx = getIndex();
-    return buildTree(idx.notes, idx.files, gm ? allFolders() : []);
-  }, [v, campaign?.folders, gm]);
+    let notes = idx.notes;
+    let files = idx.files;
+    let folders = gm ? allFolders() : [];
+    if (query) {
+      const hit = (s) => String(s || '').toLowerCase().includes(query);
+      notes = notes.filter((n) => hit(n.title) || (n.aliases || []).some(hit) || hit(n.folder));
+      files = files.filter((f) => hit(f.name));
+      folders = folders.filter(hit);
+    }
+    return buildTree(notes, files, folders);
+  }, [v, campaign?.folders, gm, query]);
+  const pinned = useMemo(() => bookmarks.map((id) => getIndex().byId.get(id)).filter(Boolean), [bookmarks, v]);
+  const allPaths = () => {
+    const out = {};
+    const walk = (n) => n.folders.forEach((c) => { out[c.path] = true; walk(c); });
+    walk(tree);
+    return out;
+  };
 
   useEffect(() => {
     const n = activeId && vault.get().notes[activeId];
@@ -273,6 +341,11 @@ function FileExplorer() {
       if (!next[p]) { next[p] = true; changed = true; }
     }
     if (changed) persistExp(next);
+  }, [activeId]);
+  useEffect(() => {
+    if (!activeId) return undefined;
+    const t = setTimeout(() => document.querySelector('.sidebar .tree-row.active')?.scrollIntoView({ block: 'nearest' }), 80);
+    return () => clearTimeout(t);
   }, [activeId]);
 
   const sortNotes = (arr) => {
@@ -309,26 +382,33 @@ function FileExplorer() {
     ${node.files.map(fileRow)}`;
 
   const folderRow = (f) => {
-    const open = !!expanded[f.path];
+    const open = query ? true : !!expanded[f.path];
+    const m = meta[f.path] || {};
     return html`<div key=${`f:${f.path}`}>
-      <div class=${`tree-row${dragOver === f.path ? ' drop' : ''}`} onClick=${() => persistExp({ ...expanded, [f.path]: !open })}
+      <div class=${`tree-row folder${dragOver === f.path ? ' drop' : ''}`} style=${m.color ? { '--fc': m.color } : null} title=${f.path}
+        onClick=${() => !query && persistExp({ ...expanded, [f.path]: !open })}
         onContextMenu=${(e) => gm && folderMenu(e, f.path)}
         onDragOver=${(e) => { if (gm) { e.preventDefault(); setDragOver(f.path); } }} onDragLeave=${() => setDragOver(null)} onDrop=${(e) => dropOn(e, f.path)}>
         <span class=${`chev${open ? ' open' : ''}`}><${Icon} name="chevron-right" size=${14} /></span>
+        <span class="f-icon"><${Icon} name=${m.icon || (open ? 'folder-open' : 'folder')} size=${15} /></span>
         <span class="name folder-name">${f.name}</span>
+        ${m.label ? html`<span class="f-label">${m.label}</span>` : null}
+        ${f.count ? html`<span class="f-count">${f.count}</span>` : null}
+        ${gm ? html`<button type="button" class="f-more" title="Ordner markieren & Aktionen" onClick=${(e) => { e.stopPropagation(); folderMenu(e, f.path); }}><${Icon} name="more-horizontal" size=${15} /></button>` : null}
       </div>
-      ${open ? html`<div class="tree-children">${children(f)}</div>` : null}
+      ${open ? html`<div class="tree-children" style=${m.color ? { borderLeftColor: `color-mix(in srgb, ${m.color} 50%, transparent)` } : null}>${children(f)}</div>` : null}
     </div>`;
   };
   const noteRow = (n) => {
     const color = groupColor(n, groups);
-    return html`<div key=${n.id} class=${`tree-row${n.id === activeId ? ' active' : ''}`} title=${n.title} draggable=${gm}
+    const kindIcon = KIND_ICON[n.kind];
+    return html`<div key=${n.id} class=${`tree-row${n.id === activeId ? ' active' : ''}`} title=${n.folder ? `${n.folder}/${n.title}` : n.title} draggable=${gm}
         onDragStart=${(e) => e.dataTransfer.setData('text/x-note', n.id)}
         onClick=${(e) => openNote(n.id, { newTab: e.ctrlKey || e.metaKey })}
         onAuxClick=${(e) => e.button === 1 && openNote(n.id, { newTab: true })}
         onContextMenu=${(e) => noteMenu(e, n)}>
       <span class="chev"></span>
-      ${color ? html`<span class="dot" style=${{ background: color }}></span>` : null}
+      ${color ? html`<span class="dot" style=${{ background: color }}></span>` : kindIcon ? html`<span class="k-icon"><${Icon} name=${kindIcon} size=${13} /></span>` : null}
       <span class="name">${n.title}</span>
       ${gm && n.visibility === 'players' ? html`<span class="lock" title="Für Spieler sichtbar"><${Icon} name="users" size=${12} /></span>` : null}
     </div>`;
@@ -344,11 +424,20 @@ function FileExplorer() {
       <${IconBtn} icon="folder-plus" title="Neuer Ordner" onClick=${() => newFolderDialog('')} />
       <${IconBtn} icon="sort" title="Sortierung" onClick=${sortMenu} />
       <${IconBtn} icon="file-text" title="Neue Notiz aus Vorlage" onClick=${(e) => templateMenu(e, '')} />
+      <${IconBtn} icon="chevrons-up-down" title="Alle ausklappen" onClick=${() => persistExp(allPaths())} />
       <${IconBtn} icon="chevrons-down-up" title="Alle einklappen" onClick=${() => persistExp({})} />
     </div>` : null}
+    <div class="tree-filter">
+      <${Icon} name="filter" size=${14} />
+      <input class="input" value=${q} onInput=${(e) => setQ(e.target.value)} placeholder="Notizen & Ordner filtern …" />
+      ${q ? html`<${IconBtn} icon="x" size=${14} title="Filter löschen" onClick=${() => setQ('')} />` : null}
+    </div>
     <div class=${`sidebar-body tree${dragOver === '' ? ' drop' : ''}`} onDragOver=${(e) => { if (gm) e.preventDefault(); }} onDrop=${(e) => dropOn(e, '')}>
+      ${pinned.length && !query ? html`<div class="tree-section"><div class="tree-sec-title"><${Icon} name="bookmark" size=${12} />Angeheftet</div>${pinned.map(noteRow)}</div>` : null}
       ${children(tree)}
-      ${empty ? html`<div class="tree-empty">${gm ? html`Noch keine Notizen.<br /><br /><${Btn} size="sm" icon="file-plus" onClick=${() => newNoteQuick()}>Erste Notiz<//> <${Btn} size="sm" icon="upload" onClick=${() => openView('import')}>Obsidian importieren<//>` : 'Die Spielleitung hat noch nichts für dich freigegeben.'}</div>` : null}
+      ${query && empty ? html`<div class="tree-empty">Nichts gefunden für „${q}“.</div>` : null}
+      ${!query && empty ? html`<div class="tree-empty">${gm ? html`Noch keine Notizen.<br /><br /><${Btn} size="sm" icon="file-plus" onClick=${() => newNoteQuick()}>Erste Notiz<//> <${Btn} size="sm" icon="upload" onClick=${() => openView('import')}>Obsidian importieren<//>` : 'Die Spielleitung hat noch nichts für dich freigegeben.'}</div>` : null}
+      ${gm && !query && !empty && !Object.keys(meta).length ? html`<div class="tree-hint"><${Icon} name="palette" size=${13} /> Tipp: Ordner über ⋯ farbig markieren, mit Symbol und Etikett.</div>` : null}
     </div>`;
 }
 
@@ -932,7 +1021,7 @@ function NoteEditor({ note }) {
       onClick=${(e) => updateSuggest(e.target)}
       onBlur=${() => { if (pending.current) save.flush(textRef.current); setTimeout(() => setSug(null), 180); }}
       placeholder="Schreibe los … [[ verlinkt Notizen · #tag · 1d20 wird klickbar · > [!vorlesen] für Vorlesetexte" />
-    ${sug && sug.items.length ? html`<div class="suggest" style=${{ top: `${sug.top}px`, left: `${sug.left}px` }}>
+    ${sug && sug.items.length ? html`<div class="ac-pop" style=${{ top: `${sug.top}px`, left: `${sug.left}px` }}>
       ${sug.items.map((it, i) => html`<div class=${`suggest-item${i === sug.act ? ' active' : ''}`} onMouseDown=${(e) => { e.preventDefault(); pick(it.value); }}>
         <${Icon} name=${it.icon} size=${15} /><span class="ellipsis">${it.label}</span>${it.sub ? html`<span class="path">${it.sub}</span>` : null}
       </div>`)}

@@ -16,17 +16,23 @@ Statische PWA ohne Build‑Schritt (GitHub Pages). UI komplett auf **Deutsch**.
 - `js/core/ai.js` – Anbieter (Gemini/OpenAI/OpenRouter/eigener Server per `fetch` + SSE; Claude über das **offizielle Anthropic‑SDK** mit `dangerouslyAllowBrowser`, Streaming, `fallbacks: 'default'` für Opus 5/Fable 5.1; kein `temperature` bei Claude‑5‑Modellen), Modellkatalog, `TASKS` mit Empfehlungen, `generate()`, `generateImage()`.
 - `js/core/prompts.js` – alle deutschen Prompts + Codex‑Kontext.
 - `js/ui/aiout.js` – `useGeneration()` (Streaming, Nachbessern, Fortsetzen) + Speicher‑Dialoge.
+- `js/ui/account.js` – Konto‑Menü (Avatar im Ribbon/Übersicht), Abmelden (optional mit Gerätebereinigung), Rolle wechseln, Einstellungen als Dialog.
+- Start: `views/auth.js` (Rollenwahl Spielleitung/Spieler → Name + Geheimwort) → `views/home.js` `Lobby` (ohne offene Kampagne) → Kampagne. Firebase‑Config ist in `js/config.js` fest eingebaut; `#/offline` startet den Offline‑Modus (lokal, ohne Konto).
+- Würfel: `lib/dice.js` `rollDetailed()` (jeder physische Würfel + Effekte wie Vorteil, Halblingsglück, Verlässliches Talent, Großwaffen …), `core/rolls.js` `prepareRoll/commitRoll/doRoll`, `ui/dicetray.js` (Animation: `DiceTray`, schwebende `DiceOverlay` für alle Würfe).
+- Charaktere: `data/chargen.js` (Völker/Spezies, Hintergründe, Klassen je Regelstand, Talente, Rüstungen, Waffen, Zaubertabellen, `charMods()`), `views/charwizard.js` (Assistent, Stufenaufstieg, `derive()`, Übernahme alter Bögen), `views/characters.js` (Bogen: Werte fest, Spielstand änderbar).
+- Karten: `views/mapeditor.js` (Dungeon‑Editor, Typ `scrawl`: Formen → Maske → Wände/Schraffur per Dilatation, Objekte als Vektorzeichnungen, Generatoren, Export, Spielmodus) · `views/maps.js` (Liste, Welt‑/Rasterkarten, Weiche `MapView`).
 
 ## Datenmodell (Firestore‑Pfade = IndexedDB‑Pfade)
 ```
-users/{uid}                    Profil
+users/{uid}                    Profil { name, kind: gm|player }
 users/{uid}/campaigns/{cid}    Kampagnen-Index des Nutzers
 users/{uid}/characters/{id}    Charakterbögen (campaignId verknüpft)
 users/{uid}/notes/{id}         Tagebuch (bleibt über Kampagnen erhalten)
 users/{uid}/archive/{id}       KI-Verlauf
 users/{uid}/private/settings   synchronisierte Einstellungen
 invites/{code}                 { campaignId, role }
-campaigns/{cid}                { name, ownerUid, folders[], world, scene, pbpWaiting[] }
+campaigns/{cid}                { name, ownerUid, folders[], folderMeta{pfad:{color,icon,label}}, world, scene, pbpWaiting[] }
+campaigns/{cid}/maps/{id}      type world|battle|scrawl – scrawl: { w, h, style, shapes[], terrain[], objects[], labels[], fog, thumb } (Punkte flach: pts:[x1,y1,x2,y2,…], Firestore kennt keine verschachtelten Arrays)
 campaigns/{cid}/members/{uid}  { role: gm|player, characterId }
 campaigns/{cid}/notes|sessions|quests|maps|pins|tokens|handouts|files   (visibility: gm|players)
 campaigns/{cid}/secrets|gm|trash|monsters|encounters                    (nur SL)
@@ -45,6 +51,7 @@ campaigns/{cid}/combat/{gm|public}  chat  whispers  posts  signals  party
 - `node tools/serve.mjs` → http://localhost:5173 (bzw. Preview „weltenschmiede“ aus `.claude/launch.json`).
 - Syntax: `node --check` pro Datei; Importe: `node tools/check-imports.mjs`.
 - Demo‑Modus (Einstellungen → KI) liefert feste Antworten → Generatoren ohne Schlüssel testen.
+- Ohne Konto testen: `http://localhost:5173/#/offline` (lokale IndexedDB, Nutzer `local`, Rolle Spielleitung). Zurück zur Anmeldung: Konto‑Menü → „Offline‑Modus beenden“.
 - Im Browser Ansichten per `(await import('/js/core/workspace.js')).openView('forge')` öffnen.
 
 ## Veröffentlichen

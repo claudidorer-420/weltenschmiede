@@ -35,7 +35,7 @@ export const DEFAULTS = {
     tasks: {},
     loaded: {},
     demo: false,
-    syncKeys: false,
+    syncKeys: true,
   },
   graph: {
     groups: DEFAULT_GRAPH_GROUPS,
@@ -86,17 +86,33 @@ export function updateSettings(patch) {
   settings.replace(deepMerge(settings.get(), patch));
 }
 
+// KI-Schlüssel gehören zum Konto und liegen im privaten Bereich (users/{uid}/private/settings).
 export function syncablePart(s) {
   const out = structuredClone(s);
   delete out.layout;
-  if (!s.ai.syncKeys) {
-    for (const p of Object.values(out.ai.providers)) p.key = '';
-  }
   return out;
 }
 
 export function setCloudSettingsSync(fn) {
   cloudPush = fn;
+}
+
+export function flushSettings() {
+  persist.flush(settings.get());
+}
+
+// Beim Abmelden bzw. Kontowechsel: Schlüssel vom Gerät entfernen (vorher Cloud-Sync trennen!)
+export function clearAiKeys() {
+  const cur = settings.get();
+  const providers = Object.fromEntries(Object.entries(cur.ai.providers).map(([id, p]) => [id, { ...p, key: '' }]));
+  settings.replace({ ...cur, ai: { ...cur.ai, providers } });
+  flushSettings();
+}
+
+export function ensureSettingsOwner(uid) {
+  const prev = localStorage.getItem('ws.settingsOwner');
+  if (prev && prev !== uid) clearAiKeys();
+  localStorage.setItem('ws.settingsOwner', uid);
 }
 
 export function mergeRemoteSettings(remote) {
@@ -155,7 +171,8 @@ export function parseFirebaseConfig(text) {
   return out.apiKey && out.projectId ? out : null;
 }
 
+// 'local' nur noch über #/offline (alte Werte aus 'ws.mode' werden bewusst ignoriert)
 export const modePref = {
-  get: () => localStorage.getItem('ws.mode') || 'auto',
-  set: (v) => localStorage.setItem('ws.mode', v),
+  get: () => localStorage.getItem('ws.mode2') || 'auto',
+  set: (v) => localStorage.setItem('ws.mode2', v),
 };

@@ -1,26 +1,23 @@
-// Einstellungen: KI-Anbieter & Modellzuordnung (mit Empfehlungen), Cloud & Konto, Darstellung, Spiel, Daten, Über.
+// Einstellungen: KI & Modelle (nur Spielleitung), Konto, Darstellung, Spiel, Daten, Über.
 import { html, useState, useEffect } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { app, signOut, renameLocalProfile, refreshCampaigns } from '../core/app.js';
-import { db, localDb } from '../core/db.js';
-import {
-  settings, updateSettings, getCloudConfig, setCloudConfig, parseFirebaseConfig, modePref, hasBakedCloudConfig,
-} from '../core/settings.js';
+import { app, renameLocalProfile, refreshCampaigns } from '../core/app.js';
+import { settings, updateSettings } from '../core/settings.js';
 import {
   PROVIDERS, TASKS, MODELS, modelsFor, recommendedRefs, resolveModel, modelLabel, providerReady, applyRecommendations, refreshModels,
   testProvider, usageStats,
 } from '../core/ai.js';
 import { ViewFrame } from '../ui/frame.js';
-import { Icon, IconBtn, Btn, Field, Toggle, Segmented, Select, toast, confirmDialog, promptDialog } from '../ui/components.js';
-import { authErrorMessage } from '../core/db-cloud.js';
+import { Icon, Btn, Field, Toggle, Segmented, Avatar, toast, confirmDialog, promptDialog } from '../ui/components.js';
+import { changeSecretDialog, signOutDialog, switchKind } from '../ui/account.js';
 import { localSummary, migrateLocalToCloud } from './importexport.js';
 
-const SECTIONS = [
-  { value: 'ai', label: 'KI & Modelle', icon: 'sparkles' },
-  { value: 'cloud', label: 'Cloud & Konto', icon: 'cloud' },
+const ALL_SECTIONS = [
+  { value: 'ai', label: 'KI & Modelle', icon: 'sparkles', gm: true },
+  { value: 'konto', label: 'Konto', icon: 'user' },
   { value: 'look', label: 'Darstellung', icon: 'palette' },
   { value: 'game', label: 'Spiel', icon: 'd20' },
-  { value: 'data', label: 'Daten', icon: 'archive' },
+  { value: 'data', label: 'Daten', icon: 'archive', gm: true },
   { value: 'about', label: 'Über', icon: 'info' },
 ];
 
@@ -100,13 +97,15 @@ function AISection() {
       Du bringst deinen eigenen Schlüssel mit – die App schickt Anfragen direkt vom Browser an den Anbieter, ohne Umweg über einen Server. Du zahlst nur, was du nutzt.<br />
       <b>Günstiger Start:</b> Google Gemini (Flash-Modelle mit Gratis-Kontingent). <b>Beste Texte:</b> Claude Opus 5. <b>Viele Modelle mit einem Schlüssel:</b> OpenRouter.
     </div></div>
+    <div class="card row nowrap" style="gap:12px">
+      <${Icon} name="lock" size=${20} class="accent-text" />
+      <div class="small muted" style="line-height:1.55">${mode === 'cloud'
+        ? 'Deine Schlüssel gehören zu deinem Konto: Sie liegen im privaten Bereich deines Kontos (nur du kannst sie lesen), stehen auf all deinen Geräten bereit und werden beim Abmelden von diesem Gerät entfernt. Spieler sehen diesen Bereich nicht.'
+        : 'Offline-Modus: Die Schlüssel liegen nur auf diesem Gerät.'}</div>
+    </div>
     <div class="grid two">${['gemini', 'anthropic', 'openai', 'openrouter'].map((id) => html`<${ProviderCard} key=${id} id=${id} />`)}</div>
     <${ProviderCard} id="custom" />
-    <div class="row">
-      <${Toggle} checked=${ai.demo} onChange=${(v) => updateSettings({ ai: { demo: v } })} label="Demo-Modus (Beispieltexte ohne KI)" />
-      ${mode === 'cloud' ? html`<${Toggle} checked=${ai.syncKeys} onChange=${(v) => updateSettings({ ai: { syncKeys: v } })} label="Schlüssel mit meinen Geräten synchronisieren" />` : null}
-    </div>
-    ${ai.syncKeys ? html`<div class="small faint">Die Schlüssel liegen dann in deinem privaten Bereich der Firestore-Datenbank (nur für dein Konto lesbar). Ohne Sync musst du sie auf jedem Gerät einmal eintragen.</div>` : null}
+    <${Toggle} checked=${ai.demo} onChange=${(v) => updateSettings({ ai: { demo: v } })} label="Demo-Modus (Beispieltexte ohne KI)" />
 
     <div class="card">
       <div class="card-head"><h3><${Icon} name="layers" size=${18} />Welches Modell für welche Aufgabe?</h3><span class="grow"></span><${Btn} size="sm" icon="star" onClick=${() => { const t = applyRecommendations(); toast(`${Object.keys(t).length} Empfehlungen übernommen`, 'success'); }}>Empfehlungen übernehmen<//></div>
@@ -120,34 +119,16 @@ function AISection() {
   </div>`;
 }
 
-// ───────────────────────── Cloud ─────────────────────────
-function CloudSection() {
+// ───────────────────────── Konto ─────────────────────────
+function KontoSection() {
   const mode = useStore(app, (s) => s.mode);
   const user = useStore(app, (s) => s.user);
-  const cfg = getCloudConfig();
-  const [text, setText] = useState('');
+  const sync = useStore(app, (s) => s.sync);
+  const gm = (user?.kind || 'gm') === 'gm';
+  const cloud = mode === 'cloud';
   const [local, setLocal] = useState(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (mode === 'cloud') localSummary().then(setLocal); }, [mode]);
-
-  const connect = () => {
-    const c = parseFirebaseConfig(text);
-    if (!c) return toast('Das sieht nicht nach einer Firebase-Konfiguration aus (apiKey und projectId fehlen).', 'error');
-    setCloudConfig(c);
-    modePref.set('auto');
-    location.reload();
-  };
-  const changeSecret = async () => {
-    const a = await promptDialog('Neues Geheimwort (mind. 6 Zeichen)', '', { title: 'Geheimwort ändern' });
-    if (!a) return;
-    if (a.length < 6) return toast('Mindestens 6 Zeichen.', 'error');
-    try {
-      await db.cloud.changeSecret(a);
-      toast('Geheimwort geändert', 'success');
-    } catch (e) {
-      toast(authErrorMessage(e), 'error');
-    }
-  };
+  useEffect(() => { if (cloud && gm) localSummary().then(setLocal).catch(() => setLocal([])); }, [cloud, gm]);
   const migrate = async () => {
     setBusy(true);
     try {
@@ -161,39 +142,27 @@ function CloudSection() {
       setBusy(false);
     }
   };
-
-  if (mode === 'cloud') {
-    return html`<div class="stack lg">
-      <div class="card stack">
-        <div class="row"><${Icon} name="cloud" size=${22} class="success-text" /><div class="grow"><b>Verbunden mit Firebase</b><div class="small muted">Projekt <code>${cfg?.projectId}</code> · angemeldet als <b>${user?.name}</b></div></div></div>
-        <div class="small muted">Alle Kampagnen, Charaktere und dein Tagebuch synchronisieren sich zwischen deinen Geräten und funktionieren auch offline (Änderungen werden nachgereicht).</div>
-        <div class="btn-row">
-          <${Btn} icon="key" onClick=${changeSecret}>Geheimwort ändern<//>
-          <${Btn} icon="log-out" onClick=${async () => { await signOut(); }}>Abmelden<//>
-          <${Btn} kind="ghost" icon="cloud-off" onClick=${async () => { if (await confirmDialog('Auf diesem Gerät ohne Cloud weiterarbeiten? (Cloud-Daten bleiben erhalten, lokale Kampagnen sind getrennt.)', { ok: 'Lokal arbeiten' })) { modePref.set('local'); location.reload(); } }}>Nur lokal arbeiten<//>
-        </div>
-      </div>
-      ${local?.length ? html`<div class="card stack accent-left"><b>${local.length} lokale Kampagne(n) auf diesem Gerät</b><div class="small muted">${local.map((c) => c.name).join(', ')} – aus der Zeit vor der Cloud.</div><${Btn} kind="primary" icon="upload" loading=${busy} onClick=${migrate}>In die Cloud übertragen<//></div>` : null}
-    </div>`;
-  }
+  const status = cloud ? (sync === 'offline' ? 'offline – Änderungen werden nachgereicht' : 'mit der Cloud synchronisiert') : 'Offline-Modus (nur dieses Gerät)';
   return html`<div class="stack lg">
-    ${cfg ? html`<div class="card stack"><b>Cloud ist konfiguriert (Projekt <code>${cfg.projectId}</code>), aber dieses Gerät arbeitet lokal.</b>
-      <div class="btn-row"><${Btn} kind="primary" icon="cloud" onClick=${() => { modePref.set('auto'); location.reload(); }}>Cloud verwenden<//>${!hasBakedCloudConfig() ? html`<${Btn} kind="ghost" icon="trash" onClick=${() => { setCloudConfig(null); location.reload(); }}>Konfiguration entfernen<//>` : null}</div></div>` : null}
     <div class="card stack">
-      <div class="card-head" style="margin:0"><h3><${Icon} name="cloud" size=${18} />Cloud einrichten (Firebase, kostenlos)</h3></div>
-      <div class="small muted">Einmalig ca. 10 Minuten. Danach: Sync zwischen Handy, Tablet und PC + Mitspieler per Einladungscode (ohne E-Mail).</div>
-      <div class="step-list small" style="line-height:1.55">
-        <div class="step"><div><b>Projekt anlegen:</b> <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a> → „Projekt hinzufügen“ (Google Analytics nicht nötig).</div></div>
-        <div class="step"><div><b>Anmeldung aktivieren:</b> Build → Authentication → „Jetzt starten“ → Anmeldemethode <b>E-Mail/Passwort</b> aktivieren.</div></div>
-        <div class="step"><div><b>Datenbank:</b> Build → Firestore Database → „Datenbank erstellen“ → Standort <code>europe-west3</code> (Frankfurt) → Produktionsmodus.</div></div>
-        <div class="step"><div><b>Regeln:</b> Firestore → Regeln → Inhalt der Datei <code>firebase/firestore.rules</code> einfügen → Veröffentlichen.</div></div>
-        <div class="step"><div><b>Web-App:</b> Projekteinstellungen (Zahnrad) → „App hinzufügen“ → Web (&lt;/&gt;) → die angezeigte <code>firebaseConfig</code> kopieren und unten einfügen.</div></div>
-        <div class="step"><div><b>Domain freigeben:</b> Authentication → Einstellungen → Autorisierte Domains → deine GitHub-Pages-Adresse hinzufügen (z. B. <code>deinname.github.io</code>).</div></div>
-      </div>
-      <textarea class="textarea mono" style="min-height:140px;font-size:13px" value=${text} onInput=${(e) => setText(e.target.value)} placeholder=${'const firebaseConfig = {\n  apiKey: "AIza…",\n  authDomain: "…firebaseapp.com",\n  projectId: "…",\n  appId: "1:…"\n};'}></textarea>
-      <div class="btn-row"><${Btn} kind="primary" icon="cloud" onClick=${connect}>Verbinden<//></div>
-      <div class="tiny faint">Tipp: Trägst du die Konfiguration zusätzlich in <code>js/config.js</code> ein, müssen Mitspieler nichts einrichten – sie öffnen nur den Einladungslink.</div>
+      <div class="row nowrap"><${Avatar} name=${user?.name} size="lg" /><div class="grow"><b style="font-size:18px">${user?.name}</b><div class="small muted">${gm ? 'Spielleitung' : 'Spieler'} · ${status}</div></div></div>
+      ${cloud ? html`<div class="small muted">Kampagnen, Charaktere und Tagebuch${gm ? ' sowie deine KI-Schlüssel' : ''} liegen in deinem Konto und sind auf Handy, Tablet und PC gleich – auch offline nutzbar.</div>` : null}
+      ${cloud ? html`<div class="btn-row">
+        <${Btn} icon="key" onClick=${changeSecretDialog}>Geheimwort ändern<//>
+        <${Btn} icon=${gm ? 'user' : 'crown'} onClick=${() => switchKind(gm ? 'player' : 'gm')}>${gm ? 'Als Spieler weiterspielen' : 'Als Spielleitung arbeiten'}<//>
+      </div>` : null}
     </div>
+    <div class="card stack">
+      <b><${Icon} name="log-out" size=${16} /> Abmelden</b>
+      <div class="small muted" style="line-height:1.55">${cloud
+        ? 'Beim Abmelden werden deine KI-Schlüssel von diesem Gerät entfernt. „Gerät bereinigen“ löscht zusätzlich die Offline-Kopie und alle Einstellungen – sinnvoll auf fremden oder geteilten Geräten.'
+        : 'Beendet den Offline-Modus und zeigt wieder die Anmeldung.'}</div>
+      <div class="btn-row">
+        <${Btn} icon="log-out" onClick=${() => signOutDialog(false)}>${cloud ? 'Abmelden' : 'Offline-Modus beenden'}<//>
+        ${cloud ? html`<${Btn} kind="danger" icon="trash" onClick=${() => signOutDialog(true)}>Abmelden & Gerät bereinigen<//>` : null}
+      </div>
+    </div>
+    ${local?.length ? html`<div class="card stack accent-left"><b>${local.length} lokale Kampagne(n) auf diesem Gerät</b><div class="small muted">${local.map((c) => c.name).join(', ')} – aus der Zeit ohne Konto.</div><${Btn} kind="primary" icon="upload" loading=${busy} onClick=${migrate}>In dein Konto übertragen<//></div>` : null}
   </div>`;
 }
 
@@ -223,10 +192,11 @@ function GameSection() {
   const s = useStore(settings, (x) => x);
   const mode = useStore(app, (x) => x.mode);
   return html`<div class="stack lg">
-    <${Field} label="Regelwerk" hint="Beeinflusst die Encounter-Formel (DMG 2014 mit Multiplikator bzw. 2024 mit EP-Budget) und KI-Prompts."><${Segmented} value=${s.rulesVersion} onChange=${(v) => updateSettings({ rulesVersion: v })} options=${[{ value: '2014', label: 'D&D 5e (2014)' }, { value: '2024', label: 'D&D 5e (2024)' }]} /><//>
+    <${Field} label="Regelwerk" hint="Beeinflusst Charaktererschaffung, Encounter-Formel (DMG 2014 mit Multiplikator bzw. 2024 mit EP-Budget) und KI-Prompts."><${Segmented} value=${s.rulesVersion} onChange=${(v) => updateSettings({ rulesVersion: v })} options=${[{ value: '2014', label: 'D&D 5e (2014)' }, { value: '2024', label: 'D&D 5e (2024)' }]} /><//>
     <${Field} label="Entfernungen"><${Segmented} value=${s.units} onChange=${(v) => updateSettings({ units: v })} options=${[{ value: 'm', label: 'Meter (dt. Regelwerk)' }, { value: 'ft', label: 'Fuß' }]} /><//>
-    <${Toggle} checked=${s.shareRolls !== false} onChange=${(v) => updateSettings({ shareRolls: v })} label="Würfe automatisch im Spieltisch-Chat zeigen (Cloud)" />
-    ${mode === 'local' ? html`<${Field} label="Dein Name (lokal)"><input class="input" value=${s.profileName} onInput=${(e) => { updateSettings({ profileName: e.target.value }); renameLocalProfile(e.target.value); }} /><//>` : null}
+    <${Toggle} checked=${s.diceAnim !== false} onChange=${(v) => updateSettings({ diceAnim: v })} label="Würfel-Animation (Würfel rollen über den Tisch)" />
+    <${Toggle} checked=${s.shareRolls !== false} onChange=${(v) => updateSettings({ shareRolls: v })} label="Würfe automatisch im Spieltisch-Chat zeigen" />
+    ${mode === 'local' ? html`<${Field} label="Dein Name (offline)"><input class="input" value=${s.profileName} onInput=${(e) => { updateSettings({ profileName: e.target.value }); renameLocalProfile(e.target.value); }} /><//>` : null}
   </div>`;
 }
 
@@ -239,7 +209,7 @@ function DataSection() {
   }, []);
   const mb = (b) => `${(b / 1024 / 1024).toLocaleString('de-DE', { maximumFractionDigits: 1 })} MB`;
   const wipe = async () => {
-    if (!(await confirmDialog('ALLE lokalen Daten dieses Geräts löschen (lokale Kampagnen, Einstellungen, Schlüssel, Offline-Cache)? Cloud-Daten bleiben erhalten.', { danger: true, ok: 'Alles löschen', title: 'Lokale Daten löschen' }))) return;
+    if (!(await confirmDialog('ALLE lokalen Daten dieses Geräts löschen (Offline-Kopie, Einstellungen, Schlüssel)? Deine Kampagnen in der Cloud bleiben erhalten.', { danger: true, ok: 'Alles löschen', title: 'Lokale Daten löschen' }))) return;
     const typed = await promptDialog('Zur Bestätigung LÖSCHEN eintippen', '', { title: 'Wirklich?' });
     if (typed !== 'LÖSCHEN') return toast('Abgebrochen.', 'info');
     Object.keys(localStorage).filter((k) => k.startsWith('ws.')).forEach((k) => localStorage.removeItem(k));
@@ -255,8 +225,8 @@ function DataSection() {
     </div>
     <div class="card stack sm">
       <b><${Icon} name="upload" size=${16} /> Import, Export & Backup</b>
-      <div class="small muted">Obsidian-Vault importieren/exportieren, Komplett-Backups und die Übertragung lokaler Daten in die Cloud findest du unter „Import & Export“.</div>
-      <${Btn} size="sm" icon="upload" onClick=${() => import('../core/workspace.js').then((m) => m.openView('import'))}>Import & Export öffnen<//>
+      <div class="small muted">Obsidian-Vault importieren/exportieren und Komplett-Backups findest du unter „Import & Export“ (innerhalb einer Kampagne).</div>
+      ${app.get().cid ? html`<${Btn} size="sm" icon="upload" onClick=${() => import('../core/workspace.js').then((m) => m.openView('import'))}>Import & Export öffnen<//>` : null}
     </div>
     <div class="card stack sm">
       <b class="danger-text"><${Icon} name="alert" size=${16} /> Gefahrenzone</b>
@@ -268,25 +238,31 @@ function DataSection() {
 function AboutSection() {
   const keys = [['Strg + O', 'Schnellwechsler (Notiz öffnen/anlegen)'], ['Strg + P', 'Befehlspalette'], ['Strg + N', 'Neue Notiz'], ['Strg + E', 'Lesen ↔ Bearbeiten'], ['Strg + G', 'Graph'], ['Strg + ⇧ + F', 'Volltextsuche'], ['Alt + ← / →', 'Zurück / Vor'], ['[[', 'Notiz verlinken (Autovervollständigung)']];
   return html`<div class="stack lg">
-    <div class="row"><img src="icons/icon.svg" width="56" height="56" alt="" /><div><b style="font-size:18px">Weltenschmiede</b><div class="small muted">D&D-5e-Kampagnen-Werkstatt · Version 1.0 (2026-09)</div></div></div>
+    <div class="row"><img src="icons/icon.svg" width="56" height="56" alt="" /><div><b style="font-size:18px">Weltenschmiede</b><div class="small muted">D&D-5e-Kampagnen-Werkstatt · Version 1.1 (2026-09)</div></div></div>
     <div class="card"><div class="card-head"><h3><${Icon} name="command" size=${18} />Tastenkürzel</h3></div><table class="xp-table">${keys.map(([k, d]) => html`<tr><td><span class="kbd">${k}</span></td><td>${d}</td></tr>`)}</table></div>
-    <div class="small faint" style="line-height:1.6">Gebaut mit Preact + htm (ohne Build-Schritt), optional Firebase für Sync. Regelzusammenfassungen in eigenen Worten; SRD-Importe: System Reference Document 5.1 von Wizards of the Coast LLC, CC-BY-4.0. „Dungeons & Dragons“ ist eine Marke von Wizards of the Coast – dies ist ein privates Fan-Werkzeug.</div>
+    <div class="small faint" style="line-height:1.6">Gebaut mit Preact + htm (ohne Build-Schritt), Firebase für Konten & Sync. Regelzusammenfassungen in eigenen Worten; Regeldaten nach dem System Reference Document 5.1 und 5.2 von Wizards of the Coast LLC, CC-BY-4.0. „Dungeons & Dragons“ ist eine Marke von Wizards of the Coast – dies ist ein privates Fan-Werkzeug.</div>
   </div>`;
 }
 
-export function SettingsPanel({ section: initial = 'ai' }) {
-  const [section, setSection] = useState(initial);
-  useEffect(() => setSection(initial), [initial]);
+export function SettingsPanel({ section: initial }) {
+  const gm = useStore(app, (s) => (s.user?.kind || 'gm') === 'gm');
+  const sections = ALL_SECTIONS.filter((x) => gm || !x.gm);
+  const pick = (v) => {
+    const w = v === 'cloud' ? 'konto' : v;
+    return sections.some((x) => x.value === w) ? w : sections[0].value;
+  };
+  const [section, setSection] = useState(() => pick(initial));
+  useEffect(() => setSection(pick(initial)), [initial, gm]);
   let body;
-  if (section === 'cloud') body = html`<${CloudSection} />`;
+  if (section === 'konto') body = html`<${KontoSection} />`;
   else if (section === 'look') body = html`<${LookSection} />`;
   else if (section === 'game') body = html`<${GameSection} />`;
   else if (section === 'data') body = html`<${DataSection} />`;
   else if (section === 'about') body = html`<${AboutSection} />`;
   else body = html`<${AISection} />`;
-  return html`<div class="stack lg"><${Segmented} value=${section} onChange=${setSection} options=${SECTIONS} />${body}</div>`;
+  return html`<div class="stack lg"><${Segmented} value=${section} onChange=${setSection} options=${sections} />${body}</div>`;
 }
 
 export function SettingsView({ params, tabId }) {
-  return html`<${ViewFrame} tabId=${tabId} title="Einstellungen"><div class="page narrow"><${SettingsPanel} section=${params.section || 'ai'} /></div><//>`;
+  return html`<${ViewFrame} tabId=${tabId} title="Einstellungen"><div class="page narrow"><${SettingsPanel} section=${params.section} /></div><//>`;
 }

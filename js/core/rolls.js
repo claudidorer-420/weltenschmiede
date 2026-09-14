@@ -1,6 +1,7 @@
 // Würfel-Protokoll (lokal) + optionales Teilen im Spieltisch-Chat bzw. geheim an die SL.
+// prepareRoll würfelt nur (für die Animation), commitRoll protokolliert/teilt, doRoll macht beides.
 import { createStore } from './store.js';
-import { roll } from '../lib/dice.js';
+import { rollDetailed } from '../lib/dice.js';
 import { app, vault, col, myUid, myName, gmUids } from './app.js';
 import { db } from './db.js';
 import { settings } from './settings.js';
@@ -16,28 +17,41 @@ function loadLog() {
 
 export const rolls = createStore({ log: loadLog() });
 
-// von der UI belegt (Toast-Anzeige)
+// von der UI belegt (Toast bzw. Würfelschale)
 export const rollBridge = { show: () => {}, error: () => {} };
 
 export function sharingActive() {
   return db.mode === 'cloud' && !!app.get().cid && settings.get().shareRolls !== false;
 }
 
-export function doRoll(expr, { label = '', share, secret = false, silent = false, character = '' } = {}) {
-  let r;
+export function prepareRoll(expr, { label = '', kind = 'auto', fx = {}, character = '' } = {}) {
   try {
-    r = roll(expr, label);
+    const r = rollDetailed(expr, { kind, fx, label, edition: settings.get().rulesVersion || '2014' });
+    if (character) r.character = character;
+    return r;
   } catch (e) {
     rollBridge.error(e.message);
     return null;
   }
-  if (character) r.character = character;
+}
+
+export function commitRoll(r, { share, secret = false } = {}) {
+  if (!r) return null;
   const log = [r, ...rolls.get().log].slice(0, 150);
   rolls.set({ log });
-  try { localStorage.setItem('ws.rolls', JSON.stringify(log.slice(0, 60))); } catch { /* ignore */ }
-  if (!silent) rollBridge.show(r);
+  try {
+    localStorage.setItem('ws.rolls', JSON.stringify(log.slice(0, 60).map(({ dice, ...x }) => x)));
+  } catch { /* ignore */ }
   const doShare = share ?? sharingActive();
   if (doShare && db.mode === 'cloud' && app.get().cid) postRoll(r, secret).catch((e) => console.warn(e));
+  return r;
+}
+
+export function doRoll(expr, opts = {}) {
+  const r = prepareRoll(expr, opts);
+  if (!r) return null;
+  commitRoll(r, opts);
+  if (!opts.silent) rollBridge.show(r);
   return r;
 }
 
@@ -49,7 +63,7 @@ export function clearRollLog() {
 async function postRoll(r, secret) {
   const data = {
     uid: myUid(), name: myName(), kind: 'roll', text: r.label || '', character: r.character || '',
-    roll: { input: r.input, expr: r.expr, total: r.total, text: r.text, crit: r.crit, fumble: r.fumble, label: r.label },
+    roll: { input: r.input, expr: r.expr, total: r.total, text: r.text, crit: r.crit, fumble: r.fumble, label: r.label, notes: (r.notes || []).slice(0, 4) },
     ts: now(),
   };
   if (secret) {

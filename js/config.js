@@ -1,25 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  Weltenschmiede – Konfiguration
 //
-//  Trage hier deine Firebase-Web-Konfiguration ein, um Sync zwischen deinen
-//  Geräten und das Online-Spiel mit Mitspielern zu aktivieren.
-//  Anleitung: README.md → „Cloud einrichten (Firebase)“.
-//
+//  Firebase-Web-Konfiguration für Sync zwischen Geräten und das Online-Spiel.
 //  Diese Werte sind NICHT geheim (sie landen in jeder Firebase-Web-App im
-//  Browser). Geschützt werden deine Daten durch Login + firestore.rules.
+//  Browser). Geschützt werden die Daten durch Login + firebase/firestore.rules.
 //
-//  KI-Schlüssel gehören NICHT hierher – die trägst du in der App unter
-//  Einstellungen → KI ein. Sie bleiben auf deinem Gerät.
+//  KI-Schlüssel gehören NICHT hierher – die trägt die Spielleitung in der App
+//  unter Einstellungen → KI ein. Sie liegen im privaten Bereich ihres Kontos.
 // ─────────────────────────────────────────────────────────────────────────────
 window.WS_CONFIG = {
-  firebase: null,
-  // Beispiel:
-  // firebase: {
-  //   apiKey: "AIza...",
-  //   authDomain: "deine-app.firebaseapp.com",
-  //   projectId: "deine-app",
-  //   storageBucket: "deine-app.firebasestorage.app",
-  //   messagingSenderId: "123456789",
-  //   appId: "1:123456789:web:abcdef"
-  // },
+  firebase: {
+    apiKey: 'AIzaSyDlDyPSUlgtKNiWe69SFagDBU_kuwF8doA',
+    authDomain: 'weltenschmiede.firebaseapp.com',
+    projectId: 'weltenschmiede',
+    storageBucket: 'weltenschmiede.firebasestorage.app',
+    messagingSenderId: '349891049660',
+    appId: '1:349891049660:web:4820fc7cf84fc0924478b9',
+  },
 };

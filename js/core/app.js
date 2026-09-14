@@ -1,7 +1,9 @@
 // Zentraler App-Zustand: Anmeldung, Kampagnen, Mitgliedschaft/Rollen, Codex (Notizen) + Index.
 import { createStore } from './store.js';
 import { db, connectCloud, useLocalDb } from './db.js';
-import { settings, getCloudConfig, setCloudConfig, modePref, setCloudSettingsSync, mergeRemoteSettings, applyTheme } from './settings.js';
+import {
+  settings, getCloudConfig, setCloudConfig, modePref, setCloudSettingsSync, mergeRemoteSettings, applyTheme, ensureSettingsOwner, clearAiKeys,
+} from './settings.js';
 import { uid, now, inviteCode, sortBy } from '../lib/util.js';
 import { parseFrontmatter, extractLinks, extractTags, renameLinkTarget } from '../lib/markdown.js';
 
@@ -41,9 +43,17 @@ function decodeB64Url(s) {
 }
 
 // ───────────────────────── Start & Anmeldung ─────────────────────────
+let explicitLogin = false; // true = gerade eben angemeldet → Übersicht statt letzter Kampagne
+let pendingKind = null; // gewählte Rolle beim Anmelden ('gm' | 'player')
+let pendingName = '';
+
 export async function boot() {
   applyTheme();
   const h = location.hash || '';
+  if (/#\/offline\b/.test(h)) {
+    modePref.set('local');
+    history.replaceState(null, '', location.pathname + location.search);
+  }
   const jm = /#\/join\/([A-Za-z0-9]{4,12})/.exec(h);
   if (jm) {
     app.set({ joinCode: jm[1].toUpperCase() });
@@ -62,8 +72,11 @@ export async function boot() {
       const cloud = await connectCloud(cfg);
       app.set({ mode: 'cloud', sync: navigator.onLine ? 'synced' : 'offline' });
       cloud.onAuth(async (fu) => {
-        if (fu) await onSignedIn({ uid: fu.uid, name: fu.displayName || 'Held' });
-        else {
+        if (fu) {
+          const explicit = explicitLogin;
+          explicitLogin = false;
+          await onSignedIn({ uid: fu.uid, name: fu.displayName || pendingName || 'Held' }, { explicit });
+        } else {
           stopCampaign();
           app.set({ user: null, campaigns: [], cid: null, campaign: null, phase: 'login' });
         }
@@ -78,14 +91,22 @@ export async function boot() {
       app.set({ mode: 'local', cloudError: `Cloud nicht erreichbar – lokaler Modus. (${e.message || e})` });
     }
   }
-  await onSignedIn({ uid: 'local', name: settings.get().profileName || 'Spielleitung' });
+  await onSignedIn({ uid: 'local', name: settings.get().profileName || 'Spielleitung', kind: 'gm' });
 }
 
-async function onSignedIn(user) {
+async function onSignedIn(baseUser, { explicit = false } = {}) {
+  let user = { kind: 'gm', ...baseUser };
   app.set({ user, mode: db.mode, phase: 'loading' });
   try {
     if (db.mode === 'cloud') {
-      db.set('users', user.uid, { name: user.name, lastSeen: now() }, { merge: true }).catch(() => {});
+      ensureSettingsOwner(user.uid);
+      let profile = null;
+      try { profile = await db.get('users', user.uid); } catch { /* offline */ }
+      const kind = pendingKind || profile?.kind || 'gm';
+      pendingKind = null;
+      user = { ...user, name: user.name === 'Held' && profile?.name ? profile.name : user.name, kind };
+      app.set({ user });
+      db.set('users', user.uid, { name: user.name, kind, lastSeen: now() }, { merge: true }).catch(() => {});
       try {
         const remote = await db.get(`users/${user.uid}/private`, 'settings');
         if (remote?.data) mergeRemoteSettings(remote.data);
@@ -105,9 +126,11 @@ async function onSignedIn(user) {
       app.set({ joinCode: null });
       history.replaceState(null, '', location.pathname + location.search);
     }
-    const list = app.get().campaigns;
-    const last = localStorage.getItem(`ws.lastCampaign.${user.uid}`);
-    target = target || list.find((c) => c.id === last)?.id || list[0]?.id;
+    // Frisch angemeldet → Übersicht. App nur wieder geöffnet → zurück in die zuletzt offene Kampagne.
+    if (!target && !explicit && localStorage.getItem(`ws.inCampaign.${user.uid}`) === '1') {
+      const last = localStorage.getItem(`ws.lastCampaign.${user.uid}`);
+      target = app.get().campaigns.find((c) => c.id === last)?.id || null;
+    }
     if (target) await openCampaign(target);
   } catch (e) {
     console.error(e);
@@ -116,19 +139,71 @@ async function onSignedIn(user) {
   app.set({ phase: 'ready' });
 }
 
-export async function signIn(name, secret) {
-  return db.cloud.signIn(name, secret);
+export async function signIn(name, secret, kind) {
+  explicitLogin = true;
+  pendingKind = kind || null;
+  pendingName = name;
+  try {
+    return await db.cloud.signIn(name, secret);
+  } catch (e) {
+    explicitLogin = false;
+    pendingKind = null;
+    throw e;
+  }
 }
-export async function register(name, secret) {
-  const u = await db.cloud.register(name, secret);
-  await db.set('users', u.uid, { name, createdAt: now() }, { merge: true }).catch(() => {});
-  return u;
+
+export async function register(name, secret, kind = 'gm') {
+  explicitLogin = true;
+  pendingKind = kind;
+  pendingName = name;
+  try {
+    const u = await db.cloud.register(name, secret);
+    await db.set('users', u.uid, { name, kind, createdAt: now() }, { merge: true }).catch(() => {});
+    return u;
+  } catch (e) {
+    explicitLogin = false;
+    pendingKind = null;
+    throw e;
+  }
 }
-export async function signOut() {
+
+// Abmelden: KI-Schlüssel verlassen das Gerät; mit wipe zusätzlich Offline-Kopie + lokale Daten löschen
+export async function signOut({ wipe = false } = {}) {
+  if (db.mode !== 'cloud') {
+    modePref.set('auto');
+    location.reload();
+    return;
+  }
   stopCampaign();
   setCloudSettingsSync(null);
-  if (db.cloud) await db.cloud.signOut();
+  clearAiKeys();
+  await db.cloud.signOut();
+  if (wipe) {
+    Object.keys(localStorage).filter((k) => k.startsWith('ws.')).forEach((k) => localStorage.removeItem(k));
+    await db.cloud.wipeLocal();
+    await new Promise((res) => {
+      const r = indexedDB.deleteDatabase('weltenschmiede');
+      r.onsuccess = r.onerror = r.onblocked = () => res();
+    });
+    location.reload();
+  }
 }
+
+export function enterLobby() {
+  const u = app.get().user;
+  stopCampaign();
+  app.set({ cid: null, campaign: null, viewAsPlayer: false });
+  if (u) localStorage.setItem(`ws.inCampaign.${u.uid}`, '0');
+}
+
+export async function setAccountKind(kind) {
+  const u = app.get().user;
+  if (!u) return;
+  app.set({ user: { ...u, kind } });
+  if (db.mode === 'cloud') await db.set('users', u.uid, { kind }, { merge: true }).catch(() => {});
+}
+
+export const isGmAccount = () => (app.get().user?.kind || 'gm') === 'gm';
 
 export function renameLocalProfile(name) {
   if (app.get().mode !== 'local') return;
@@ -193,6 +268,8 @@ export async function openCampaign(cid) {
   }
   app.set({ cid, role: member.role, campaign: null, viewAsPlayer: false });
   localStorage.setItem(`ws.lastCampaign.${u.uid}`, cid);
+  localStorage.setItem(`ws.inCampaign.${u.uid}`, '1');
+  localStorage.setItem(`ws.lastOpened.${cid}`, String(now()));
   const gm = member.role === 'gm';
   const vis = gm ? {} : { where: [['visibility', '==', 'players']] };
   const onErr = (e) => {
@@ -576,15 +653,31 @@ export async function renameFolder(oldPath, newPath) {
   }
   const folders = (app.get().campaign?.folders || []).map((f) => (f === oldPath || f.startsWith(`${oldPath}/`) ? np + f.slice(oldPath.length) : f));
   if (!folders.includes(np)) folders.push(np);
-  ops.push({ op: 'update', col: 'campaigns', id: app.get().cid, data: { folders } });
+  const folderMeta = { ...(app.get().campaign?.folderMeta || {}) };
+  for (const k of Object.keys(folderMeta)) {
+    if (k === oldPath || k.startsWith(`${oldPath}/`)) {
+      folderMeta[np + k.slice(oldPath.length)] = folderMeta[k];
+      delete folderMeta[k];
+    }
+  }
+  ops.push({ op: 'update', col: 'campaigns', id: app.get().cid, data: { folders, folderMeta } });
   await db.batch(ops);
+}
+
+// Ordner markieren (Farbe, Symbol, Etikett) – liegt am Kampagnen-Dokument
+export async function setFolderMeta(path, meta) {
+  const cur = { ...(app.get().campaign?.folderMeta || {}) };
+  if (!meta || (!meta.color && !meta.icon && !meta.label)) delete cur[path];
+  else cur[path] = { color: meta.color || '', icon: meta.icon || '', label: meta.label || '' };
+  await db.update('campaigns', app.get().cid, { folderMeta: cur });
 }
 
 export async function deleteFolder(path) {
   const inside = Object.values(vault.get().notes).filter((n) => (n.folder || '') === path || (n.folder || '').startsWith(`${path}/`));
   for (const n of inside) await deleteNote(n.id);
   const folders = (app.get().campaign?.folders || []).filter((f) => f !== path && !f.startsWith(`${path}/`));
-  await db.update('campaigns', app.get().cid, { folders });
+  const folderMeta = Object.fromEntries(Object.entries(app.get().campaign?.folderMeta || {}).filter(([k]) => k !== path && !k.startsWith(`${path}/`)));
+  await db.update('campaigns', app.get().cid, { folders, folderMeta });
   return inside.length;
 }
 

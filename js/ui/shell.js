@@ -6,12 +6,14 @@ import {
   ws, currentOf, openView, closeTab, setActive, newTab, toggleLeft, toggleRight, restoreTabs,
   showLeftPanel, closeOtherTabs, moveTab,
 } from '../core/workspace.js';
-import { Icon, IconBtn, OverlayHost, ErrorBoundary, openMenu, useMedia, Spinner, Empty } from './components.js';
+import { Icon, IconBtn, OverlayHost, ErrorBoundary, openMenu, useMedia, Spinner, Empty, Avatar } from './components.js';
 import { ViewFrame } from './frame.js';
 import { Palette, registerShortcuts, openPalette } from './palette.js';
 import { LeftSidebar, RightSidebar } from '../views/codex.js';
 import { AuthScreen } from '../views/auth.js';
-import { Welcome } from '../views/home.js';
+import { Lobby } from '../views/home.js';
+import { accountMenu } from './account.js';
+import { DiceOverlay } from './dicetray.js';
 
 const LOADERS = {
   home: () => import('../views/home.js'),
@@ -128,7 +130,7 @@ export function App() {
   if (phase === 'boot' || phase === 'loading') body = html`<${BootScreen} />`;
   else if (!user) body = html`<${AuthScreen} />`;
   else body = html`<${Workspace} />`;
-  return html`${body}<${OverlayHost} /><${Palette} />`;
+  return html`${body}<${OverlayHost} /><${DiceOverlay} /><${Palette} />`;
 }
 
 function BootScreen() {
@@ -152,7 +154,7 @@ function Workspace() {
     const m = /#\/(dice|table)$/.exec(h);
     if (m && cid) openView(m[1]);
   }, [cid]);
-  if (!cid) return html`<${Welcome} />`;
+  if (!cid) return html`<${Lobby} />`;
   const views = s.tabs.map((t) => html`<${ViewHost} key=${t.id} tab=${t} active=${t.id === s.active} />`);
   const main = html`<main class="main">
     ${mobile ? html`<${MobileHeader} tabs=${s.tabs} active=${s.active} />` : html`<${TabBar} tabs=${s.tabs} active=${s.active} leftOpen=${s.leftOpen} rightOpen=${s.rightOpen} />`}
@@ -172,6 +174,7 @@ function Workspace() {
 
 function Ribbon() {
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
+  const user = useStore(app, (s) => s.user);
   const current = useStore(ws, (s) => currentOf(s.tabs.find((t) => t.id === s.active)).view);
   const items = gm ? RIBBON_GM : RIBBON_PLAYER;
   return html`<nav class="ribbon" aria-label="Module">
@@ -181,6 +184,7 @@ function Ribbon() {
       return html`<button key=${it.title} type="button" class=${`ribbon-btn${it.view && current === it.view ? ' active' : ''}`} title=${it.title} aria-label=${it.title}
         onClick=${(e) => (it.action ? it.action() : openView(it.view, {}, { newTab: e.ctrlKey || e.metaKey }))}><${Icon} name=${it.icon} size=${19} /></button>`;
     })}
+    <button type="button" class="ribbon-btn ribbon-avatar" title=${`${user?.name || 'Konto'} – Konto, Übersicht, Abmelden`} aria-label="Konto" onClick=${accountMenu}><${Avatar} name=${user?.name} size="sm" /></button>
   </nav>`;
 }
 
@@ -297,7 +301,7 @@ function StatusBar() {
           <${Icon} name=${s.viewAsPlayer ? 'eye' : 'eye-off'} size=${13} />${s.viewAsPlayer ? 'Spieleransicht aktiv' : 'Spieleransicht'}</button>`
       : html`<span><${Icon} name="user" size=${13} /> Spieler</span>`}
     <span>${count} Notizen</span>
-    <button type="button" class=${cloudOk ? 'ok' : s.sync === 'offline' ? 'warn' : ''} onClick=${() => openView('settings', { section: 'cloud' })} title="Speicherort & Sync">
+    <button type="button" class=${cloudOk ? 'ok' : s.sync === 'offline' ? 'warn' : ''} onClick=${() => openView('settings', { section: 'konto' })} title="Konto & Sync">
       <${Icon} name=${s.mode === 'cloud' ? (s.sync === 'offline' ? 'cloud-off' : 'cloud') : 'save'} size=${13} />
       ${s.mode === 'cloud' ? (s.sync === 'offline' ? 'Offline – synchronisiert später' : 'Synchronisiert') : 'Nur auf diesem Gerät'}
     </button>

@@ -1,19 +1,20 @@
-// Startseite (Dashboard), Willkommen/Onboarding, Kampagnen-Verwaltung und -Wechsel.
+// Übersicht nach der Anmeldung (Lobby), Kampagnen-Startseite (Dashboard), Kampagnen verwalten/wechseln.
 import { html, useState, useMemo, useEffect } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import {
   app, vault, createCampaign, openCampaign, deleteCampaign, leaveCampaign, updateCampaign, joinCampaign,
-  importNotes, addFolders, getIndex, signOut, myUid,
+  importNotes, addFolders, getIndex, myUid, enterLobby,
 } from '../core/app.js';
 import { openView, openNote } from '../core/workspace.js';
 import { settings, updateSettings } from '../core/settings.js';
 import { anyAIReady } from '../core/ai.js';
-import { Icon, Btn, IconBtn, Field, openModal, confirmDialog, promptDialog, toast, openMenu, Empty } from '../ui/components.js';
+import { Icon, Btn, IconBtn, Field, Avatar, openModal, confirmDialog, promptDialog, toast, openMenu } from '../ui/components.js';
 import { ViewFrame } from '../ui/frame.js';
 import { useCol, useVisibleCol } from '../core/hooks.js';
-import { fmtRelative, fmtDate, sortBy } from '../lib/util.js';
+import { fmtRelative, fmtDate, sortBy, colorFromString, initials } from '../lib/util.js';
 import { SAMPLE_CAMPAIGN } from '../data/templates.js';
 import { newNoteQuick } from '../ui/palette.js';
+import { accountMenu, openSettings } from '../ui/account.js';
 
 // ───────────────────────── Kampagnen-Aktionen ─────────────────────────
 export async function seedSample() {
@@ -77,6 +78,8 @@ export async function joinDialog() {
 export function campaignMenu(e) {
   const { campaigns, cid, mode } = app.get();
   openMenu(e, [
+    { label: 'Übersicht: alle Kampagnen', icon: 'home', onClick: enterLobby },
+    { divider: true },
     { header: true, label: 'Kampagnen' },
     ...campaigns.map((c) => ({
       label: c.name, icon: c.id === cid ? 'check' : c.role === 'gm' ? 'crown' : 'user', hint: c.role === 'gm' ? 'SL' : 'Spieler',
@@ -89,73 +92,150 @@ export function campaignMenu(e) {
   ]);
 }
 
-// ───────────────────────── Willkommen (noch keine Kampagne) ─────────────────────────
-export function Welcome() {
+// ───────────────────────── Übersicht nach der Anmeldung ─────────────────────────
+const lastOpened = (id) => Number(localStorage.getItem(`ws.lastOpened.${id}`) || 0);
+
+function CampaignCard({ c, busy, onOpen }) {
+  const t = lastOpened(c.id);
+  return html`<button type="button" class="camp-card" onClick=${onOpen}>
+    <span class="camp-emblem" style=${{ background: colorFromString(c.name || '?') }}>${initials(c.name || '?')}</span>
+    <span class="camp-body">
+      <b>${c.name}</b>
+      <span class="small muted">${c.role === 'gm' ? 'Spielleitung' : 'Spieler'}${t ? ` · zuletzt ${fmtRelative(t)}` : ''}</span>
+    </span>
+    ${busy ? html`<span class="spinner sm" />` : html`<${Icon} name="chevron-right" size=${18} class="faint" />`}
+  </button>`;
+}
+
+function CharMini({ c, onOpen }) {
+  return html`<button type="button" class="camp-card" onClick=${onOpen}>
+    ${c.portrait ? html`<span class="avatar lg"><img src=${c.portrait} alt="" /></span>` : html`<${Avatar} name=${c.name} size="lg" color=${c.color} />`}
+    <span class="camp-body"><b>${c.name}</b><span class="small muted">${[c.species, c.cls, c.level ? `Stufe ${c.level}` : ''].filter(Boolean).join(' · ')}</span></span>
+    <${Icon} name="chevron-right" size=${18} class="faint" />
+  </button>`;
+}
+
+function LobbyTop() {
+  const user = useStore(app, (s) => s.user);
+  const mode = useStore(app, (s) => s.mode);
+  const gm = (user?.kind || 'gm') === 'gm';
+  return html`<header class="lobby-top">
+    <div class="lobby-brand"><img src="icons/icon.svg" width="30" height="30" alt="" /><span>Weltenschmiede</span></div>
+    <span class="grow"></span>
+    ${mode !== 'cloud' ? html`<span class="badge warn"><${Icon} name="cloud-off" size=${12} />Offline-Modus</span>` : null}
+    <button type="button" class="account-chip" onClick=${accountMenu} title="Konto, Einstellungen, Abmelden">
+      <${Avatar} name=${user?.name} size="sm" />
+      <span class="nm">${user?.name}<small>${gm ? 'Spielleitung' : 'Spieler'}</small></span>
+      <${Icon} name="chevron-down" size=${15} class="faint" />
+    </button>
+  </header>`;
+}
+
+function JoinCard({ busy, onJoin, compact }) {
+  const [code, setCode] = useState('');
+  return html`<div class=${`card stack join-card${compact ? '' : ' accent-left'}`}>
+    <h3 class="row" style="margin:0"><${Icon} name="user-plus" />${compact ? 'Als Spieler beitreten' : 'Einer Kampagne beitreten'}</h3>
+    <div class="small muted" style="margin:0">Den Code (oder Einladungslink) bekommst du von deiner Spielleitung.</div>
+    <form class="row nowrap" onSubmit=${(e) => { e.preventDefault(); if (code.trim()) onJoin(code.trim()); }}>
+      <input class="input grow" value=${code} onInput=${(e) => setCode(e.target.value.toUpperCase())} placeholder="z. B. K7QX2M" maxlength="12" autocomplete="off" spellcheck=${false} />
+      <${Btn} kind="primary" type="submit" icon="log-in" loading=${busy} disabled=${!code.trim()}>Beitreten<//>
+    </form>
+  </div>`;
+}
+
+export function Lobby() {
   const user = useStore(app, (s) => s.user);
   const mode = useStore(app, (s) => s.mode);
   const campaigns = useStore(app, (s) => s.campaigns);
+  const aiReady = useStore(settings, () => anyAIReady());
+  const gm = (user?.kind || 'gm') === 'gm';
+  const chars = useCol(user && !gm ? `users/${user.uid}/characters` : null);
   const [busy, setBusy] = useState('');
   const run = async (key, fn) => {
     setBusy(key);
-    try { await fn(); } catch (e) { toast(e.message, 'error'); } finally { setBusy(''); }
+    try { await fn(); } catch (e) { toast(e.message || String(e), 'error'); } finally { setBusy(''); }
   };
+  const sorted = [...campaigns].sort((a, b) => lastOpened(b.id) - lastOpened(a.id) || String(a.name).localeCompare(String(b.name), 'de'));
+  const leading = sorted.filter((c) => c.role === 'gm');
+  const playing = sorted.filter((c) => c.role !== 'gm');
+  const last = sorted[0] && lastOpened(sorted[0].id) ? sorted[0] : null;
+  const open = (c) => run(`c:${c.id}`, () => openCampaign(c.id));
+  const join = (code) => run('join', async () => {
+    const cid = await joinCampaign(code);
+    await openCampaign(cid);
+    toast('Kampagne beigetreten!', 'success');
+  });
   const importObsidian = () => run('import', async () => {
     const cid = await createCampaign({ name: 'Meine Welt', description: 'Aus Obsidian importiert' });
     await openCampaign(cid);
     setTimeout(() => openView('import'), 50);
   });
-  return html`<div class="auth-screen" style="place-items:start center">
-    <div class="stack lg" style="width:min(820px,100%);padding:4vh 0 40px">
-      <div class="hero">
-        <div class="row nowrap" style="gap:16px">
-          <img src="icons/icon.svg" width="64" height="64" alt="" />
-          <div><h1>Willkommen, ${user?.name}!</h1><p>Deine Werkstatt für D&D 5e: Codex im Obsidian-Stil, KI-Weltenschmiede, Encounter mit Statblocks, Karten und ein Online-Spieltisch.</p></div>
-        </div>
-      </div>
-      ${campaigns.length ? html`<div class="card"><div class="card-head"><h3><${Icon} name="castle" size=${18} />Deine Kampagnen</h3></div>
-        <div class="list">${campaigns.map((c) => html`<div class="list-item" onClick=${() => openCampaign(c.id)}><${Icon} name=${c.role === 'gm' ? 'crown' : 'user'} size=${16} /><span class="title">${c.name}</span><span class="meta">${c.role === 'gm' ? 'Spielleitung' : 'Spieler'}</span></div>`)}</div></div>` : null}
-      <div class="grid two">
-        <div class="card stack">
-          <h3 style="margin:0" class="row"><${Icon} name="plus" />Neue Kampagne</h3>
-          <p class="muted small" style="margin:0">Starte mit einem leeren Codex – du bist die Spielleitung.</p>
-          <${Btn} kind="primary" icon="castle" onClick=${newCampaignDialog}>Kampagne anlegen<//>
-        </div>
-        <div class="card stack">
-          <h3 style="margin:0" class="row"><${Icon} name="upload" />Obsidian-Vault importieren</h3>
-          <p class="muted small" style="margin:0">ZIP oder Ordner deines Vaults wählen – Ordner, [[Links]], Bilder und Eigenschaften bleiben erhalten.</p>
-          <${Btn} icon="folder-open" loading=${busy === 'import'} onClick=${importObsidian}>Vault importieren<//>
-        </div>
-        <div class="card stack">
-          <h3 style="margin:0" class="row"><${Icon} name="sparkles" />Beispielkampagne</h3>
-          <p class="muted small" style="margin:0">„Die Nebelküste“ – ein Dorf, NPCs, eine Quest, ein Statblock. Ideal zum Ausprobieren.</p>
-          <${Btn} icon="book-open" loading=${busy === 'sample'} onClick=${() => run('sample', loadSampleCampaign)}>Beispiel laden<//>
-        </div>
-        ${mode === 'cloud'
-          ? html`<div class="card stack">
-              <h3 style="margin:0" class="row"><${Icon} name="user-plus" />Als Spieler beitreten</h3>
-              <p class="muted small" style="margin:0">Du hast einen Einladungscode von deiner Spielleitung?</p>
-              <${Btn} icon="log-in" onClick=${joinDialog}>Code eingeben<//>
-            </div>`
-          : html`<div class="card stack">
-              <h3 style="margin:0" class="row"><${Icon} name="cloud" />Sync & Online-Spiel</h3>
-              <p class="muted small" style="margin:0">Aktuell speichert die App nur auf diesem Gerät. Mit Firebase (kostenlos) synchronisieren alle deine Geräte und Mitspieler können beitreten.</p>
-              <${Btn} icon="settings" onClick=${openSettingsModal}>Einrichten<//>
-            </div>`}
-      </div>
-      <div class="row center small faint" style="justify-content:center">
-        <a href="#" onClick=${(e) => { e.preventDefault(); openSettingsModal(); }}>Einstellungen</a>
-        ${mode === 'cloud' ? html`<span>·</span><a href="#" onClick=${(e) => { e.preventDefault(); signOut(); }}>Abmelden</a>` : null}
-      </div>
-    </div>
-  </div>`;
-}
+  const newChar = () => import('./characters.js').then((m) => m.openCharacterWizard());
+  const openChar = (c) => import('./characters.js').then((m) => m.openCharacter(c));
 
-export function openSettingsModal() {
-  openModal(() => {
-    const [Comp, setComp] = useState(null);
-    useEffect(() => { import('./settings.js').then((m) => setComp(() => m.SettingsPanel)); }, []);
-    return html`<div class="modal-body">${Comp ? html`<${Comp} />` : html`<div class="empty"><span class="spinner" /></div>`}</div>`;
-  }, { title: 'Einstellungen', icon: 'settings', size: 'xl' });
+  const intro = gm
+    ? (campaigns.length ? 'Wähle eine Kampagne oder beginne eine neue Welt.' : 'Lege deine erste Kampagne an – oder importiere deinen Obsidian-Vault.')
+    : (campaigns.length ? 'Deine Kampagnen und Charaktere auf einen Blick.' : 'Tritt mit dem Code deiner Spielleitung einer Kampagne bei.');
+
+  return html`<div class="lobby">
+    <${LobbyTop} />
+    <main class="lobby-main">
+      <section class="lobby-hero">
+        <div class="grow">
+          <div class="lobby-kicker">${gm ? 'Spielleitung' : 'Spieler'}</div>
+          <h1>Willkommen${campaigns.length ? ' zurück' : ''}, ${user?.name}!</h1>
+          <p>${intro}</p>
+        </div>
+        ${last ? html`<${Btn} kind="primary" size="lg" icon="play" loading=${busy === `c:${last.id}`} onClick=${() => open(last)}>Weiter: ${last.name}<//>` : null}
+      </section>
+
+      ${gm && !aiReady ? html`<div class="card row lobby-hint">
+        <${Icon} name="sparkles" size=${22} class="accent-text" />
+        <div class="grow"><b>KI noch nicht eingerichtet</b><div class="small muted">Für Weltenschmiede, NPC-Schmiede und Encounter brauchst du einen API-Schlüssel (z. B. Google Gemini mit Gratis-Kontingent). Er gehört nur zu deinem Konto – Spieler sehen ihn nie.</div></div>
+        <${Btn} icon="settings" onClick=${() => openSettings('ai')}>Einrichten<//>
+      </div>` : null}
+
+      ${gm ? html`
+        <div class="section-title"><${Icon} name="crown" size=${14} />Deine Kampagnen</div>
+        <div class="camp-grid">
+          ${leading.map((c) => html`<${CampaignCard} key=${c.id} c=${c} busy=${busy === `c:${c.id}`} onOpen=${() => open(c)} />`)}
+          <button type="button" class="camp-card add" onClick=${newCampaignDialog}>
+            <span class="camp-emblem add"><${Icon} name="plus" size=${22} /></span>
+            <span class="camp-body"><b>Neue Kampagne</b><span class="small muted">Leerer Codex – du bist die Spielleitung</span></span>
+          </button>
+        </div>
+        ${playing.length ? html`<div class="section-title"><${Icon} name="user" size=${14} />Als Spieler dabei</div>
+          <div class="camp-grid">${playing.map((c) => html`<${CampaignCard} key=${c.id} c=${c} busy=${busy === `c:${c.id}`} onOpen=${() => open(c)} />`)}</div>` : null}
+        <div class="section-title"><${Icon} name="zap" size=${14} />Schnellstart</div>
+        <div class="grid three">
+          <div class="card stack">
+            <h3 class="row" style="margin:0"><${Icon} name="upload" />Obsidian-Vault</h3>
+            <p class="muted small" style="margin:0">ZIP oder Ordner deines Vaults – Ordner, [[Links]], Bilder und Eigenschaften bleiben erhalten.</p>
+            <${Btn} icon="folder-open" loading=${busy === 'import'} onClick=${importObsidian}>Vault importieren<//>
+          </div>
+          <div class="card stack">
+            <h3 class="row" style="margin:0"><${Icon} name="book-open" />Beispielkampagne</h3>
+            <p class="muted small" style="margin:0">„Die Nebelküste“ – Dorf, NPCs, Quest und Statblock zum Ausprobieren.</p>
+            <${Btn} icon="book-open" loading=${busy === 'sample'} onClick=${() => run('sample', loadSampleCampaign)}>Beispiel laden<//>
+          </div>
+          ${mode === 'cloud' ? html`<${JoinCard} compact busy=${busy === 'join'} onJoin=${join} />` : null}
+        </div>`
+      : html`
+        ${mode === 'cloud' ? html`<${JoinCard} busy=${busy === 'join'} onJoin=${join} />` : null}
+        <div class="section-title"><${Icon} name="castle" size=${14} />Deine Kampagnen</div>
+        ${sorted.length
+          ? html`<div class="camp-grid">${sorted.map((c) => html`<${CampaignCard} key=${c.id} c=${c} busy=${busy === `c:${c.id}`} onOpen=${() => open(c)} />`)}</div>`
+          : html`<div class="small faint">Noch keine Kampagne – gib oben den Einladungscode ein.</div>`}
+        <div class="section-title"><${Icon} name="users" size=${14} />Deine Charaktere</div>
+        <div class="camp-grid">
+          ${(chars || []).map((c) => html`<${CharMini} key=${c.id} c=${c} onOpen=${() => openChar(c)} />`)}
+          <button type="button" class="camp-card add" onClick=${newChar}>
+            <span class="camp-emblem add"><${Icon} name="user-plus" size=${22} /></span>
+            <span class="camp-body"><b>Neuer Charakter</b><span class="small muted">Schritt für Schritt nach den 5e-Regeln</span></span>
+          </button>
+        </div>`}
+    </main>
+  </div>`;
 }
 
 // ───────────────────────── Startseite einer Kampagne ─────────────────────────
@@ -168,7 +248,6 @@ function QuickTile({ icon, label, sub, onClick }) {
 }
 
 function SetupChecklist() {
-  const mode = useStore(app, (s) => s.mode);
   const ai = useStore(settings, () => anyAIReady());
   const members = useStore(vault, (s) => Object.keys(s.members).length);
   const notes = useStore(vault, (s) => Object.keys(s.notes).length);
@@ -176,7 +255,6 @@ function SetupChecklist() {
   const steps = [
     { done: ai, label: 'KI verbinden', sub: 'Gemini, Claude, OpenAI … – Schlüssel eintragen', go: () => openView('settings', { section: 'ai' }) },
     { done: notes > 3, label: 'Welt füllen', sub: 'Obsidian importieren oder erste Notizen anlegen', go: () => openView('import') },
-    { done: mode === 'cloud', label: 'Cloud einrichten', sub: 'Sync zwischen Handy, Tablet & PC', go: () => openView('settings', { section: 'cloud' }) },
     { done: members > 1, label: 'Mitspieler einladen', sub: 'Code oder Link teilen', go: () => openView('members') },
   ];
   if (dismissed || steps.every((s) => s.done)) return null;
@@ -216,7 +294,8 @@ export function HomeView({ tabId }) {
           </div>
           <div class="row">
             <span class=${`badge ${gm ? 'gm' : 'players'}`}><${Icon} name=${gm ? 'crown' : 'user'} size=${12} />${gm ? 'Spielleitung' : 'Spieler'}</span>
-            <span class="badge"><${Icon} name=${mode === 'cloud' ? 'cloud' : 'save'} size=${12} />${mode === 'cloud' ? 'Cloud' : 'Lokal'}</span>
+            <span class="badge"><${Icon} name=${mode === 'cloud' ? 'cloud' : 'save'} size=${12} />${mode === 'cloud' ? 'Cloud' : 'Offline'}</span>
+            <${Btn} size="sm" kind="ghost" icon="home" onClick=${enterLobby}>Alle Kampagnen<//>
           </div>
         </div>
       </div>
@@ -229,7 +308,7 @@ export function HomeView({ tabId }) {
         <${QuickTile} icon="mask" label="NPC-Schmiede" sub="Figuren mit Stimme & Geheimnis" onClick=${() => openView('npc')} />
         <${QuickTile} icon="swords" label="Encounter" sub="Statblocks + Schwierigkeit" onClick=${() => openView('encounter')} />
         <${QuickTile} icon="sword" label="Kampf-Tracker" sub="Initiative, TP, Zustände" onClick=${() => openView('combat')} />
-        <${QuickTile} icon="map" label="Karten" sub="Weltkarte & Battlemaps" onClick=${() => openView('maps')} />
+        <${QuickTile} icon="map" label="Karten" sub="Weltkarte & Dungeon-Editor" onClick=${() => openView('maps')} />
         <${QuickTile} icon="message" label="Spieltisch" sub="Chat, Würfel, Play-by-Post" onClick=${() => openView('table')} />
         <${QuickTile} icon="graph" label="Graph" sub="Alle Verbindungen" onClick=${() => openView('graph')} />
       </div>` : html`<div class="grid four">

@@ -8,18 +8,19 @@
 
 | Bereich | Highlights |
 |---|---|
-| **Codex** (wie Obsidian) | Dateiexplorer mit Ordnern, Tabs mit Vor/Zurück, Lesen/Bearbeiten, `[[Wikilinks]]` mit Autovervollständigung, Rückverweise & unverlinkte Erwähnungen, Gliederung, Eigenschaften (Frontmatter), `#Tags`, Callouts, Aufgabenlisten, Bilder per Einfügen/Ziehen, Papierkorb, Vorlagen |
+| **Anmeldung** | Start mit Rollenwahl **Spielleitung** oder **Spieler**, dann Name + Geheimwort (keine E‑Mail). Danach eine Übersicht mit allem Nötigen; Konto‑Menü (Avatar) mit „Abmelden“ und „Abmelden & Gerät bereinigen“. KI‑Schlüssel gehören nur zum Konto der Spielleitung |
+| **Codex** (wie Obsidian) | Dateiexplorer mit Ordnern (**Farbe, Symbol, Etikett** pro Ordner, Filterfeld, Anzahl, angeheftete Notizen), Tabs mit Vor/Zurück, Lesen/Bearbeiten, `[[Wikilinks]]` mit Autovervollständigung, Rückverweise & unverlinkte Erwähnungen, Gliederung, Eigenschaften (Frontmatter), `#Tags`, Callouts, Aufgabenlisten, Bilder per Einfügen/Ziehen, Papierkorb, Vorlagen |
 | **Graph‑Ansicht** | Kraftlayout wie in Obsidian, Zoom/Pinch, Farbgruppen – deine Farbcodes wie „Hügelgrab (**Blau 2**)“ werden automatisch eingefärbt, lokaler Graph pro Notiz |
 | **Weltenschmiede (KI)** | 12 Generator‑Typen (Ort, Taverne, Laden & Markt, Reich, Dungeon, Fraktion, Gottheit, Quest, Gegenstand, Fest, Legende, freie Anfrage), **kombinierbare Themenblöcke** mit Gewichtung, eigene Blöcke, Rezepte, Codex‑Notizen als Kontext, Diktat, Inspirationsbilder, Preislisten im cp/sp/gp‑Stil, Bemal‑Guide für Miniaturen, Streaming, „Nachbessern“, „Fortsetzen“, Bild generieren |
 | **Speichern** | In den Codex (legt verlinkte NPCs/Orte automatisch als eigene Notizen an), an Notiz anhängen, Handout an Spieler, Markdown, Teilen, E‑Mail, Drucken/PDF – und alles automatisch im **Archiv der Welten** |
 | **NPC‑Schmiede** | Blitz‑NPCs offline (Namen, Aussehen, Marotte, Motiv, Geheimnis) + KI‑Dossiers mit Stimme, Zitaten, Bemal‑Guide, **Porträt** und **Statblock** |
 | **Encounter** | Monster aus jeder Welt (Witcher, Herr der Ringe …) lore‑getreu in 5e, **Schwierigkeit 1–10 von der KI *und* nach DMG‑Formel** (2014 oder 2024), Taktik, Gelände, Beute, Bestiarium, SRD‑Import |
 | **Kampf‑Tracker** | Initiative, Runden, TP/Temp‑TP, Zustände mit Dauer, Konzentrations‑Hinweis, Todesrettungswürfe, legendäre Aktionen, Statblocks mit klickbaren Würfen; Spieler sehen die Reihenfolge und beenden ihren Zug selbst |
-| **Karten** | Weltkarte mit Pins (Farbcode‑Notizen per Antippen platzieren), Maßstab & Maßband; Battlemaps mit Gelände‑Pinsel, Generatoren (Dungeon, Höhle, Wald, Taverne), Tokens, **Nebel des Krieges**, KI‑gemalte Karten |
+| **Karten** | **Dungeon‑Editor** im Stil von Dungeon Scrawl: Räume, runde Räume, Polygone, Gänge und Höhlen aufziehen – Wände, Schraffur und Raster entstehen automatisch; Türen, Treppen, 35 Objekte, Gelände (Wasser, Lava, Gras …), Raumnummern mit verknüpften Notizen, 4 Stile, Generatoren (Dungeon, Höhle, Taverne, Lichtung), Rückgängig, PNG‑Export, Bild als Vorlage, Spielmodus mit Tokens, **Nebel des Krieges** und Maßband. Dazu Weltkarten mit Pins (Farbcode‑Notizen) und KI‑gemalte Karten |
 | **Spieltisch** | Live‑Chat mit Würfeln (`/r 1d20+5`), Flüstern an die SL, Szenen mit Bild, Gruppenübersicht, Initiative; **Play‑by‑Post** mit „Wer ist dran?“ für asynchrones Spielen; Handouts |
 | **Kampagnen‑Manager** | Sitzungen (Lazy‑DM‑Vorbereitung, Live‑Notizen, KI‑Rückblick „Was bisher geschah“), Quests als Kanban, Mitspieler & Einladungen |
-| **Charaktere & Tagebuch** | 5e‑Charakterbogen mit klickbaren Würfen; Charaktere und Spieler‑Notizen gehören dem Spieler und **bleiben für die nächste Kampagne erhalten** |
-| **Werkzeuge** | Würfel (Pool, Vorteil, Makros), Zufallsgeneratoren (Namen, Tavernen, Märkte mit Preisfaktor, Gerüchte, Wetter, Beute …), Regel‑Nachschlagewerk + KI‑Regelfragen, **Orakel** (Chat mit deinem Codex, findet Widersprüche) |
+| **Charaktere & Tagebuch** | **Charakter‑Assistent nach den 5e‑Regeln** (2014 oder 2024): Klasse, Volk/Spezies, Hintergrund, Attribute (Standardwerte, Punktekauf, 4W6), Fertigkeiten, Talente, Ausrüstung, Zauber. Der Bogen zeigt die Werte nur an – ändern geht beim **geführten Stufenaufstieg** (TP würfeln/Durchschnitt, Unterklasse, Attributswerterhöhung/Talent, Mehrklassen). Ressourcen, Zauberplätze, Rasten, Zustände. Charaktere gehören dem Spieler und **bleiben für die nächste Kampagne erhalten** |
+| **Werkzeuge** | **Würfelschale mit Animation** (Würfel rollen von der Seite herein, Summe erst wenn alle liegen), Würfelbecher mit Anzahl, Effekte wie Vorteil, Elfische Präzision, Halblingsglück, Glückspunkt, Verlässliches Talent, Segen, Bardische Inspiration, Kritischer Treffer, Kampf mit Großwaffen, Wilder Angreifer; Würfe direkt für den eigenen Charakter. Dazu Zufallsgeneratoren, Regel‑Nachschlagewerk + KI‑Regelfragen, **Orakel** (Chat mit deinem Codex) |
 | **KI flexibel** | Google Gemini, Anthropic Claude, OpenAI, OpenRouter, eigener Server (Ollama/LM Studio) – Modell pro Aufgabe wählbar, mit Empfehlungen |
 
 ---
@@ -43,7 +44,7 @@ Das Skript installiert bei Bedarf die GitHub CLI, meldet dich im Browser an, leg
 **Als App installieren:** Adresse auf dem Gerät öffnen → Chrome/Edge: Menü ⋮ → „App installieren“ bzw. „Zum Startbildschirm hinzufügen“ · iPad/iPhone (Safari): Teilen → „Zum Home‑Bildschirm“.
 
 ### Variante C – Sync zwischen Geräten + Mitspieler (Firebase, kostenlos)
-Siehe [Cloud einrichten](#cloud-einrichten-firebase). Ohne Cloud funktioniert alles lokal pro Gerät.
+Siehe [Cloud einrichten](#cloud-einrichten-firebase). **Für dieses Projekt ist das bereits erledigt** – die Firebase‑Konfiguration steht in `js/config.js`, die App startet direkt mit der Anmeldung. Ohne Konto (nur dieses Gerät) geht es über `…/#/offline`.
 
 ---
 
@@ -91,7 +92,7 @@ Einmalig ca. 10 Minuten. Danach synchronisieren Handy, Tablet und PC, und Mitspi
 7. **Authentication → Einstellungen → Autorisierte Domains** → `<dein-name>.github.io` hinzufügen.
 8. Änderungen veröffentlichen: `powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Message "Firebase"`.
 
-Beim ersten Öffnen legst du einen Zugang an (Name + Geheimwort, mind. 6 Zeichen). Mit denselben Daten meldest du dich auf allen Geräten an. Lokale Kampagnen überträgst du unter **Einstellungen → Cloud** mit einem Klick.
+Beim ersten Öffnen wählst du **Spielleitung** oder **Spieler** und legst ein Konto an (Name + Geheimwort, mind. 6 Zeichen). Mit denselben Daten meldest du dich auf allen Geräten an. Lokale Kampagnen aus dem Offline‑Modus überträgst du unter **Einstellungen → Konto** mit einem Klick.
 
 **Kosten:** Der kostenlose Spark‑Tarif reicht für private Runden locker (1 GB Speicher, 50.000 Lesezugriffe/Tag). Bilder werden komprimiert in Firestore gespeichert – Firebase Storage (kostenpflichtig) wird nicht benötigt.
 
@@ -137,7 +138,7 @@ Lokales Testen im WLAN (z. B. am Tablet): `node tools/serve.mjs --lan` – Mikro
 
 ## Datenschutz & Sicherheit
 
-- **KI‑Schlüssel** liegen nur im Browser des jeweiligen Geräts (optional verschlüsselt übertragen in deinen privaten Firestore‑Bereich). Anfragen gehen direkt vom Browser an den Anbieter.
+- **KI‑Schlüssel** gehören zum Konto der Spielleitung: Sie liegen in deinem privaten Firestore‑Bereich (nur für dich lesbar), stehen auf all deinen Geräten bereit und werden beim Abmelden vom Gerät entfernt. Spieler sehen den KI‑Bereich nicht. Anfragen gehen direkt vom Browser an den Anbieter.
 - **Die Firebase‑Konfiguration ist nicht geheim** – geschützt wird über Anmeldung + `firestore.rules`.
 - **Backups:** Import & Export → „Komplett‑Backup (JSON)“ bzw. „Als Obsidian‑Vault“. Lokal gespeicherte Daten können vom Browser gelöscht werden, wenn der Speicher knapp wird – Einstellungen → Daten → „Dauerhaft speichern“ anfragen oder die Cloud nutzen.
 

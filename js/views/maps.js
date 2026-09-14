@@ -20,18 +20,22 @@ import {
 import { useCol, useDoc, useVisibleCol } from '../core/hooks.js';
 import { now, debounce, initials, colorFromString, sortBy } from '../lib/util.js';
 import { uploadImage } from './codex.js';
+import { DungeonMapView, newScrawlMap, SCRAWL_GENERATORS, STYLES } from './mapeditor.js';
 
 const cssVar = (n, fb) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || fb;
 
 // ───────────────────────── Kartenliste ─────────────────────────
 function MapCard({ m, gm }) {
   const cid = useStore(app, (s) => s.cid);
-  const [thumb, setThumb] = useState('');
-  useEffect(() => { if (m.fileId) fileUrl(cid, m.fileId).then(setThumb); }, [m.fileId]);
+  const [thumb, setThumb] = useState(m.type === 'scrawl' ? m.thumb || '' : '');
+  useEffect(() => {
+    if (m.type === 'scrawl') setThumb(m.thumb || '');
+    else if (m.fileId) fileUrl(cid, m.fileId).then(setThumb);
+  }, [m.fileId, m.thumb]);
   return html`<div class="card click" onClick=${() => openView('map', { id: m.id, title: m.name })}>
-    <div class="map-card-img" style=${thumb ? { backgroundImage: `url(${thumb})` } : {}}>${thumb ? null : html`<${Icon} name=${m.type === 'battle' ? 'grid' : 'map'} size=${34} />`}</div>
+    <div class="map-card-img" style=${thumb ? { backgroundImage: `url(${thumb})` } : {}}>${thumb ? null : html`<${Icon} name=${m.type === 'battle' ? 'grid' : m.type === 'scrawl' ? 'castle' : 'map'} size=${34} />`}</div>
     <div class="row nowrap"><b class="grow ellipsis">${m.name}</b>
-      <span class="badge">${m.type === 'battle' ? `Battlemap ${m.cols}×${m.rows}` : 'Weltkarte'}</span>
+      <span class="badge">${m.type === 'scrawl' ? `Dungeon ${m.w}×${m.h}` : m.type === 'battle' ? `Rasterkarte ${m.cols}×${m.rows}` : 'Weltkarte'}</span>
       ${gm ? html`<span class=${`badge ${m.visibility === 'players' ? 'players' : 'gm'}`}>${m.visibility === 'players' ? 'sichtbar' : 'SL'}</span>` : null}</div>
   </div>`;
 }
@@ -51,6 +55,19 @@ function NewBattleForm({ close }) {
     <${Field} label="Startgelände"><${Select} value=${f.gen} onChange=${(v) => setF({ ...f, gen: v })} options=${Object.entries(GENERATORS).map(([k, g]) => ({ value: k, label: g.label }))} /><//>
     <div class="row"><${Btn} icon="image" onClick=${pick}>${f.image ? 'Anderes Bild' : 'Hintergrundbild (optional)'}<//>${f.imageName ? html`<span class="small muted">${f.imageName}</span>` : null}</div>
   </div><div class="modal-foot"><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" type="submit" icon="grid">Erstellen<//></div></form>`;
+}
+
+function NewScrawlForm({ close }) {
+  const [f, setF] = useState({ name: 'Neuer Dungeon', w: 36, h: 26, style: 'klassisch', gen: 'dungeon' });
+  return html`<form onSubmit=${(e) => { e.preventDefault(); close(f); }}><div class="modal-body stack">
+    <${Field} label="Name"><input class="input" value=${f.name} onInput=${(e) => setF({ ...f, name: e.target.value })} autoFocus /><//>
+    <div class="grid two" style="gap:8px">
+      <${Field} label="Spalten (Felder à 1,5 m / 5 ft)"><input class="input" type="number" min="8" max="150" value=${f.w} onInput=${(e) => setF({ ...f, w: Math.max(8, Math.min(150, Number(e.target.value) || 36)) })} /><//>
+      <${Field} label="Zeilen"><input class="input" type="number" min="8" max="150" value=${f.h} onInput=${(e) => setF({ ...f, h: Math.max(8, Math.min(150, Number(e.target.value) || 26)) })} /><//>
+    </div>
+    <${Field} label="Stil"><div class="style-pick">${Object.entries(STYLES).map(([k, sv]) => html`<button type="button" class=${f.style === k ? 'active' : ''} onClick=${() => setF({ ...f, style: k })}><span class="sw" style=${{ background: `linear-gradient(135deg, ${sv.bg} 0 45%, ${sv.floor} 45% 70%, ${sv.wall} 70%)` }}></span>${sv.label}</button>`)}</div><//>
+    <${Field} label="Start" hint="Generierte Karten kannst du danach frei weiterbauen."><div class="chips">${Object.entries(SCRAWL_GENERATORS).map(([k, g]) => html`<button type="button" class=${`chip${f.gen === k ? ' selected' : ' suggest'}`} onClick=${() => setF({ ...f, gen: k })}>${g.label}</button>`)}</div><//>
+  </div><div class="modal-foot"><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" type="submit" icon="castle">Erstellen<//></div></form>`;
 }
 
 function AiMapForm({ close }) {
@@ -94,6 +111,12 @@ export function MapsView({ tabId }) {
     const id = await db.add(col('maps'), { name: r.name, type: 'battle', cols: r.cols, rows: r.rows, cells, fog: { enabled: false, revealed: '0'.repeat(r.cols * r.rows) }, grid: true, fileId, terrainAlpha: fileId ? 0.55 : 1, visibility: 'gm', createdAt: now() });
     openView('map', { id, title: r.name });
   };
+  const createScrawl = async () => {
+    const r = await openModal(({ close }) => html`<${NewScrawlForm} close=${close} />`, { title: 'Neuer Dungeon', icon: 'castle' });
+    if (!r) return;
+    const id = await db.add(col('maps'), newScrawlMap(r));
+    openView('map', { id, title: r.name });
+  };
   const createAi = async () => {
     const r = await openModal(({ close }) => html`<${AiMapForm} close=${close} />`, { title: 'Karte per KI malen', icon: 'sparkles' });
     if (!r) return;
@@ -117,8 +140,8 @@ export function MapsView({ tabId }) {
   return html`<${ViewFrame} tabId=${tabId} title="Karten">
     <div class="page wide stack lg">
       <div class="page-head"><h1><${Icon} name="map" size=${24} />Karten</h1><span class="grow"></span>
-        ${gm ? html`<${Btn} icon="map" loading=${busy === 'world'} onClick=${createWorld}>Weltkarte hochladen<//><${Btn} icon="grid" onClick=${createBattle}>Battlemap<//><${Btn} icon="sparkles" loading=${busy === 'ai'} onClick=${createAi}>Per KI malen<//>` : null}
-        <span class="sub">${gm ? 'Weltkarten mit verlinkten Pins (Farbcodes wie „(Blau 2)“ werden erkannt) und Battlemaps mit Tokens & Nebel – Spieler sehen nur, was du freigibst.' : 'Karten, die die Spielleitung freigegeben hat.'}</span></div>
+        ${gm ? html`<${Btn} kind="primary" icon="castle" onClick=${createScrawl}>Dungeon-Editor<//><${Btn} icon="map" loading=${busy === 'world'} onClick=${createWorld}>Weltkarte hochladen<//><${Btn} icon="sparkles" loading=${busy === 'ai'} onClick=${createAi}>Per KI malen<//><${Btn} kind="ghost" icon="grid" onClick=${createBattle}>Einfache Rasterkarte<//>` : null}
+        <span class="sub">${gm ? 'Dungeon-Editor: Räume und Gänge aufziehen – Wände, Schraffur und Raster entstehen automatisch, dazu Türen, Objekte, Tokens und Nebel. Weltkarten mit verlinkten Pins (Farbcodes wie „(Blau 2)“ werden erkannt). Spieler sehen nur, was du freigibst.' : 'Karten, die die Spielleitung freigegeben hat.'}</span></div>
       ${!maps ? html`<div class="empty"><span class="spinner" /></div>` : !maps.length ? html`<${Empty} icon="map" title="Noch keine Karten">${gm ? 'Lade deine Weltkarte hoch oder erstelle eine Battlemap.' : 'Die Spielleitung hat noch keine Karte freigegeben.'}<//>`
         : html`<div class="grid cards">${sortBy(maps, (m) => m.createdAt || 0, -1).map((m) => html`<${MapCard} key=${m.id} m=${m} gm=${gm} />`)}</div>`}
     </div>
@@ -164,8 +187,8 @@ function MapSettingsForm({ close, map }) {
         <${Field} label="Zeilen"><input class="input" type="number" min="5" max="120" value=${f.rows} onInput=${(e) => setF({ ...f, rows: Number(e.target.value) })} /><//>
       </div>
       <${Toggle} checked=${f.grid} onChange=${(v) => setF({ ...f, grid: v })} label="Raster anzeigen" />
-      ${map.fileId ? html`<div class="row small"><span class="muted" style="width:130px">Gelände-Deckkraft</span><input type="range" min="0" max="1" step="0.05" value=${f.terrainAlpha} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setF({ ...f, terrainAlpha: Number(e.target.value) })} /></div>` : null}` : html`
-      <div class="small muted">Maßstab: mit dem Maßband eine bekannte Strecke messen und hier eintragen, z. B. „50 km“.</div>`}
+      ${map.fileId ? html`<div class="row small"><span class="muted" style="width:130px">Gelände-Deckkraft</span><input type="range" min="0" max="1" step="0.05" value=${f.terrainAlpha} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setF({ ...f, terrainAlpha: Number(e.target.value) })} /></div>` : null}` : map.type === 'world' ? html`
+      <div class="small muted">Maßstab: mit dem Maßband eine bekannte Strecke messen und hier eintragen, z. B. „50 km“.</div>` : null}
     <div class="btn-row"><${Btn} kind="danger" icon="trash" onClick=${() => close({ _delete: true })}>Karte löschen<//><span class="grow"></span><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" onClick=${() => close(f)}>Übernehmen<//></div>
   </div>`;
 }
@@ -177,7 +200,36 @@ const TOOLS_GM_BATTLE = [
 const TOOLS_GM_WORLD = [['pan', 'hand', 'Bewegen'], ['pin', 'map-pin', 'Pin setzen'], ['measure', 'ruler', 'Messen']];
 const TOOLS_PLAYER = [['pan', 'hand', 'Bewegen'], ['measure', 'ruler', 'Messen']];
 
-export function MapView({ params, active, tabId }) {
+// Dungeon-Karten (neuer Editor) bzw. Welt- und Rasterkarten
+function ScrawlHost(props) {
+  const { map } = props;
+  const cid = useStore(app, (s) => s.cid);
+  const settingsDialog = async () => {
+    const r = await openModal(({ close }) => html`<${MapSettingsForm} close=${close} map=${map} />`, { title: 'Karteneinstellungen', icon: 'settings' });
+    if (!r) return;
+    if (r._delete) {
+      if (!(await confirmDialog(`Karte „${map.name}“ mit allen Tokens löschen?`, { danger: true, ok: 'Löschen' }))) return;
+      const toks = await db.list(col('tokens'), { where: [['mapId', '==', map.id]] }).catch(() => []);
+      for (const t of toks) await db.remove(col('tokens'), t.id);
+      if (map.fileId) await deleteFile(cid, map.fileId).catch(() => {});
+      await db.remove(col('maps'), map.id);
+      openView('maps', {}, { replace: true });
+      return;
+    }
+    await db.update(col('maps'), map.id, { name: r.name, visibility: r.visibility });
+    if (map.fileId && r.visibility !== map.visibility) await updateFileMeta(cid, map.fileId, { visibility: r.visibility }).catch(() => {});
+  };
+  return html`<${DungeonMapView} ...${props} settingsDialog=${settingsDialog} />`;
+}
+
+export function MapView(props) {
+  const cid = useStore(app, (s) => s.cid);
+  const map = useDoc(cid ? col('maps') : null, props.params.id);
+  if (map?.type === 'scrawl') return html`<${ScrawlHost} key=${map.id} ...${props} map=${map} />`;
+  return html`<${LegacyMapView} ...${props} />`;
+}
+
+function LegacyMapView({ params, active, tabId }) {
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
   const cid = useStore(app, (s) => s.cid);
   const members = useStore(vault, (s) => s.members);

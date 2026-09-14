@@ -136,6 +136,11 @@ export async function initCloud(config) {
     async signOut() {
       await authM.signOut(auth);
     },
+    // Offline-Kopie von Firestore auf diesem Gerät löschen (danach neu laden)
+    async wipeLocal() {
+      try { await fsM.terminate(fdb); } catch { /* ignore */ }
+      try { await fsM.clearIndexedDbPersistence(fdb); } catch { /* ignore */ }
+    },
     async changeSecret(newSecret) {
       await authM.updatePassword(auth.currentUser, newSecret);
     },

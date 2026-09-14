@@ -168,17 +168,17 @@ export function EncounterView({ tabId }) {
           <div class="card stack">
             <div class="card-head" style="margin:0"><h3><${Icon} name="users" size=${18} />Gruppe</h3><span class="grow"></span><${Btn} size="sm" icon="download" onClick=${importParty}>Aus Kampagne<//></div>
             <div class="party-levels">
-              ${draft.levels.map((l, i) => html`<span class="lvl">Stufe
+              ${draft.levels.map((l, i) => html`<span class="lvl" title=${`Charakter ${i + 1}`}><b class="faint">#${i + 1}</b> Stufe
                 <${IconBtn} icon="minus" size=${13} class="sm" onClick=${() => set({ levels: draft.levels.map((x, j) => (j === i ? Math.max(1, x - 1) : x)) })} /><b>${l}</b>
                 <${IconBtn} icon="plus" size=${13} class="sm" onClick=${() => set({ levels: draft.levels.map((x, j) => (j === i ? Math.min(20, x + 1) : x)) })} />
                 <${IconBtn} icon="x" size=${13} class="sm" onClick=${() => draft.levels.length > 1 && set({ levels: draft.levels.filter((_, j) => j !== i) })} /></span>`)}
               <${Btn} size="sm" kind="ghost" icon="plus" onClick=${() => set({ levels: [...draft.levels, draft.levels[draft.levels.length - 1] || 1] })}>Charakter<//>
             </div>
-            <div class="row small">
-              <span class="muted">Schnell:</span>
-              <input class="input tiny" type="number" min="1" max="10" value=${count} onInput=${(e) => setCount(Number(e.target.value) || 1)} /> Spieler auf Stufe
+            <div class="row small" title="Setzt die ganze Gruppe auf einmal, z. B. 4 Charaktere, alle auf Stufe 5.">
+              <span class="muted">Ganze Gruppe festlegen:</span>
+              <input class="input tiny" type="number" min="1" max="10" value=${count} onInput=${(e) => setCount(Number(e.target.value) || 1)} /> Charaktere, alle auf Stufe
               <input class="input tiny" type="number" min="1" max="20" value=${lvl} onInput=${(e) => setLvl(Number(e.target.value) || 1)} />
-              <${Btn} size="sm" onClick=${() => set({ levels: Array.from({ length: count }, () => lvl) })}>Setzen<//>
+              <${Btn} size="sm" icon="check" onClick=${() => set({ levels: Array.from({ length: count }, () => lvl) })}>Übernehmen<//>
             </div>
           </div>
 

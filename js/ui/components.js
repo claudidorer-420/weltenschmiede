@@ -458,7 +458,7 @@ export function NotePicker({ onPick, placeholder = 'Notiz suchen …', exclude =
     <input class="input" value=${q} placeholder=${placeholder} autoFocus=${autoFocus}
       onInput=${(e) => { setQ(e.target.value); setOpen(true); setAct(0); }}
       onFocus=${() => setOpen(true)} onBlur=${() => setTimeout(() => setOpen(false), 150)} onKeyDown=${onKey} />
-    ${open && (items.length || (allowCreate && q.trim())) ? html`<div class="suggest" style="left:0;right:0;top:calc(100% + 4px)">
+    ${open && (items.length || (allowCreate && q.trim())) ? html`<div class="ac-pop" style="left:0;right:0;top:calc(100% + 4px)">
       ${items.map((n, i) => html`<div class=${`suggest-item${i === act ? ' active' : ''}`} onMouseDown=${(e) => { e.preventDefault(); pick(n); }}>
         <${Icon} name="file-text" size=${15} /><span class="ellipsis">${n.title}</span>${n.folder ? html`<span class="path">${n.folder}</span>` : null}
       </div>`)}

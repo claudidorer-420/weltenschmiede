@@ -18,6 +18,11 @@ import { now, debounce, sortBy, fmtDate, fmtTime, copyText, shareText } from '..
 import { TEMPLATES } from '../data/templates.js';
 
 const PREP_TEMPLATE = TEMPLATES.find((t) => t.id === 'sitzung').body('').replace(/^---[\s\S]*?---\n/, '');
+const SESSION_TAB_HINT = {
+  prep: 'Vor dem Spiel: dein Plan für den Abend – nur für dich sichtbar.',
+  notes: 'Während des Spiels: kurz mitschreiben, was passiert – nur für dich sichtbar.',
+  recap: 'Nach dem Spiel: „Was bisher geschah“ für die Spieler – erst sichtbar, wenn du „Rückblick teilen“ wählst.',
+};
 
 // ───────────────────────── Sitzungen ─────────────────────────
 export function SessionsView({ tabId }) {
@@ -33,7 +38,16 @@ export function SessionsView({ tabId }) {
   return html`<${ViewFrame} tabId=${tabId} title="Sitzungen">
     <div class="page narrow stack lg">
       <div class="page-head"><h1><${Icon} name="calendar" size=${24} />Sitzungen</h1><span class="grow"></span>${gm ? html`<${Btn} kind="primary" icon="plus" onClick=${create}>Neue Sitzung<//>` : null}
-        <span class="sub">${gm ? 'Vorbereiten (Lazy-DM-Checkliste), live mitschreiben, danach per KI einen Rückblick für die Spieler erzeugen.' : 'Rückblicke der bisherigen Sitzungen.'}</span></div>
+        <span class="sub">${gm ? 'Eine Sitzung = ein Spielabend: vorher planen, währenddessen mitschreiben, danach den Rückblick teilen.' : 'Rückblicke der bisherigen Spielabende – „Was bisher geschah“.'}</span></div>
+      ${gm ? html`<details class="card how-to" open=${!(list || []).length}>
+        <summary><${Icon} name="help" size=${16} />So funktionieren Sitzungen</summary>
+        <div class="step-list small" style="margin-top:12px;line-height:1.55">
+          <div class="step"><div><b>Vor dem Spielabend – Vorbereitung:</b> „Neue Sitzung“ anlegen. Die Checkliste (starker Einstieg, Szenen, Geheimnisse & Hinweise, Orte, NPCs, Monster, Belohnungen) füllst du selbst – oder „KI: vorbereiten“ baut sie aus dem letzten Rückblick, den offenen Quests und ausgewählten Codex-Notizen. Nur du siehst sie.</div></div>
+          <div class="step"><div><b>Während des Spiels – Live-Notizen:</b> kurze Stichpunkte, was passiert (mit Zeitstempel-Knopf oder per Diktat). Ebenfalls nur für dich.</div></div>
+          <div class="step"><div><b>Nach dem Spiel – Rückblick:</b> „Rückblick erzeugen“ macht aus deinen Notizen eine Zusammenfassung. Mit „Rückblick teilen“ sehen die Spieler sie hier, und die KI nutzt sie als Gedächtnis für die nächste Vorbereitung.</div></div>
+        </div>
+        <div class="small faint" style="margin-top:10px">Tipp: Der Status „geplant“ / „gespielt“ und das Datum erscheinen auf der Startseite unter „Nächste Sitzung“.</div>
+      </details>` : null}
       ${!sorted ? html`<div class="empty"><span class="spinner" /></div>` : !sorted.length ? html`<${Empty} icon="calendar" title="Noch keine Sitzungen">${gm ? 'Lege die erste Sitzung an.' : 'Die Spielleitung hat noch keine Rückblicke geteilt.'}<//>` : html`<div class="stack sm">
         ${sorted.map((s) => html`<div class="session-item" key=${s.id} onClick=${() => openView('session', { id: s.id, title: s.title })}>
           <div class="num">#${s.number || '?'}</div>
@@ -102,6 +116,7 @@ export function SessionView({ params, tabId }) {
           <${Btn} size="sm" kind=${s.visibility === 'players' ? 'success' : ''} icon=${s.visibility === 'players' ? 'users' : 'lock'} onClick=${() => setMeta({ visibility: s.visibility === 'players' ? 'gm' : 'players' })}>${s.visibility === 'players' ? 'Rückblick geteilt' : 'Rückblick teilen'}<//>` : null}
       </div>
       ${gm ? html`<div class="row"><${Segmented} value=${tab} onChange=${setTab} options=${[{ value: 'prep', label: 'Vorbereitung', icon: 'list-checks' }, { value: 'notes', label: 'Live-Notizen', icon: 'pencil' }, { value: 'recap', label: 'Rückblick', icon: 'scroll' }]} /><span class="grow"></span><${ModelPicker} task="summary" value=${model} onChange=${setModel} /></div>
+        <div class="small muted" style="margin-top:-8px">${SESSION_TAB_HINT[tab]}</div>
         <div class="card stack sm"><div class="small muted">Codex-Kontext für die KI (optional):</div><${NotePicker} onPick=${(n) => setCtx([...new Set([...ctx, n.id])])} exclude=${ctx} />
           ${ctx.length ? html`<div class="chips">${ctx.map((id) => vault.get().notes[id]).filter(Boolean).map((n) => html`<span class="chip accent">${n.title}<span class="x" onClick=${() => setCtx(ctx.filter((x) => x !== n.id))}><${Icon} name="x" size=${12} /></span></span>`)}</div>` : null}</div>` : null}
       <${GenStatus} gen=${gen} />
@@ -215,8 +230,8 @@ export function MembersView({ tabId }) {
 
   if (mode !== 'cloud') {
     return html`<${ViewFrame} tabId=${tabId} title="Mitspieler & Einladungen"><div class="page narrow">
-      <${Empty} icon="cloud-off" title="Für Mitspieler braucht es die Cloud" action=${html`<${Btn} kind="primary" icon="settings" onClick=${() => openView('settings', { section: 'cloud' })}>Cloud einrichten<//>`}>
-        Aktuell liegt alles nur auf diesem Gerät. Mit einem kostenlosen Firebase-Projekt (ca. 10 Minuten, Anleitung in der README) können Mitspieler per Code beitreten, und deine Geräte synchronisieren sich.
+      <${Empty} icon="cloud-off" title="Offline-Modus: keine Mitspieler" action=${html`<${Btn} kind="primary" icon="settings" onClick=${() => openView('settings', { section: 'konto' })}>Konto<//>`}>
+        Im Offline-Modus liegt alles nur auf diesem Gerät. Beende ihn unter Konto und melde dich an – dann können Mitspieler per Code beitreten.
       <//></div><//>`;
   }
   const share = async (role) => {
