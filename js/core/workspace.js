@@ -11,7 +11,8 @@ export const ws = createStore({
   leftPanel: 'files',
   rightPanel: 'backlinks',
   drawer: null, // 'left' | 'right' | null (mobil)
-  palette: null, // 'commands' | 'switcher' | null
+  palette: null, // 'all' (Notizen + Befehle) | 'commands' | null
+  chatUnread: false,
   searchQuery: '',
   editMode: {}, // noteId -> true
 });

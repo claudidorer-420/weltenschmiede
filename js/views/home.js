@@ -3,7 +3,7 @@ import { html, useState, useMemo, useEffect } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import {
   app, vault, createCampaign, openCampaign, deleteCampaign, leaveCampaign, updateCampaign, joinCampaign,
-  importNotes, addFolders, getIndex, myUid, enterLobby,
+  importNotes, addFolders, getIndex, myUid, enterLobby, getInvitesFor, inviteLink,
 } from '../core/app.js';
 import { openView, openNote } from '../core/workspace.js';
 import { settings, updateSettings } from '../core/settings.js';
@@ -11,7 +11,7 @@ import { anyAIReady } from '../core/ai.js';
 import { Icon, Btn, IconBtn, Field, Avatar, openModal, confirmDialog, promptDialog, toast, openMenu } from '../ui/components.js';
 import { ViewFrame } from '../ui/frame.js';
 import { useCol, useVisibleCol } from '../core/hooks.js';
-import { fmtRelative, fmtDate, sortBy, colorFromString, initials } from '../lib/util.js';
+import { fmtRelative, fmtDate, sortBy, colorFromString, initials, copyText, shareText } from '../lib/util.js';
 import { SAMPLE_CAMPAIGN } from '../data/templates.js';
 import { newNoteQuick } from '../ui/palette.js';
 import { accountMenu, openSettings } from '../ui/account.js';
@@ -84,6 +84,36 @@ export async function joinDialog() {
   } catch (e) {
     toast(e.message, 'error');
   }
+}
+
+// Einladungscodes einer Kampagne (Spieler + Co-SL) mit Kopieren/Teilen
+function InviteCodes({ cid, name }) {
+  const [inv, setInv] = useState(null);
+  const [err, setErr] = useState('');
+  const cloud = app.get().mode === 'cloud';
+  useEffect(() => {
+    if (cloud) getInvitesFor(cid, name).then(setInv).catch((e) => setErr(e.message || String(e)));
+  }, [cid]);
+  if (!cloud) return html`<div class="small muted">Einladungen gibt es nur mit Konto (Cloud) – im Offline-Modus kann niemand beitreten.</div>`;
+  if (err) return html`<div class="small danger-text">${err}</div>`;
+  if (!inv) return html`<div class="row small muted"><span class="spinner sm" /> Code wird geladen …</div>`;
+  const row = (label, code, hint) => html`<div class="invite-row">
+    <div class="grow" style="min-width:0"><div class="tiny faint">${label}</div><b class="invite-code">${code}</b><div class="tiny faint">${hint}</div></div>
+    <${IconBtn} icon="copy" title="Code kopieren" onClick=${async () => { await copyText(code); toast(`Code ${code} kopiert`, 'success'); }} />
+    <${IconBtn} icon="link" title="Einladungslink kopieren" onClick=${async () => { await copyText(inviteLink(code)); toast('Einladungslink kopiert', 'success'); }} />
+    <${IconBtn} icon="share" title="Teilen" onClick=${async () => { const r = await shareText({ title: `Einladung: ${name}`, text: `Komm in meine Kampagne „${name}“ in der Weltenschmiede – Code ${code}`, url: inviteLink(code) }); if (r && r !== 'shared' && r !== 'aborted') toast('Einladung kopiert', 'success'); }} />
+  </div>`;
+  return html`<div class="invite-box">
+    ${row('Spieler-Code', inv.player, 'Für deine Mitspieler – nach der Anmeldung eingeben oder den Link öffnen')}
+    ${row('Co-Spielleitung', inv.gm, 'Nur an Mit-Spielleiter weitergeben – gibt volle SL-Rechte')}
+  </div>`;
+}
+
+export function inviteDialog(c) {
+  return openModal(() => html`<div class="modal-body stack">
+    <div class="small muted">Gib den Spieler-Code oder den Link an deine Mitspieler. Neue Codes (alte werden ungültig) gibt es unter „Mitspieler & Einladungen“ in der Kampagne.</div>
+    <${InviteCodes} cid=${c.id} name=${c.name} />
+  </div>`, { title: `Einladen: ${c.name}`, icon: 'user-plus' });
 }
 
 export function campaignMenu(e) {
@@ -209,7 +239,8 @@ export function Lobby() {
       ${gm ? html`
         <div class="section-title"><${Icon} name="crown" size=${14} />Deine Kampagnen</div>
         <div class="camp-grid">
-          ${leading.map((c) => html`<${CampaignCard} key=${c.id} c=${c} busy=${busy === `c:${c.id}`} onOpen=${() => open(c)} />`)}
+          ${leading.map((c) => html`<div class="camp-wrap" key=${c.id}><${CampaignCard} c=${c} busy=${busy === `c:${c.id}`} onOpen=${() => open(c)} />
+            ${mode === 'cloud' ? html`<button type="button" class="camp-invite" title="Einladungscode anzeigen" onClick=${() => inviteDialog(c)}><${Icon} name="user-plus" size=${16} /></button>` : null}</div>`)}
           <button type="button" class="camp-card add" onClick=${newCampaignDialog}>
             <span class="camp-emblem add"><${Icon} name="plus" size=${22} /></span>
             <span class="camp-body"><b>Neue Kampagne</b><span class="small muted">Leerer Codex – du bist die Spielleitung</span></span>
@@ -318,7 +349,7 @@ export function HomeView({ tabId }) {
         <${QuickTile} icon="anvil" label="Weltenschmiede" sub="Orte, Läden, Reiche per KI" onClick=${() => openView('forge')} />
         <${QuickTile} icon="mask" label="NPC-Schmiede" sub="Figuren mit Stimme & Geheimnis" onClick=${() => openView('npc')} />
         <${QuickTile} icon="swords" label="Encounter" sub="Statblocks + Schwierigkeit" onClick=${() => openView('encounter')} />
-        <${QuickTile} icon="sword" label="Kampf-Tracker" sub="Initiative, TP, Zustände" onClick=${() => openView('combat')} />
+        <${QuickTile} icon="sword" label="Kampf" sub="Kampfkarte mit Initiative & Reichweiten" onClick=${() => import('./maps.js').then((m) => m.openBattle())} />
         <${QuickTile} icon="map" label="Karten" sub="Weltkarte & Dungeon-Editor" onClick=${() => openView('maps')} />
         <${QuickTile} icon="message" label="Spieltisch" sub="Chat, Würfel, Play-by-Post" onClick=${() => openView('table')} />
         <${QuickTile} icon="graph" label="Graph" sub="Alle Verbindungen" onClick=${() => openView('graph')} />
@@ -367,6 +398,7 @@ export function CampaignsView({ tabId }) {
   const campaign = useStore(app, (s) => s.campaign);
   const user = useStore(app, (s) => s.user);
   const [desc, setDesc] = useState(campaign?.description || '');
+  const [inviteOpen, setInviteOpen] = useState(null);
   useEffect(() => setDesc(campaign?.description || ''), [campaign?.id]);
   const isOwner = campaign?.ownerUid === user?.uid;
 
@@ -403,12 +435,16 @@ export function CampaignsView({ tabId }) {
       </div>` : null}
       <div class="card">
         <div class="list">
-          ${campaigns.map((c) => html`<div class="list-item">
-            <${Icon} name=${c.role === 'gm' ? 'crown' : 'user'} size=${16} />
-            <span class="title" onClick=${() => openCampaign(c.id)}>${c.name} ${c.id === cid ? html`<span class="badge accent">aktiv</span>` : null}</span>
-            <span class="meta">${c.role === 'gm' ? 'Spielleitung' : 'Spieler'}</span>
-            ${c.id !== cid ? html`<${Btn} size="sm" onClick=${() => openCampaign(c.id)}>Öffnen<//>` : null}
-            ${c.role === 'gm' && (c.id !== cid || isOwner) ? html`<${IconBtn} icon="trash" class="danger" title="Löschen" onClick=${() => remove(c)} />` : html`<${IconBtn} icon="log-out" title="Verlassen" onClick=${() => leave(c)} />`}
+          ${campaigns.map((c) => html`<div key=${c.id}>
+            <div class="list-item">
+              <${Icon} name=${c.role === 'gm' ? 'crown' : 'user'} size=${16} />
+              <span class="title" onClick=${() => openCampaign(c.id)}>${c.name} ${c.id === cid ? html`<span class="badge accent">aktiv</span>` : null}</span>
+              <span class="meta">${c.role === 'gm' ? 'Spielleitung' : 'Spieler'}</span>
+              ${c.role === 'gm' ? html`<${Btn} size="sm" icon="user-plus" kind=${inviteOpen === c.id ? 'primary' : ''} onClick=${() => setInviteOpen(inviteOpen === c.id ? null : c.id)}>Einladungscode<//>` : null}
+              ${c.id !== cid ? html`<${Btn} size="sm" onClick=${() => openCampaign(c.id)}>Öffnen<//>` : null}
+              ${c.role === 'gm' && (c.id !== cid || isOwner) ? html`<${IconBtn} icon="trash" class="danger" title="Löschen" onClick=${() => remove(c)} />` : html`<${IconBtn} icon="log-out" title="Verlassen" onClick=${() => leave(c)} />`}
+            </div>
+            ${inviteOpen === c.id ? html`<div class="invite-inline"><${InviteCodes} cid=${c.id} name=${c.name} /></div>` : null}
           </div>`)}
         </div>
       </div>

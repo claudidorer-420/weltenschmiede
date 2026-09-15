@@ -6,11 +6,14 @@ import { openNote, openSearch } from '../core/workspace.js';
 import { settings, updateSettings, DEFAULT_GRAPH_GROUPS } from '../core/settings.js';
 import { groupColor } from '../core/groups.js';
 import { ViewFrame } from '../ui/frame.js';
-import { Icon, IconBtn, Btn, Toggle } from '../ui/components.js';
+import { Icon, IconBtn, Btn, Toggle, Segmented } from '../ui/components.js';
 
 const cssVar = (name, fb) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
 
-function buildData({ local, depth = 1, gs }) {
+// Letzte Positionen der 2D-Ansicht – der 3D-Graph startet mit denselben Punkten
+export const layout2d = { byId: null };
+
+export function buildData({ local, depth = 1, gs }) {
   const idx = getIndex();
   const nodes = new Map();
   const links = [];
@@ -108,6 +111,7 @@ function GraphCanvas({ active, focus, local, depth = 1, compact = false, query =
     }
     s.nodes = [...byId.values()];
     s.byId = byId;
+    if (!local) layout2d.byId = byId;
     s.adj = data.adj;
     s.links = data.links.map(([a, b]) => ({ a: byId.get(a), b: byId.get(b) })).filter((l) => l.a && l.b);
     s.alpha = Math.max(s.alpha, fresh.length ? 1 : 0.4);
@@ -162,6 +166,7 @@ function GraphCanvas({ active, focus, local, depth = 1, compact = false, query =
       const s = S.current;
       const moved = step(s, settings.get().graph, false);
       if (!s.fitted && s.w > 10) fit(s);
+      else if (moved && !s.pan && !s.pinch) clampView(s);
       if (moved || s.dirty) {
         draw(s, canvasRef.current, settings.get().graph, compact);
         s.dirty = false;
@@ -200,6 +205,7 @@ function GraphCanvas({ active, focus, local, depth = 1, compact = false, query =
       s.t.x = x - (x - s.t.x) * real;
       s.t.y = y - (y - s.t.y) * real;
       s.t.k = k;
+      clampView(s);
       s.dirty = true;
     };
     const down = (e) => {
@@ -247,6 +253,7 @@ function GraphCanvas({ active, focus, local, depth = 1, compact = false, query =
         if (Math.abs(dx) + Math.abs(dy) > 3) s.pan.moved = true;
         s.t.x = s.pan.tx + dx;
         s.t.y = s.pan.ty + dy;
+        clampView(s);
         s.dirty = true;
         return;
       }
@@ -335,6 +342,24 @@ function rScale(k) {
 }
 function nodeRadius(n, gs) {
   return (3.2 + Math.sqrt(n.deg || 0) * 1.7) * (gs.nodeSize || 1);
+}
+
+// Nie den ganzen Graphen aus dem Bild schieben: der nächstgelegene Knoten bleibt immer deutlich im Bild.
+function clampView(s) {
+  if (!s.nodes.length || s.w < 10) return;
+  const { k, x: tx, y: ty } = s.t;
+  const m = Math.max(28, Math.min(s.w, s.h) * 0.12);
+  let best = null;
+  let bd = Infinity;
+  for (const n of s.nodes) {
+    const px = n.x * k + tx;
+    const py = n.y * k + ty;
+    if (px >= m && px <= s.w - m && py >= m && py <= s.h - m) return;
+    const d = (px - s.w / 2) ** 2 + (py - s.h / 2) ** 2;
+    if (d < bd) { bd = d; best = [px, py]; }
+  }
+  s.t.x += Math.min(s.w - m, Math.max(m, best[0])) - best[0];
+  s.t.y += Math.min(s.h - m, Math.max(m, best[1])) - best[1];
 }
 
 function fit(s) {
@@ -505,13 +530,25 @@ function GraphControls({ query, setQuery, onClose }) {
   </div>`;
 }
 
+// 3D-Ansicht erst laden, wenn sie gebraucht wird
+let graph3d = null;
+function Lazy3D(props) {
+  const [Comp, setComp] = useState(() => graph3d);
+  useEffect(() => {
+    if (!Comp) import('./graph3d.js').then((m) => { graph3d = m.Graph3D; setComp(() => m.Graph3D); });
+  }, []);
+  return Comp ? html`<${Comp} ...${props} />` : html`<div class="empty" style="position:absolute;inset:0;justify-content:center"><span class="spinner lg" /></div>`;
+}
+
 export function GraphView({ params, active, tabId }) {
   const [panel, setPanel] = useState(false);
   const [query, setQuery] = useState('');
   const groups = useStore(settings, (s) => s.graph.groups);
+  const dim = useStore(settings, (s) => (s.graph.dim === '3d' ? '3d' : '2d'));
   return html`<${ViewFrame} tabId=${tabId} title="Graph-Ansicht" noScroll
-    actions=${html`<${IconBtn} icon="settings" title="Graph-Einstellungen" active=${panel} onClick=${() => setPanel(!panel)} />`}>
-    <${GraphCanvas} active=${active} focus=${params.focus} query=${query} />
+    actions=${html`<${Segmented} value=${dim} onChange=${(v) => updateSettings({ graph: { dim: v } })} options=${[{ value: '2d', label: '2D', title: 'Flacher Graph wie in Obsidian' }, { value: '3d', label: '3D', title: 'Dieselben Knoten als drehbare 3D-Wolke' }]} />
+      <${IconBtn} icon="settings" title="Graph-Einstellungen" active=${panel} onClick=${() => setPanel(!panel)} />`}>
+    ${dim === '3d' ? html`<${Lazy3D} active=${active} focus=${params.focus} query=${query} />` : html`<${GraphCanvas} active=${active} focus=${params.focus} query=${query} />`}
     ${panel ? html`<${GraphControls} query=${query} setQuery=${setQuery} onClose=${() => setPanel(false)} />` : null}
     <div class="graph-legend" style="left:auto;right:10px;bottom:10px">${groups.filter((g) => g.query).slice(0, 10).map((g) => html`<span class="chip"><span class="pin-dot" style=${{ background: g.color, width: '10px', height: '10px', boxShadow: 'none' }}></span>${g.label || g.query.replace(/^\(|^path:|^tag:/, '')}</span>`)}</div>
   <//>`;

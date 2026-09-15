@@ -484,6 +484,7 @@ function BookmarksPanel() {
 
 // ───────────────────────── Rechte Seitenleiste ─────────────────────────
 const RIGHT_TABS = [
+  ['chat', 'message', 'Chat & Würfel'],
   ['backlinks', 'link', 'Rückverweise'],
   ['outgoing', 'arrow-right', 'Ausgehende Links'],
   ['outline', 'list', 'Gliederung'],
@@ -491,13 +492,30 @@ const RIGHT_TABS = [
   ['tags', 'tag', 'Tags'],
 ];
 
+// Chat lädt das Spieltisch-Modul erst, wenn er gebraucht wird
+let chatMod = null;
+function LazyChat() {
+  const [Comp, setComp] = useState(() => chatMod?.ChatPanel || null);
+  useEffect(() => {
+    if (!Comp) import('./table.js').then((m) => { chatMod = m; setComp(() => m.ChatPanel); });
+  }, []);
+  return Comp ? html`<${Comp} />` : html`<div class="empty" style="flex:1"><span class="spinner" /></div>`;
+}
+
 export function RightSidebar() {
   const panel = useStore(ws, (s) => s.rightPanel);
+  const unread = useStore(ws, (s) => s.chatUnread);
   const noteId = useStore(ws, (s) => {
     const c = currentOf(s.tabs.find((t) => t.id === s.active));
     return c.view === 'note' ? c.params.id : null;
   });
   const note = useStore(vault, (s) => (noteId ? s.notes[noteId] : null));
+  const tabs = html`<div class="right-tabs">
+      ${RIGHT_TABS.map(([id, icon, title]) => html`<${IconBtn} key=${id} icon=${icon} title=${title} active=${panel === id} class=${id === 'chat' && unread && panel !== 'chat' ? 'has-dot' : ''} onClick=${() => ws.set({ rightPanel: id })} />`)}
+      <span class="grow"></span>
+      ${isMobile() ? html`<${IconBtn} icon="x" title="Schließen" onClick=${() => ws.set({ drawer: null })} />` : null}
+    </div>`;
+  if (panel === 'chat') return html`<aside class="sidebar right">${tabs}<${LazyChat} /></aside>`;
   let body;
   if (panel === 'tags') body = html`<${TagsPanel} />`;
   else if (!note) body = html`<div class="tree-empty">Öffne eine Notiz, um hier ${RIGHT_TABS.find((t) => t[0] === panel)?.[2] || 'Details'} zu sehen.</div>`;
@@ -506,11 +524,7 @@ export function RightSidebar() {
   else if (panel === 'local') body = html`<${LocalGraphPanel} note=${note} />`;
   else body = html`<${BacklinksPanel} note=${note} />`;
   return html`<aside class="sidebar right">
-    <div class="right-tabs">
-      ${RIGHT_TABS.map(([id, icon, title]) => html`<${IconBtn} key=${id} icon=${icon} title=${title} active=${panel === id} onClick=${() => ws.set({ rightPanel: id })} />`)}
-      <span class="grow"></span>
-      ${isMobile() ? html`<${IconBtn} icon="x" title="Schließen" onClick=${() => ws.set({ drawer: null })} />` : null}
-    </div>
+    ${tabs}
     <div class="sidebar-body">${body}</div>
   </aside>`;
 }

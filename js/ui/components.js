@@ -495,6 +495,12 @@ export function ModelPicker({ task, value, onChange }) {
     if (!ready.length) items.push({ label: 'Noch kein Anbieter eingerichtet', disabled: true, icon: 'alert' });
     items.push({ divider: true });
     if (sel) items.push({ label: 'Als Standard für diese Aufgabe merken', icon: 'save', onClick: () => { updateSettings({ ai: { tasks: { [task]: ref } } }); toast('Als Standard gespeichert', 'success'); } });
+    if (sel && sel.provider !== 'demo') {
+      items.push({
+        label: 'Überall als bevorzugtes Modell verwenden', icon: 'star',
+        onClick: () => { updateSettings({ ai: TASKS[task]?.image ? { preferredImage: ref } : { preferred: ref } }); toast(`${modelLabel(sel)} ist jetzt dein bevorzugtes Modell`, 'success'); },
+      });
+    }
     items.push({ label: 'KI-Einstellungen …', icon: 'settings', onClick: () => openView('settings', { section: 'ai' }) });
     openMenu(e, items);
   };

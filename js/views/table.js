@@ -3,7 +3,8 @@ import { html, useState, useEffect, useRef, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import { app, vault, col, myUid, myName, gmUids, updateCampaign, isRealGM } from '../core/app.js';
 import { db } from '../core/db.js';
-import { openView } from '../core/workspace.js';
+import { showRightPanel, isMobile } from '../core/workspace.js';
+import { sendEvent } from '../core/relay.js';
 import { watchParty } from '../core/party.js';
 import { doRoll } from '../core/rolls.js';
 import { fileUrl } from '../core/files.js';
@@ -114,14 +115,14 @@ function InitiativeStrip() {
   const mine = cur?.ownerUid === me;
   return html`<div class="card tight stack sm">
     <div class="row"><span class="round-badge">Runde ${pub.round}</span><b>Kampf</b><span class="grow"></span>
-      ${mine ? html`<${Btn} kind="primary" size="sm" icon="check" onClick=${() => db.set(col('signals'), me, { type: 'endTurn', ts: now() }).then(() => toast('Zug beendet', 'success'))}>Mein Zug ist fertig<//>` : null}
-      <${Btn} size="sm" kind="ghost" icon="sword" onClick=${() => openView('combat')}>Öffnen<//></div>
+      ${mine ? html`<${Btn} kind="primary" size="sm" icon="check" onClick=${() => sendEvent({ type: 'endTurn' }).then(() => toast('Zug beendet', 'success'))}>Mein Zug ist fertig<//>` : null}
+      <${Btn} size="sm" kind="ghost" icon="swords" onClick=${() => import('./maps.js').then((m) => m.openBattle())}>Zum Kampf<//></div>
     <div class="turn-strip">${pub.list.map((c) => html`<span class=${`turn-pill${c.id === pub.currentId ? ' current' : ''}${c.down ? ' down' : ''}`}>${c.init ?? '–'} · ${c.name}${c.hp != null ? ` (${c.hp})` : ''}</span>`)}</div>
   </div>`;
 }
 
-// ───────────────────────── Chat ─────────────────────────
-function Chat({ active }) {
+// ───────────────────────── Chat (rechte Seitenleiste) ─────────────────────────
+export function ChatPanel({ active = true }) {
   const me = myUid();
   const gm = useStore(app, (s) => s.role === 'gm');
   const members = useStore(vault, (s) => s.members);
@@ -184,8 +185,8 @@ function Chat({ active }) {
   };
   const nameOf = (uid) => members[uid]?.name || 'Unbekannt';
 
-  return html`<div class="table-side">
-    <div class="row" style="padding:10px 12px;border-bottom:1px solid var(--border)"><b class="grow"><${Icon} name="message" size=${16} /> Chat & Würfel</b>
+  return html`<div class="chat-panel">
+    <div class="row" style="padding:8px 12px;border-bottom:1px solid var(--border)"><b class="grow"><${Icon} name="message" size=${16} /> Chat & Würfel</b>
       ${gm ? html`<${IconBtn} icon="trash" title="Chat leeren" onClick=${clearChat} />` : null}</div>
     <div class="chat-log" ref=${logRef}>
       ${!all.length ? html`<div class="small faint center" style="margin:auto">Noch nichts los. Tipp: <code>/r 1d20+5 Angriff</code> würfelt für alle sichtbar.</div>` : null}
@@ -375,16 +376,16 @@ export function TableView({ tabId, active }) {
   const campaign = useStore(app, (s) => s.campaign);
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
   const [tab, setTab] = useState('live');
-  return html`<${ViewFrame} tabId=${tabId} title="Spieltisch" bodyClass=${tab === 'live' ? 'no-scroll' : ''}
-    actions=${html`<${Segmented} value=${tab} onChange=${setTab} options=${[{ value: 'live', label: 'Live', icon: 'message' }, { value: 'pbp', label: 'Play-by-Post', icon: 'feather' }, { value: 'handouts', label: 'Handouts', icon: 'scroll' }]} />`}>
+  // Der Chat wohnt in der rechten Seitenleiste – am Spieltisch (PC/Tablet) direkt aufklappen
+  useEffect(() => { if (active && tab === 'live' && !isMobile()) showRightPanel('chat'); }, [active]);
+  return html`<${ViewFrame} tabId=${tabId} title="Spieltisch"
+    actions=${html`<${Segmented} value=${tab} onChange=${setTab} options=${[{ value: 'live', label: 'Szene', icon: 'image' }, { value: 'pbp', label: 'Play-by-Post', icon: 'feather' }, { value: 'handouts', label: 'Handouts', icon: 'scroll' }]} />`}>
     ${mode !== 'cloud' ? html`<div class="callout callout-orange small" style="margin:10px 16px">Nur auf diesem Gerät – damit Mitspieler mitmachen können, richte die Cloud ein (Einstellungen → Cloud).</div>` : null}
-    ${tab === 'live' ? html`<div class="table-layout" style=${{ height: mode !== 'cloud' ? 'calc(100% - 52px)' : '100%' }}>
-      <div class="table-main stack">
-        <${SceneCard} scene=${campaign?.scene} gm=${gm} />
-        <${InitiativeStrip} />
-        <${PartyStrip} />
-      </div>
-      <${Chat} active=${active} />
+    ${tab === 'live' ? html`<div class="page stack">
+      <div class="card row chat-hint"><${Icon} name="message" size=${18} class="accent-text" /><span class="grow small muted">Chat & Würfe sind jetzt in der rechten Seitenleiste – so hast du sie auf jeder Seite der App dabei (Karte, Bogen, Codex …).</span><${Btn} size="sm" icon="message" onClick=${() => showRightPanel('chat')}>Chat öffnen<//></div>
+      <${SceneCard} scene=${campaign?.scene} gm=${gm} />
+      <${InitiativeStrip} />
+      <${PartyStrip} />
     </div>` : tab === 'pbp' ? html`<${PlayByPost} active=${active} />` : html`<${Handouts} />`}
   <//>`;
 }

@@ -13,7 +13,7 @@ import { changeSecretDialog, signOutDialog, switchKind } from '../ui/account.js'
 import { localSummary, migrateLocalToCloud } from './importexport.js';
 
 const ALL_SECTIONS = [
-  { value: 'ai', label: 'KI & Modelle', icon: 'sparkles', gm: true },
+  { value: 'ai', label: 'KI & Modelle', icon: 'sparkles' },
   { value: 'konto', label: 'Konto', icon: 'user' },
   { value: 'look', label: 'Darstellung', icon: 'palette' },
   { value: 'game', label: 'Spiel', icon: 'd20' },
@@ -57,9 +57,43 @@ function ProviderCard({ id }) {
   </div>`;
 }
 
+// Ein Modell für alles: wird in allen Generatoren vorausgewählt (pro Anfrage trotzdem umschaltbar)
+function PreferredCard({ tasks }) {
+  const ai = useStore(settings, (s) => s.ai);
+  const text = modelsFor('world').filter((m) => m.ready);
+  const img = modelsFor('image').filter((m) => m.ready);
+  const own = tasks.filter((t) => !TASKS[t].image && ai.tasks?.[t]);
+  const groups = (list) => Object.entries(list.reduce((acc, m) => ((acc[m.provider] ||= []).push(m), acc), {}));
+  const opts = (list) => groups(list).map(([p, ms]) => html`<optgroup label=${PROVIDERS[p]?.label || p}>${ms.slice(0, 150).map((m) => html`<option value=${m.ref}>${m.label}${m.free ? ' (gratis)' : ''}</option>`)}</optgroup>`);
+  const set = (patch) => updateSettings({ ai: patch });
+  const useEverywhere = () => {
+    set({ tasks: Object.fromEntries(own.map((t) => [t, ''])) });
+    toast('Alle Aufgaben nutzen jetzt das bevorzugte Modell', 'success');
+  };
+  return html`<div class="card stack accent-left">
+    <div class="card-head" style="margin:0"><h3><${Icon} name="star" size=${18} />Bevorzugtes Modell</h3></div>
+    ${!text.length ? html`<div class="small muted">Trag oben einen Schlüssel ein – danach wählst du hier dein Lieblingsmodell, das überall vorausgewählt wird.</div>` : html`
+      <div class="small muted">Wird in allen Generatoren vorausgewählt. Pro Anfrage kannst du trotzdem jederzeit über den Modell-Knopf wechseln.</div>
+      <div class="grid two" style="gap:10px">
+        <${Field} label="Für Texte (Weltenschmiede, NPCs, Encounter, Regeln …)">
+          <select class="select" value=${ai.preferred || ''} onChange=${(e) => set({ preferred: e.target.value })}>
+            <option value="">Automatisch – beste Empfehlung je Aufgabe</option>${opts(text)}
+          </select><//>
+        ${tasks.includes('image') ? html`<${Field} label="Für Bilder (Porträts, Karten, Szenen)">
+          <select class="select" value=${ai.preferredImage || ''} disabled=${!img.length} onChange=${(e) => set({ preferredImage: e.target.value })}>
+            <option value="">${img.length ? 'Automatisch – beste Empfehlung' : 'Kein Bildmodell verfügbar'}</option>${opts(img)}
+          </select><//>` : null}
+      </div>
+      ${ai.preferred && own.length ? html`<div class="row small"><${Icon} name="info" size=${15} class="accent-text" />
+        <span class="grow muted">${own.length === 1 ? 'Eine Aufgabe hat' : `${own.length} Aufgaben haben`} unten eine eigene Auswahl (${own.map((t) => TASKS[t].label).join(', ')}) und ${own.length === 1 ? 'nutzt' : 'nutzen'} deshalb nicht das bevorzugte Modell.</span>
+        <${Btn} size="sm" icon="star" onClick=${useEverywhere}>Überall bevorzugtes Modell<//></div>` : null}`}
+  </div>`;
+}
+
 function TaskRow({ task }) {
   const t = TASKS[task];
   const chosen = useStore(settings, (s) => s.ai.tasks?.[task] || '');
+  const pref = useStore(settings, (s) => (t.image ? s.ai.preferredImage : s.ai.preferred) || '');
   useStore(settings, (s) => s.ai.providers);
   const recs = recommendedRefs(task);
   const models = modelsFor(task);
@@ -79,7 +113,7 @@ function TaskRow({ task }) {
     </div>
     <div class="stack sm">
       <select class="select" value=${chosen} onChange=${(e) => updateSettings({ ai: { tasks: { [task]: e.target.value } } })}>
-        <option value="">Automatisch (beste verfügbare Empfehlung)</option>
+        <option value="">${pref ? 'Automatisch → bevorzugtes Modell' : 'Automatisch (beste verfügbare Empfehlung)'}</option>
         ${ready.length ? html`<optgroup label="Verfügbar">${ready.slice(0, 80).map((m) => html`<option value=${m.ref}>${label(m)}</option>`)}</optgroup>` : null}
         ${notReady.length ? html`<optgroup label="Schlüssel fehlt">${notReady.map((m) => html`<option value=${m.ref} disabled>${label(m)}</option>`)}</optgroup>` : null}
       </select>
@@ -88,10 +122,15 @@ function TaskRow({ task }) {
   </div>`;
 }
 
+// Aufgaben, für die Spieler die KI nutzen (Regelfragen im Regelteil)
+const PLAYER_TASKS = ['rules'];
+
 function AISection() {
   const ai = useStore(settings, (s) => s.ai);
   const mode = useStore(app, (s) => s.mode);
+  const gm = useStore(app, (s) => s.role === 'gm');
   const usage = usageStats();
+  const tasks = Object.keys(TASKS).filter((t) => gm || PLAYER_TASKS.includes(t));
   return html`<div class="stack lg">
     <div class="callout callout-blue"><div class="callout-title"><${Icon} name="info" size=${16} />So funktioniert der KI-Zugang</div><div class="callout-content small" style="line-height:1.6">
       Du bringst deinen eigenen Schlüssel mit – die App schickt Anfragen direkt vom Browser an den Anbieter, ohne Umweg über einen Server. Du zahlst nur, was du nutzt.<br />
@@ -100,17 +139,19 @@ function AISection() {
     <div class="card row nowrap" style="gap:12px">
       <${Icon} name="lock" size=${20} class="accent-text" />
       <div class="small muted" style="line-height:1.55">${mode === 'cloud'
-        ? 'Deine Schlüssel gehören zu deinem Konto: Sie liegen im privaten Bereich deines Kontos (nur du kannst sie lesen), stehen auf all deinen Geräten bereit und werden beim Abmelden von diesem Gerät entfernt. Spieler sehen diesen Bereich nicht.'
-        : 'Offline-Modus: Die Schlüssel liegen nur auf diesem Gerät.'}</div>
+        ? `Deine Schlüssel gehören nur zu deinem Konto: Sie liegen im privaten Bereich deines Kontos – nur du kannst sie lesen, ${gm ? 'deine Spieler' : 'weder die Spielleitung noch deine Mitspieler'} sehen sie nie. Sie stehen auf all deinen Geräten bereit und werden beim Abmelden von diesem Gerät entfernt; meldet sich jemand anderes an, sind sie weg.`
+        : 'Offline-Modus: Die Schlüssel liegen nur auf diesem Gerät und gehören zum Offline-Profil.'}</div>
     </div>
+    ${gm ? null : html`<div class="small muted">Als Spieler nutzt du die KI für Regelfragen (Regeln → „Regelfrage an die KI“). Die Anfragen laufen über deinen eigenen Schlüssel – die Spielleitung zahlt nichts dafür und sieht nichts davon.</div>`}
     <div class="grid two">${['gemini', 'anthropic', 'openai', 'openrouter'].map((id) => html`<${ProviderCard} key=${id} id=${id} />`)}</div>
     <${ProviderCard} id="custom" />
+    <${PreferredCard} tasks=${tasks} />
     <${Toggle} checked=${ai.demo} onChange=${(v) => updateSettings({ ai: { demo: v } })} label="Demo-Modus (Beispieltexte ohne KI)" />
 
     <div class="card">
       <div class="card-head"><h3><${Icon} name="layers" size=${18} />Welches Modell für welche Aufgabe?</h3><span class="grow"></span><${Btn} size="sm" icon="star" onClick=${() => { const t = applyRecommendations(); toast(`${Object.keys(t).length} Empfehlungen übernommen`, 'success'); }}>Empfehlungen übernehmen<//></div>
       <div class="small muted">⭐ = Top-Empfehlung, ☆ = gute Alternative. In jedem Generator kannst du das Modell zusätzlich pro Anfrage wechseln.</div>
-      ${Object.keys(TASKS).map((t) => html`<${TaskRow} key=${t} task=${t} />`)}
+      ${tasks.map((t) => html`<${TaskRow} key=${t} task=${t} />`)}
     </div>
 
     ${Object.keys(usage).length ? html`<div class="card"><div class="card-head"><h3><${Icon} name="activity" size=${18} />Nutzung auf diesem Gerät</h3><span class="grow"></span><${Btn} size="sm" kind="ghost" onClick=${() => { localStorage.removeItem('ws.usage'); toast('Zurückgesetzt'); }}>Zurücksetzen<//></div>

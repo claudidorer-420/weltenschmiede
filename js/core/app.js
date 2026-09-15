@@ -3,6 +3,7 @@ import { createStore, useStore } from './store.js';
 import { db, connectCloud, useLocalDb } from './db.js';
 import {
   settings, getCloudConfig, setCloudConfig, modePref, setCloudSettingsSync, mergeRemoteSettings, applyTheme, ensureSettingsOwner, clearAiKeys,
+  hasBakedCloudConfig,
 } from './settings.js';
 import { uid, now, inviteCode, sortBy } from '../lib/util.js';
 import { parseFrontmatter, extractLinks, extractTags, renameLinkTarget } from '../lib/markdown.js';
@@ -112,7 +113,7 @@ async function onSignedIn(baseUser, { explicit = false } = {}) {
         if (remote?.data) mergeRemoteSettings(remote.data);
       } catch { /* offline */ }
       setCloudSettingsSync((data) => db.set(`users/${user.uid}/private`, 'settings', { data, updatedAt: now() }).catch(() => {}));
-    }
+    } else ensureSettingsOwner(user.uid); // KI-Schlüssel eines anderen Kontos nie im Offline-Modus weiterverwenden
     await refreshCampaigns();
     let target = null;
     const code = app.get().joinCode;
@@ -337,18 +338,30 @@ export async function deleteCampaign(cid) {
 }
 
 // ───────────────────────── Einladungen & Mitglieder ─────────────────────────
-export async function getInvites() {
-  const { cid, campaign } = app.get();
-  let inv = await db.get(col('gm'), 'invites').catch(() => null);
+// Einladungscodes einer Kampagne (nur SL) – werden beim ersten Aufruf angelegt
+export async function getInvitesFor(cid, name = '') {
+  let inv = await db.get(`campaigns/${cid}/gm`, 'invites').catch(() => null);
   if (inv?.player && inv?.gm) return inv;
   const player = inviteCode(6);
   const gm = inviteCode(8);
-  const base = { campaignId: cid, campaignName: campaign?.name || '', createdAt: now() };
+  const base = { campaignId: cid, campaignName: name, createdAt: now() };
   await db.set('invites', player, { ...base, role: 'player' });
   await db.set('invites', gm, { ...base, role: 'gm' });
   inv = { player, gm };
-  await db.set(col('gm'), 'invites', inv);
+  await db.set(`campaigns/${cid}/gm`, 'invites', inv);
   return inv;
+}
+
+export function getInvites() {
+  const { cid, campaign } = app.get();
+  return getInvitesFor(cid, campaign?.name || '');
+}
+
+export function inviteLink(code) {
+  const base = `${location.origin}${location.pathname}`;
+  const cfg = getCloudConfig();
+  const fb = !hasBakedCloudConfig() && cfg ? `?fb=${encodeB64Url(cfg)}` : '';
+  return `${base}#/join/${code}${fb}`;
 }
 
 export async function renewInvite(role) {

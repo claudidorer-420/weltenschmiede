@@ -4,6 +4,7 @@
 import { html, useState, useEffect, useRef } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import { col, myName } from '../core/app.js';
+import { openView } from '../core/workspace.js';
 import { db } from '../core/db.js';
 import { useCol, useDoc } from '../core/hooks.js';
 import { watchParty } from '../core/party.js';
@@ -698,7 +699,7 @@ function TurnStrip({ B, s }) {
       </button>`;
     })}</div>
     <div class="bt-ctl">
-      ${B.gm && c.active ? html`<${IconBtn} icon="skip-back" title="Vorheriger Zug" onClick=${prevTurn} /><${Btn} size="sm" kind="primary" icon="skip-forward" onClick=${nextTurn}>Nächster Zug<//><${IconBtn} icon="stop" title="Kampf beenden" onClick=${endCombat} />` : null}
+      ${B.gm && c.active ? html`<${IconBtn} icon="skip-back" title="Vorheriger Zug" onClick=${prevTurn} /><${Btn} size="sm" kind="primary" icon="skip-forward" onClick=${nextTurn}>Nächster Zug<//><${IconBtn} icon="stop" title="Kampf beenden" onClick=${endCombat} /><${IconBtn} icon="list" title="Kampf-Tracker (Liste mit allen Werten)" onClick=${() => openView('combat')} />` : null}
       ${B.gm && !c.active ? html`<${Btn} size="sm" kind="primary" icon="swords" onClick=${() => startCombat(B)}>Kampf starten<//>` : null}
       ${!B.gm && c.active && mine ? html`<${Btn} size="sm" kind="primary" icon="check" onClick=${() => sendEvent({ type: 'endTurn' })}>Zug beenden<//>` : null}
       ${!B.gm && c.active && myCb && myCb.init == null ? html`<${Btn} size="sm" icon="d20" onClick=${rollMyInit}>Initiative<//>` : null}

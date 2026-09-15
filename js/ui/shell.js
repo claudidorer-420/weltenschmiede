@@ -1,12 +1,13 @@
 // App-Hülle: Anmeldung/Start, Ribbon, Seitenleisten, Tabs, Ansichten (lazy geladen), Statusleiste.
 import { html, useState, useEffect, useLayoutEffect, useRef } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { app, vault, noteById } from '../core/app.js';
+import { app, vault, noteById, col } from '../core/app.js';
 import { settings, updateSettings } from '../core/settings.js';
 import {
   ws, currentOf, openView, closeTab, setActive, newTab, toggleLeft, toggleRight, restoreTabs,
-  showLeftPanel, closeOtherTabs, moveTab,
+  showLeftPanel, showRightPanel, closeOtherTabs, moveTab, isMobile,
 } from '../core/workspace.js';
+import { useCol } from '../core/hooks.js';
 import { Icon, IconBtn, OverlayHost, ErrorBoundary, openMenu, useMedia, Spinner, Empty, Avatar } from './components.js';
 import { ViewFrame } from './frame.js';
 import { Palette, registerShortcuts, openPalette } from './palette.js';
@@ -78,19 +79,31 @@ export function viewTitle(cur) {
   return typeof def.title === 'function' ? def.title(cur.params || {}) : def.title;
 }
 
+// „Karten“ fragt erst: Karten ansehen oder zum Kampf (Kampfkarte)?
+function mapsOrBattle(e) {
+  openMenu(e, [
+    { header: true, label: 'Was möchtest du öffnen?' },
+    { label: 'Karten', icon: 'map', hint: 'Welt & Dungeons', onClick: () => openView('maps') },
+    { label: 'Kampf', icon: 'swords', hint: 'Kampfkarte', onClick: () => import('../views/maps.js').then((m) => m.openBattle()) },
+  ]);
+}
+const SEARCH = { action: () => openPalette('all'), icon: 'search', title: 'Suche & Befehle (Strg+K)', label: 'Suche' };
+const MAPS = { action: mapsOrBattle, icon: 'map', title: 'Karten oder Kampf', label: 'Karten', views: ['maps', 'map', 'combat'] };
+const CHAT = { action: () => showRightPanel('chat'), icon: 'message', title: 'Chat & Würfel (rechte Seitenleiste)', label: 'Chat', chat: true };
+
 const RIBBON_GM = [
   { view: 'home', icon: 'home', title: 'Start', label: 'Start' },
-  { action: () => openPalette('switcher'), icon: 'search', title: 'Schnellwechsler (Strg+O)', label: 'Suche' },
+  SEARCH,
   { view: 'graph', icon: 'graph', title: 'Graph-Ansicht (Strg+G)', label: 'Graph' },
   '|',
   { view: 'forge', icon: 'anvil', title: 'Weltenschmiede (KI)', label: 'Schmiede' },
   { view: 'npc', icon: 'mask', title: 'NPC-Schmiede', label: 'NPCs' },
   { view: 'encounter', icon: 'swords', title: 'Encounter & Statblocks', label: 'Encounter' },
   { view: 'bestiary', icon: 'ghost', title: 'Bestiarium (SRD + eigene Monster)', label: 'Bestiarium' },
-  { view: 'combat', icon: 'sword', title: 'Kampf-Tracker', label: 'Kampf' },
-  { view: 'maps', icon: 'map', title: 'Karten', label: 'Karten' },
+  MAPS,
   '|',
-  { view: 'table', icon: 'message', title: 'Spieltisch (online)', label: 'Spieltisch' },
+  { view: 'table', icon: 'image', title: 'Spieltisch: Szene, Gruppe, Play-by-Post', label: 'Spieltisch' },
+  CHAT,
   { view: 'sessions', icon: 'calendar', title: 'Sitzungen', label: 'Sitzungen' },
   { view: 'quests', icon: 'list-checks', title: 'Quests', label: 'Quests' },
   { view: 'characters', icon: 'users', title: 'Charaktere', label: 'Charaktere' },
@@ -101,21 +114,20 @@ const RIBBON_GM = [
   { view: 'rules', icon: 'book', title: 'Regeln & Zauber', label: 'Regeln' },
   { view: 'archive', icon: 'archive', title: 'Archiv der Welten', label: 'Archiv' },
   '~',
-  { action: () => openPalette('commands'), icon: 'command', title: 'Befehle (Strg+P)', label: 'Befehle' },
   { view: 'import', icon: 'upload', title: 'Import & Export', label: 'Import' },
   { view: 'settings', icon: 'settings', title: 'Einstellungen', label: 'Optionen' },
 ];
 
 const RIBBON_PLAYER = [
   { view: 'home', icon: 'home', title: 'Start', label: 'Start' },
-  { action: () => openPalette('switcher'), icon: 'search', title: 'Schnellwechsler (Strg+O)', label: 'Suche' },
+  SEARCH,
   { view: 'graph', icon: 'graph', title: 'Graph-Ansicht', label: 'Graph' },
   '|',
-  { view: 'table', icon: 'message', title: 'Spieltisch', label: 'Spieltisch' },
+  { view: 'table', icon: 'image', title: 'Spieltisch: Szene, Gruppe, Play-by-Post', label: 'Spieltisch' },
+  CHAT,
   { view: 'characters', icon: 'user', title: 'Mein Charakter', label: 'Charakter' },
   { view: 'journal', icon: 'feather', title: 'Mein Tagebuch', label: 'Tagebuch' },
-  { view: 'combat', icon: 'sword', title: 'Kampf', label: 'Kampf' },
-  { view: 'maps', icon: 'map', title: 'Karten', label: 'Karten' },
+  MAPS,
   { view: 'quests', icon: 'list-checks', title: 'Quests', label: 'Quests' },
   { view: 'sessions', icon: 'calendar', title: 'Sitzungen', label: 'Sitzungen' },
   { view: 'handouts', icon: 'scroll', title: 'Handouts', label: 'Handouts' },
@@ -156,6 +168,7 @@ function Workspace() {
   // SL: Signale der Spieler (Zugende, Initiative, Angriffe) verarbeiten – unabhängig von der offenen Ansicht
   const role = useStore(app, (x) => x.role);
   useEffect(() => (cid && role === 'gm' ? startGmRelay() : undefined), [cid, role]);
+  useChatUnread(cid);
   useEffect(() => {
     const h = location.hash;
     const m = /#\/(dice|table)$/.exec(h);
@@ -170,6 +183,24 @@ function Workspace() {
   </main>`;
   if (mobile) return html`<div class="app">${main}<${MobileDrawers} drawer=${s.drawer} /></div>`;
   return html`<div class="app"><${Ribbon} />${s.leftOpen ? html`<${LeftSidebar} />` : null}${main}${s.rightOpen ? html`<${RightSidebar} />` : null}</div>`;
+}
+
+// Neue Chatnachrichten melden, solange der Chat nicht sichtbar ist (Punkt an Ribbon, Seitenleisten-Knopf und Chat-Reiter)
+function useChatUnread(cid) {
+  const me = useStore(app, (s) => s.user?.uid);
+  const last = useCol(cid ? col('chat') : null, { orderBy: ['ts', 'desc'], limit: 1 });
+  const visible = useStore(ws, (s) => s.rightPanel === 'chat' && (isMobile() ? s.drawer === 'right' : s.rightOpen));
+  const m = last?.[0];
+  useEffect(() => {
+    if (!cid) return;
+    const key = `ws.chatSeen.${cid}`;
+    const seen = Number(localStorage.getItem(key) || 0);
+    if (!m) { ws.set({ chatUnread: false }); return; }
+    if (!seen || visible || m.uid === me) {
+      if ((m.ts || 0) > seen) localStorage.setItem(key, String(m.ts || 0));
+      ws.set({ chatUnread: false });
+    } else ws.set({ chatUnread: (m.ts || 0) > seen });
+  }, [cid, m?.id, m?.ts, visible]);
 }
 
 // Schubladen (Handy): zum Schließen wegwischen, vom Bildschirmrand hereinziehen zum Öffnen
@@ -264,13 +295,15 @@ function Ribbon() {
   const user = useStore(app, (s) => s.user);
   const labels = useStore(settings, (s) => s.layout?.ribbonLabels !== false);
   const current = useStore(ws, (s) => currentOf(s.tabs.find((t) => t.id === s.active)).view);
+  const unread = useStore(ws, (s) => s.chatUnread);
   const items = gm ? RIBBON_GM : RIBBON_PLAYER;
   return html`<nav class=${`ribbon${labels ? ' labeled' : ''}`} aria-label="Module">
     ${items.map((it, i) => {
       if (it === '|') return html`<div class="ribbon-sep" key=${`s${i}`} />`;
       if (it === '~') return html`<div class="grow" key=${`g${i}`} />`;
-      return html`<button key=${it.title} type="button" class=${`ribbon-btn${it.view && current === it.view ? ' active' : ''}`} title=${it.title} aria-label=${it.title}
-        onClick=${(e) => (it.action ? it.action() : openView(it.view, {}, { newTab: e.ctrlKey || e.metaKey }))}><${Icon} name=${it.icon} size=${labels ? 18 : 19} />${labels ? html`<span class="rb-label">${it.label}</span>` : null}</button>`;
+      const on = (it.view && current === it.view) || it.views?.includes(current);
+      return html`<button key=${it.title} type="button" class=${`ribbon-btn${on ? ' active' : ''}`} title=${it.title} aria-label=${it.title}
+        onClick=${(e) => (it.action ? it.action(e) : openView(it.view, {}, { newTab: e.ctrlKey || e.metaKey }))}><${Icon} name=${it.icon} size=${labels ? 18 : 19} />${labels ? html`<span class="rb-label">${it.label}</span>` : null}${it.chat && unread ? html`<span class="dot" />` : null}</button>`;
     })}
     <button type="button" class="ribbon-btn ribbon-toggle" title=${labels ? 'Beschriftung ausblenden (schmale Leiste)' : 'Beschriftung einblenden'} onClick=${() => updateSettings({ layout: { ribbonLabels: !labels } })}>
       <${Icon} name=${labels ? 'chevron-left' : 'chevron-right'} size=${14} /></button>
@@ -337,8 +370,11 @@ function tabListMenu(e, tabs) {
   ]);
 }
 
+const useChatDot = () => useStore(ws, (s) => s.chatUnread && !(s.rightPanel === 'chat' && (isMobile() ? s.drawer === 'right' : s.rightOpen)));
+
 function TabBar({ tabs, active, leftOpen, rightOpen }) {
   useStore(vault, (s) => s.version);
+  const dot = useChatDot();
   return html`<div class="tabbar">
     <div class="tb-tools">${!leftOpen ? html`<${IconBtn} icon="panel-left" title="Linke Seitenleiste" onClick=${toggleLeft} />` : html`<${IconBtn} icon="panel-left" title="Linke Seitenleiste ausblenden" onClick=${toggleLeft} />`}</div>
     ${tabs.map((t) => {
@@ -354,13 +390,14 @@ function TabBar({ tabs, active, leftOpen, rightOpen }) {
     <div class="tb-tools"><${IconBtn} icon="plus" title="Neuer Tab" onClick=${newTab} /></div>
     <div class="tb-tools tb-end">
       <${IconBtn} icon="chevron-down" title="Alle Tabs" onClick=${(e) => tabListMenu(e, tabs)} />
-      <${IconBtn} icon="panel-right" title=${rightOpen ? 'Rechte Seitenleiste ausblenden' : 'Rechte Seitenleiste'} onClick=${toggleRight} />
+      <${IconBtn} icon="panel-right" class=${dot ? 'has-dot' : ''} title=${rightOpen ? 'Rechte Seitenleiste ausblenden' : 'Rechte Seitenleiste (Chat, Rückverweise …)'} onClick=${toggleRight} />
     </div>
   </div>`;
 }
 
 function MobileHeader({ tabs, active }) {
   useStore(vault, (s) => s.version);
+  const dot = useChatDot();
   const at = tabs.find((t) => t.id === active);
   return html`<div class="m-header">
     <${IconBtn} icon="panel-left" title="Seitenleiste" onClick=${toggleLeft} size=${20} />
@@ -377,7 +414,7 @@ function MobileHeader({ tabs, active }) {
     <${IconBtn} icon="plus" title="Neuer Tab" onClick=${newTab} />
     <button type="button" class="tab-count only-phone" title="Tabs" onClick=${(e) => tabListMenu(e, tabs)}>${tabs.length}</button>
     <${IconBtn} icon="chevron-down" class="only-tablet" title="Tabs" onClick=${(e) => tabListMenu(e, tabs)} />
-    <${IconBtn} icon="panel-right" title="Rechte Seitenleiste" onClick=${toggleRight} size=${20} />
+    <${IconBtn} icon="panel-right" class=${dot ? 'has-dot' : ''} title="Rechte Seitenleiste (Chat …)" onClick=${toggleRight} size=${20} />
   </div>`;
 }
 

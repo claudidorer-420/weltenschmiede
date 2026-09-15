@@ -33,6 +33,8 @@ export const DEFAULTS = {
       custom: { key: '', baseUrl: 'http://localhost:11434/v1', model: '' },
     },
     tasks: {},
+    preferred: '', // bevorzugtes Textmodell ('anbieter:modell'), überall vorausgewählt
+    preferredImage: '',
     loaded: {},
     demo: false,
     syncKeys: true,
@@ -50,6 +52,8 @@ export const DEFAULTS = {
     centerForce: 1,
     textFade: 1,
     arrows: false,
+    dim: '2d',
+    spin: true,
   },
   forge: { recipes: [], customBlocks: [], lastConfig: null },
   bookmarks: [],

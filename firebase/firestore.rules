@@ -69,7 +69,13 @@ service cloud.firestore {
       // Inhalte mit Sichtbarkeit
       match /notes/{id}    { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
       match /sessions/{id} { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
-      match /quests/{id}   { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
+      // Quests: Spieler dürfen freigegebene Quests zwischen den Spalten verschieben (nur Status)
+      match /quests/{id}   {
+        allow read: if isGM(cid) || (isMember(cid) && playerVisible());
+        allow write: if isGM(cid);
+        allow update: if isMember(cid) && playerVisible() && request.resource.data.visibility == 'players'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'movedBy']);
+      }
       match /maps/{id}     { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
       match /pins/{id}     { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
       match /handouts/{id} { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }

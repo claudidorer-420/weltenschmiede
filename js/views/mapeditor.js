@@ -744,8 +744,8 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const tokOpts = role === 'gm' ? { where: [['mapId', '==', params.id]] } : { where: [['mapId', '==', params.id], ['visibility', '==', 'players']] };
   const tokensRaw = useCol(cid ? col('tokens') : null, tokOpts);
   const tokens = (tokensRaw || []).filter((t) => gm || t.visibility === 'players');
-  const [mode, setMode] = useState(gm ? 'build' : 'play');
-  const [tool, setTool] = useState(gm ? 'room' : 'pan');
+  const [mode, setMode] = useState(gm && !params.play ? 'build' : 'play');
+  const [tool, setTool] = useState(gm && !params.play ? 'room' : 'pan');
   const [op, setOp] = useState('add');
   const [snap, setSnap] = useState('grid');
   const [width, setWidth] = useState(1);

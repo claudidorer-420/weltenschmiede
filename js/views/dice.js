@@ -162,14 +162,14 @@ export function DiceView({ tabId }) {
       <div class="row"><b class="grow"><${Icon} name="user" size=${16} /> ${char.name}</b><span class="small muted">Übung +${cm.pb} · Initiative ${fmtMod(cm.init)} · RK ${cm.ac.ac}</span></div>
       <${Segmented} value=${tab} onChange=${setTab} options=${[{ value: 'checks', label: 'Proben' }, { value: 'saves', label: 'Rettungswürfe' }, { value: 'attacks', label: 'Angriffe' }]} />
       ${tab === 'checks' ? html`<div class="quick-rolls">
-        <button type="button" class="qr" disabled=${rolling} onClick=${() => roll20(cm.init, 'Initiative', 'init')}><span>Initiative</span><b>${fmtMod(cm.init)}</b></button>
-        ${AB.map((k) => html`<button type="button" class="qr" disabled=${rolling} onClick=${() => roll20(cm.mods[k], `${AB_NAME[k]}-Probe`, 'check', 0)}><span>${AB_NAME[k]}</span><b>${fmtMod(cm.mods[k])}</b></button>`)}
-        ${ALL_SKILLS.map((k) => html`<button type="button" class=${`qr${cm.skills[k].prof ? ' prof' : ''}`} disabled=${rolling} onClick=${() => roll20(cm.skills[k].bonus, skillName(k), 'check', cm.skills[k].prof)}>
+        <button type="button" class="qroll"disabled=${rolling} onClick=${() => roll20(cm.init, 'Initiative', 'init')}><span>Initiative</span><b>${fmtMod(cm.init)}</b></button>
+        ${AB.map((k) => html`<button type="button" class="qroll"disabled=${rolling} onClick=${() => roll20(cm.mods[k], `${AB_NAME[k]}-Probe`, 'check', 0)}><span>${AB_NAME[k]}</span><b>${fmtMod(cm.mods[k])}</b></button>`)}
+        ${ALL_SKILLS.map((k) => html`<button type="button" class=${`qroll${cm.skills[k].prof ? ' prof' : ''}`} disabled=${rolling} onClick=${() => roll20(cm.skills[k].bonus, skillName(k), 'check', cm.skills[k].prof)}>
           <span>${skillName(k)} <small class="faint">${AB_SHORT[skillAbility(k)]}</small></span><b>${fmtMod(cm.skills[k].bonus)}</b></button>`)}
       </div>` : null}
       ${tab === 'saves' ? html`<div class="quick-rolls">
-        ${AB.map((k) => html`<button type="button" class=${`qr${cm.saves[k].prof ? ' prof' : ''}`} disabled=${rolling} onClick=${() => roll20(cm.saves[k].bonus, `${AB_NAME[k]}-Rettungswurf`, 'save')}><span>${AB_NAME[k]}</span><b>${fmtMod(cm.saves[k].bonus)}</b></button>`)}
-        <button type="button" class="qr" disabled=${rolling} onClick=${() => go('1d20', { label: 'Todesrettungswurf', kind: 'save' })}><span>Todesrettung</span><b>SG 10</b></button>
+        ${AB.map((k) => html`<button type="button" class=${`qroll${cm.saves[k].prof ? ' prof' : ''}`} disabled=${rolling} onClick=${() => roll20(cm.saves[k].bonus, `${AB_NAME[k]}-Rettungswurf`, 'save')}><span>${AB_NAME[k]}</span><b>${fmtMod(cm.saves[k].bonus)}</b></button>`)}
+        <button type="button" class="qroll"disabled=${rolling} onClick=${() => go('1d20', { label: 'Todesrettungswurf', kind: 'save' })}><span>Todesrettung</span><b>SG 10</b></button>
       </div>` : null}
       ${tab === 'attacks' ? html`<div class="stack sm">
         ${weapons.map((a) => html`<div class="atk-row">

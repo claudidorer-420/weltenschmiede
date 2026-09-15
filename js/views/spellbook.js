@@ -228,7 +228,7 @@ export function SpellManager({ c, entries, onChange, mode = 'sheet', baseline = 
     openSpellDetail(s, { ed, charLevel, footer: html`<${Foot} />` });
   };
 
-  return html`<div class="sm">
+  return html`<div class="spm">
     ${tabs.length > 1 ? html`<div class="sm-tabs">${tabs.map((t) => html`<button type="button" class=${`sm-tab${t.key === tab ? ' active' : ''}`} onClick=${() => { setTab(t.key); setLvl('all'); setSel(null); }}>${t.label}</button>`)}</div>` : null}
     ${n ? html`<div class="sm-counters">
       <${Counter} label="Zaubertricks" have=${cnt.cantrips} need=${n.cantrips} />

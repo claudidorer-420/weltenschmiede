@@ -2,7 +2,7 @@
 // - App-Dateien: "network first" (Updates greifen sofort), offline aus dem Cache
 // - CDN-Bibliotheken (versionierte URLs): "cache first"
 // tools/publish.ps1 erhöht bei jeder Veröffentlichung die VERSION und aktualisiert die Dateiliste.
-const VERSION = 'ws-2026-09-15-1804';
+const VERSION = 'ws-2026-09-15-2117';
 const CDN_CACHE = 'ws-cdn-v1';
 // @@FILES-START@@
 const SHELL = [
@@ -38,7 +38,9 @@ const SHELL = [
   './js/data/items.js',
   './js/data/magicitems-srd.js',
   './js/data/mapgen.js',
+  './js/data/monsternames.js',
   './js/data/monsters-srd.js',
+  './js/data/origins.js',
   './js/data/rules5e.js',
   './js/data/spells.js',
   './js/data/spells-2014.js',
@@ -77,6 +79,7 @@ const SHELL = [
   './js/views/forge.js',
   './js/views/generators.js',
   './js/views/graph.js',
+  './js/views/graph3d.js',
   './js/views/home.js',
   './js/views/importexport.js',
   './js/views/journal.js',

@@ -1,5 +1,5 @@
 // Encounter-Generator (lore-getreue Statblocks per KI + Schwierigkeit 1–10 aus KI UND DMG-Formel) und Bestiarium.
-import { html, useState, useEffect, useMemo } from '../lib/preact.js';
+import { html, useState, useEffect, useMemo, useRef } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import { app, col, createNote } from '../core/app.js';
 import { openView, openNote } from '../core/workspace.js';
@@ -22,13 +22,82 @@ import { normalizeMonster, monsterToMarkdown } from '../ui/statblock.js';
 import { useCol } from '../core/hooks.js';
 import { uid, now, sortBy, debounce, fmtDate } from '../lib/util.js';
 import { crToNumber } from '../data/rules5e.js';
+import { ORIGINS, DND, namesFor, matchNames, hasNameList, originOf, originShort } from '../data/origins.js';
 
-const ORIGINS = ['Standard D&D (5e)', 'The Witcher', 'Herr der Ringe', 'Elder Scrolls', 'Dark Souls / Elden Ring', 'Warhammer', 'Game of Thrones', 'Diablo', 'Final Fantasy', 'Eigene Kreation', 'Sonstiges'];
 const ENVIRONMENTS = ['Wald', 'Höhle', 'Ruine', 'Sumpf', 'Gebirge', 'Stadtgassen', 'Taverne', 'Schiff', 'Wüste', 'Friedhof', 'Tempel', 'Kanalisation', 'Brücke', 'Schneesturm'];
 const GOALS = ['Kampf bis zum Tod', 'Hinterhalt', 'Verteidigung', 'Flucht', 'Boss-Kampf', 'Welle um Welle', 'Ritual unterbrechen', 'Geisel befreien', 'Verfolgungsjagd'];
 
-const blankMonster = () => ({ id: uid(6), qty: 1, name: '', origin: 'Sonstiges', note: '' });
+const blankMonster = (origin = DND) => ({ id: uid(6), qty: 1, name: '', origin, note: '' });
 const defaultDraft = () => ({ levels: [5, 5, 5, 5], monsters: [blankMonster()], environment: '', goal: '', extra: '', paint: false });
+
+// Namensfeld mit Suchliste: Monster der gewählten Welt (Wiki-Listen, bei D&D SRD + offizielle Bücher) und das eigene Bestiarium
+function MonsterNameInput({ value, origin, onChange, bestiary }) {
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState(null);
+  const [act, setAct] = useState(0);
+  const [pos, setPos] = useState(null);
+  const wrap = useRef();
+  // Liste breit nach rechts aufklappen (am rechten Rand nach links verschieben)
+  const place = () => {
+    const r = wrap.current?.getBoundingClientRect();
+    if (!r) return;
+    const vw = document.documentElement.clientWidth;
+    const width = Math.round(Math.min(520, vw - 24, Math.max(r.width, 420)));
+    setPos({ width, left: Math.round(Math.min(0, vw - 12 - (r.left + width))) });
+  };
+  const show = () => { place(); setOpen(true); };
+  useEffect(() => {
+    let alive = true;
+    setList(null);
+    namesFor(origin).then((l) => alive && setList(l)).catch(() => alive && setList([]));
+    return () => { alive = false; };
+  }, [origin]);
+  const own = useMemo(() => (bestiary || [])
+    .filter((b) => !hasNameList(origin) || originOf(b) === origin)
+    .map((b) => ({ name: b.name, meta: `HG ${b.cr ?? '?'}`, own: true })), [bestiary, origin]);
+  const items = useMemo(() => {
+    const seen = new Set();
+    const all = [...own, ...(list || [])].filter((it) => {
+      const k = it.name.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    return matchNames(all, value, 60);
+  }, [own, list, value]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const off = (e) => { if (!wrap.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('pointerdown', off);
+    addEventListener('resize', place);
+    return () => {
+      document.removeEventListener('pointerdown', off);
+      removeEventListener('resize', place);
+    };
+  }, [open]);
+  const pick = (it) => { onChange(it.name); setOpen(false); };
+  const onKey = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!open) show(); setAct((a) => Math.min(items.length - 1, a + 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setAct((a) => Math.max(0, a - 1)); }
+    else if (e.key === 'Enter' && open && items[act]) { e.preventDefault(); pick(items[act]); }
+    else if (e.key === 'Escape' || e.key === 'Tab') setOpen(false);
+  };
+  const total = (list?.length || 0) + own.length;
+  const ph = hasNameList(origin) ? `Monster suchen (${list ? total : '…'})` : 'Name frei eingeben';
+  const tip = hasNameList(origin) ? `${total} Monster aus ${originShort(origin)} – tippen zum Filtern oder frei eingeben` : 'Eigene Kreatur: Name frei eingeben';
+  return html`<div class="mn-combo" ref=${wrap}>
+    <input class="input" value=${value} placeholder=${ph} title=${tip} autocomplete="off" spellcheck=${false}
+      onInput=${(e) => { onChange(e.target.value); show(); setAct(0); }} onFocus=${show} onKeyDown=${onKey} />
+    <button type="button" class="mn-toggle" tabIndex="-1" title="Liste öffnen" onPointerDown=${(e) => e.preventDefault()} onClick=${() => (open ? setOpen(false) : show())}><${Icon} name="chevron-down" size=${15} /></button>
+    ${open && (items.length || !list) ? html`<div class="mn-pop" role="listbox" style=${pos ? { width: `${pos.width}px`, left: `${pos.left}px` } : null}>
+      ${!list ? html`<div class="mn-empty"><span class="spinner sm" /> Namen werden geladen …</div>` : null}
+      ${items.map((it, i) => html`<button type="button" key=${`${it.name}:${i}`} class=${`mn-item${i === act ? ' active' : ''}`} onMouseEnter=${() => setAct(i)} onPointerDown=${(e) => e.preventDefault()} onClick=${() => pick(it)}>
+        <span class="mn-name">${it.name}${it.alt ? html` <small>${it.alt}</small>` : null}</span>
+        <span class="mn-meta">${it.own ? html`<span class="badge players">Bestiarium</span>` : it.srd ? html`<span class="badge gold">SRD</span>` : null}<span class="ellipsis">${it.meta}</span></span>
+      </button>`)}
+    </div>` : null}
+  </div>`;
+}
 
 function gaugeColor(score) {
   const s = Math.max(1, Math.min(10, score || 1));
@@ -69,7 +138,7 @@ const editJson = (monster) => openModal(({ close }) => html`<${JsonEditor} close
 
 export async function saveToBestiary(m) {
   const { qty, ...rest } = normalizeMonster(m);
-  await db.add(col('monsters'), { ...rest, createdAt: now() });
+  await db.add(col('monsters'), { ...rest, origin: m.origin || rest.origin || '', createdAt: now() });
   toast(`„${rest.name}“ im Bestiarium gespeichert`, 'success', { action: { label: 'Öffnen', onClick: () => openView('bestiary') } });
 }
 
@@ -78,7 +147,7 @@ export async function monsterToNote(m) {
   toast(`Notiz „${n.title}“ angelegt`, 'success', { action: { label: 'Öffnen', onClick: () => openNote(n.id) } });
 }
 
-export function EncounterView({ tabId }) {
+export function EncounterView({ tabId, params = {} }) {
   const campEd = useStore(app, (s) => s.campaign?.settings?.rulesVersion);
   const devEd = useStore(settings, (s) => s.rulesVersion);
   const version = (campEd || devEd) === '2024' ? '2024' : '2014';
@@ -98,6 +167,13 @@ export function EncounterView({ tabId }) {
     return n;
   });
   const setMon = (i, patch) => set({ monsters: draft.monsters.map((m, j) => (j === i ? { ...m, ...patch } : m)) });
+  // Aus dem Bestiarium: „Mit KI erstellen“ übergibt Name und Welt
+  useEffect(() => {
+    const p = params.preset;
+    if (!p?.name || (p.ts && Date.now() - p.ts > 60000)) return; // nach dem Neuladen nicht erneut übernehmen
+    set({ monsters: [{ ...blankMonster(p.origin || DND), name: p.name }] });
+    toast(`„${p.name}“ übernommen – Gruppe prüfen und „Statblocks generieren“`, 'success');
+  }, [params.preset?.name, params.preset?.ts]);
 
   const livePreview = useMemo(() => {
     if (!bestiary) return null;
@@ -123,7 +199,7 @@ export function EncounterView({ tabId }) {
     if (!res) return;
     try {
       const data = extractJSON(res.text);
-      data.monsters = (data.monsters || []).map((m, i) => ({ ...m, qty: Number(m.qty) || monsters[i]?.qty || 1 }));
+      data.monsters = (data.monsters || []).map((m, i) => ({ ...m, qty: Number(m.qty) || monsters[i]?.qty || 1, origin: (monsters.find((x) => x.name.trim().toLowerCase() === String(m.name || '').toLowerCase()) || monsters[i])?.origin || '' }));
       setResult(data);
       saveToArchive({ kind: 'encounter', title: `Encounter: ${monsters.map((m) => `${m.qty}× ${m.name}`).join(', ')}`, text: '', data, config: draft, provider: res.provider, model: res.model });
     } catch (e) {
@@ -186,15 +262,14 @@ export function EncounterView({ tabId }) {
 
           <div class="card stack">
             <div class="card-head" style="margin:0"><h3><${Icon} name="ghost" size=${18} />Gegner</h3></div>
-            <datalist id="ws-monsters">${(bestiary || []).map((b) => html`<option value=${b.name} />`)}</datalist>
             ${draft.monsters.map((m, i) => html`<div class="monster-row" key=${m.id}>
               <input class="input" type="number" min="1" max="99" value=${m.qty} title="Anzahl" onInput=${(e) => setMon(i, { qty: Math.max(1, Number(e.target.value) || 1) })} />
-              <input class="input" list="ws-monsters" value=${m.name} placeholder="Name (z. B. Ertrunkener, Uruk-hai, Goblin)" onInput=${(e) => setMon(i, { name: e.target.value })} />
-              <${Select} class="origin" value=${m.origin} onChange=${(v) => setMon(i, { origin: v })} options=${ORIGINS} />
+              <${Select} class="origin" value=${m.origin} onChange=${(v) => setMon(i, { origin: v })} options=${ORIGINS} title="Welt – bestimmt die Namensliste" />
+              <${MonsterNameInput} value=${m.name} origin=${m.origin} bestiary=${bestiary} onChange=${(v) => setMon(i, { name: v })} />
               <${IconBtn} icon="x" class="danger" title="Entfernen" onClick=${() => draft.monsters.length > 1 ? set({ monsters: draft.monsters.filter((_, j) => j !== i) }) : toast('Mindestens ein Monster ist nötig.', 'error')} />
               <input class="input sm extra" value=${m.note} placeholder="Hinweis (optional): Anführer, verwundet, reitet einen Warg …" onInput=${(e) => setMon(i, { note: e.target.value })} />
             </div>`)}
-            <${Btn} icon="plus" onClick=${() => set({ monsters: [...draft.monsters, blankMonster()] })}>Weiteres Monster<//>
+            <${Btn} icon="plus" onClick=${() => set({ monsters: [...draft.monsters, blankMonster(draft.monsters[draft.monsters.length - 1]?.origin || DND)] })}>Weiteres Monster<//>
             ${livePreview ? html`<div class="small"><${Icon} name="activity" size=${14} /> Vorab (Bestiarium): <b>${livePreview.score}/10 · ${livePreview.band}</b></div>` : null}
           </div>
 

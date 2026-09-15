@@ -1,16 +1,16 @@
 // Kampagnen-Manager: Sitzungen (Vorbereitung, Live-Notizen, Rückblick mit KI), Quests (Kanban), Mitspieler & Einladungen.
 import { html, useState, useEffect, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { app, vault, col, getInvites, renewInvite, removeMember, setMemberField, encodeB64Url, myUid } from '../core/app.js';
+import { app, vault, col, getInvites, renewInvite, removeMember, setMemberField, myUid, inviteLink } from '../core/app.js';
+import { sendEvent } from '../core/relay.js';
 import { db } from '../core/db.js';
 import { openView } from '../core/workspace.js';
-import { getCloudConfig, hasBakedCloudConfig } from '../core/settings.js';
 import { summarySystemPrompt, prepSystemPrompt, worldContext, notesContext } from '../core/prompts.js';
 import { loadParty } from '../core/party.js';
 import { ViewFrame } from '../ui/frame.js';
 import {
   Icon, IconBtn, Btn, Field, Select, Segmented, ModelPicker, NotePicker, MarkdownView, AutoTextarea, DictateButton,
-  openModal, confirmDialog, toast, Empty, Avatar,
+  openModal, openMenu, confirmDialog, toast, Empty, Avatar,
 } from '../ui/components.js';
 import { useGeneration, GenStatus, sendHandout } from '../ui/aiout.js';
 import { useCol, useDoc, useVisibleCol } from '../core/hooks.js';
@@ -189,16 +189,33 @@ export function QuestsView({ tabId }) {
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
   const list = useVisibleCol('quests');
   const [drag, setDrag] = useState(null);
-  const move = async (id, status) => db.update(col('quests'), id, { status, updatedAt: now() });
+  const [over, setOver] = useState(null);
+  // Spieler dürfen nur den Status freigegebener Quests ändern (Regeln); klappt das nicht, übernimmt es die SL über das Relais.
+  const move = async (id, status) => {
+    const q = (list || []).find((x) => x.id === id);
+    if (!q || (q.status || 'open') === status) return;
+    try {
+      await db.update(col('quests'), id, gm ? { status, updatedAt: now() } : { status, updatedAt: now(), movedBy: myUid() });
+    } catch (e) {
+      if (gm) { toast(e.message, 'error'); return; }
+      await sendEvent({ type: 'quest', questId: id, status }).catch(() => {});
+      toast('Verschoben – die Spielleitung übernimmt es, sobald sie online ist.', 'info');
+    }
+  };
+  const moveMenu = (e, q) => {
+    e.stopPropagation();
+    openMenu(e, [{ header: true, label: 'Verschieben nach' }, ...COLUMNS.map((c) => ({ label: c.label, icon: (q.status || 'open') === c.id ? 'check' : c.icon, onClick: () => move(q.id, c.id) }))]);
+  };
+  const showQuest = (q) => openModal(() => html`<div class="modal-body"><${MarkdownView} src=${`${q.giver ? `**Auftraggeber:** ${q.giver}\n\n` : ''}${q.description || ''}${q.reward ? `\n\n**Belohnung:** ${q.reward}` : ''}`} /></div>`, { title: q.title, icon: 'list-checks' });
   return html`<${ViewFrame} tabId=${tabId} title="Quests">
     <div class="page wide stack lg">
       <div class="page-head"><h1><${Icon} name="list-checks" size=${24} />Quests</h1><span class="grow"></span>${gm ? html`<${Btn} kind="primary" icon="plus" onClick=${() => editQuest(null)}>Neue Quest<//>` : null}
-        <span class="sub">${gm ? 'Ziehe Karten zwischen den Spalten. Freigegebene Quests erscheinen im Quest-Log der Spieler.' : 'Euer Quest-Log.'}</span></div>
+        <span class="sub">${gm ? 'Ziehe Karten zwischen den Spalten (oder ⋮ → verschieben). Freigegebene Quests erscheinen im Quest-Log der Spieler.' : 'Euer Quest-Log – zieh eine Karte in eine andere Spalte oder tippe auf ⋮, um sie zu verschieben.'}</span></div>
       ${!list ? html`<div class="empty"><span class="spinner" /></div>` : html`<div class="kanban">
-        ${COLUMNS.map((c) => html`<div class="kanban-col" onDragOver=${(e) => gm && e.preventDefault()} onDrop=${(e) => { e.preventDefault(); if (drag) move(drag, c.id); setDrag(null); }}>
+        ${COLUMNS.map((c) => html`<div class=${`kanban-col${over === c.id ? ' over' : ''}`} onDragOver=${(e) => { e.preventDefault(); if (over !== c.id) setOver(c.id); }} onDragLeave=${(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(null); }} onDrop=${(e) => { e.preventDefault(); if (drag) move(drag, c.id); setDrag(null); setOver(null); }}>
           <h4><${Icon} name=${c.icon} size=${14} />${c.label} <span class="faint">${list.filter((q) => (q.status || 'open') === c.id).length}</span></h4>
-          ${sortBy(list.filter((q) => (q.status || 'open') === c.id), (q) => q.updatedAt || 0, -1).map((q) => html`<div class="quest-card" key=${q.id} draggable=${gm} onDragStart=${() => setDrag(q.id)} onClick=${() => (gm ? editQuest(q) : openModal(() => html`<div class="modal-body"><${MarkdownView} src=${`${q.giver ? `**Auftraggeber:** ${q.giver}\n\n` : ''}${q.description || ''}${q.reward ? `\n\n**Belohnung:** ${q.reward}` : ''}`} /></div>`, { title: q.title, icon: 'list-checks' }))}>
-            <div class="t">${q.title}</div>
+          ${sortBy(list.filter((q) => (q.status || 'open') === c.id), (q) => q.updatedAt || 0, -1).map((q) => html`<div class=${`quest-card${drag === q.id ? ' dragging' : ''}`} key=${q.id} draggable=${true} onDragStart=${() => setDrag(q.id)} onDragEnd=${() => { setDrag(null); setOver(null); }} onClick=${() => (gm ? editQuest(q) : showQuest(q))}>
+            <div class="row nowrap" style="align-items:flex-start;gap:4px"><div class="t grow">${q.title}</div><${IconBtn} icon="more-vertical" size=${16} class="sm" title="Verschieben" onClick=${(e) => moveMenu(e, q)} /></div>
             ${q.giver || q.reward ? html`<div class="tiny faint">${[q.giver && q.giver.replace(/\[\[|\]\]/g, ''), q.reward].filter(Boolean).join(' · ')}</div>` : null}
             ${gm ? html`<div class="row" style="margin-top:6px"><span class=${`badge ${q.visibility === 'players' ? 'players' : 'gm'}`}>${q.visibility === 'players' ? 'sichtbar' : 'SL'}</span></div>` : null}
           </div>`)}
@@ -209,12 +226,6 @@ export function QuestsView({ tabId }) {
 }
 
 // ───────────────────────── Mitspieler & Einladungen ─────────────────────────
-function inviteLink(code) {
-  const base = `${location.origin}${location.pathname}`;
-  const cfg = getCloudConfig();
-  const fb = !hasBakedCloudConfig() && cfg ? `?fb=${encodeB64Url(cfg)}` : '';
-  return `${base}#/join/${code}${fb}`;
-}
 
 export function MembersView({ tabId }) {
   const mode = useStore(app, (s) => s.mode);

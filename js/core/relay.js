@@ -46,6 +46,11 @@ async function handleEvent(from, e) {
     if (app.get().role !== 'gm') return;
     inbox.set({ items: [...inbox.get().items.filter((x) => x.id !== e.id), { ...e, from }].slice(-20) });
     bridge.toast(`${e.byName || 'Spieler'}: ${e.summary || (e.type === 'attack' ? 'Angriff' : 'Zauberfläche')}`, 'info', { duration: 8000 });
+  } else if (e.type === 'quest') {
+    // Quest-Status, den ein Spieler verschoben hat (nur freigegebene Quests)
+    if (app.get().role !== 'gm' || !e.questId || !e.status) return;
+    const q = await db.get(col('quests'), e.questId).catch(() => null);
+    if (q && q.visibility === 'players' && (q.status || 'open') !== e.status) await db.update(col('quests'), e.questId, { status: e.status, updatedAt: now(), movedBy: from });
   }
 }
 
@@ -66,7 +71,7 @@ export function startGmRelay() {
         if (handled.has(id)) continue;
         handled.add(id);
         changed = true;
-        if ((e.ts || 0) < since) continue;
+        if ((e.ts || 0) < since && e.type !== 'quest') continue; // alte Kampfsignale verwerfen, Quest-Verschiebungen nachholen
         handleEvent(d.id, { ...e, id }).catch((err) => console.warn('[Signal]', err));
       }
     }

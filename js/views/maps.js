@@ -2,7 +2,7 @@
 // mit Gelände-Pinsel, Generatoren, Tokens, Nebel des Krieges und Maßband. Live synchron für alle Mitspieler.
 import { html, useState, useEffect, useRef, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { app, vault, col, myUid, getIndex, noteById } from '../core/app.js';
+import { app, vault, col, myUid, getIndex, noteById, isGM } from '../core/app.js';
 import { db } from '../core/db.js';
 import { openView, openNote } from '../core/workspace.js';
 import { settings } from '../core/settings.js';
@@ -80,6 +80,63 @@ function AiMapForm({ close }) {
     <div class="row"><${ModelPicker} task="image" value=${model} onChange=${setModel} /></div>
     <div class="btn-row end"><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" icon="sparkles" disabled=${!p.trim()} onClick=${() => close({ p, kind, model })}>Malen lassen<//></div>
   </div>`;
+}
+
+// ───────────────────────── Kampf: direkt auf die Kampfkarte ─────────────────────────
+function BattlePicker({ close }) {
+  const maps = useVisibleCol('maps');
+  const dungeons = sortBy((maps || []).filter((m) => m.type === 'scrawl'), (m) => m.updatedAt || m.createdAt || 0, -1);
+  return html`<div class="modal-body stack">
+    <div class="small muted">Wähle die Karte, auf der gekämpft wird. Dort setzt du Gruppe und Monster und startest mit „Kampf starten“ die Initiative – Bewegung, Reichweiten und Zauberflächen inklusive.</div>
+    ${!maps ? html`<div class="empty"><span class="spinner" /></div>`
+      : dungeons.length ? html`<div class="battle-pick">${dungeons.map((m) => html`<button type="button" class="bp-card" onClick=${() => close({ id: m.id, title: m.name })}>
+          <span class="bp-img" style=${m.thumb ? { backgroundImage: `url(${m.thumb})` } : {}}>${m.thumb ? null : html`<${Icon} name="castle" size=${28} />`}</span>
+          <b class="ellipsis">${m.name}</b><span class="tiny faint">${m.w}×${m.h} Felder</span></button>`)}</div>`
+      : html`<div class="small faint">Noch keine Dungeon-Karte – leg eine an, dann kann es losgehen.</div>`}
+    <div class="btn-row">
+      <${Btn} kind="primary" icon="plus" onClick=${() => close('new')}>Neue Kampfkarte<//>
+      <span class="grow"></span>
+      <${Btn} kind="ghost" icon="list" onClick=${() => close('tracker')}>Ohne Karte (nur Initiative-Liste)<//>
+    </div>
+  </div>`;
+}
+
+// Läuft ein Kampf auf einer Karte, geht es direkt dorthin – sonst wählt die SL die Karte.
+export async function openBattle() {
+  const gm = isGM();
+  let mapId = null;
+  let active = false;
+  try {
+    if (gm) {
+      const st = await loadCombat();
+      mapId = st.mapId || null;
+      active = !!st.active;
+    } else {
+      const pub = await db.get(col('combat'), 'public');
+      mapId = pub?.mapId || null;
+      active = !!pub?.active;
+    }
+  } catch { /* noch kein Kampf */ }
+  if (mapId) {
+    const m = await db.get(col('maps'), mapId).catch(() => null);
+    if (m) { openView('map', { id: mapId, title: m.name, play: 1 }); return; }
+  }
+  if (!gm) {
+    if (active) openView('combat');
+    else toast('Gerade läuft kein Kampf. Sobald die Spielleitung einen startet, bringt dich „Kampf“ direkt auf die Kampfkarte.', 'info');
+    return;
+  }
+  const r = await openModal(({ close }) => html`<${BattlePicker} close=${close} />`, { title: 'Wo wird gekämpft?', icon: 'swords', size: 'lg' });
+  if (!r) return;
+  if (r === 'tracker') { openView('combat'); return; }
+  if (r === 'new') {
+    const f = await openModal(({ close }) => html`<${NewScrawlForm} close=${close} />`, { title: 'Neue Kampfkarte', icon: 'castle' });
+    if (!f) return;
+    const id = await db.add(col('maps'), newScrawlMap(f));
+    openView('map', { id, title: f.name });
+    return;
+  }
+  openView('map', { id: r.id, title: r.title, play: 1 });
 }
 
 export function MapsView({ tabId }) {

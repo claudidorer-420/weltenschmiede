@@ -163,6 +163,9 @@ export function resolveModel(task, override) {
   const ai = settings.get().ai;
   const chosen = override || ai.tasks?.[task];
   if (chosen && refAvailable(chosen)) return parseRef(chosen);
+  // bevorzugtes Modell aus den Einstellungen (Text bzw. Bild) vor den Empfehlungen
+  const pref = TASKS[task]?.image ? ai.preferredImage : ai.preferred;
+  if (pref && refAvailable(pref)) return parseRef(pref);
   for (const r of recommendedRefs(task)) if (refAvailable(r)) return parseRef(r);
   if (!TASKS[task]?.image) {
     for (const prov of readyProviders()) {

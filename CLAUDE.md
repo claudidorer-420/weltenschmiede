@@ -14,6 +14,7 @@ Statische PWA ohne Build‑Schritt (GitHub Pages). UI komplett auf **Deutsch**.
 - `js/core/workspace.js` – Tabs mit eigener Historie (`openView(view, params, {newTab})`), Seitenleisten, mobile Schubladen.
 - `js/ui/shell.js` – Ansichten‑Registry `VIEWS` + `LOADERS` (lazy `import()`), Ribbon, Tableiste.
 - `js/core/ai.js` – Anbieter (Gemini/OpenAI/OpenRouter/eigener Server per `fetch` + SSE; Claude über das **offizielle Anthropic‑SDK** mit `dangerouslyAllowBrowser`, Streaming, `fallbacks: 'default'` für Opus 5/Fable 5.1; kein `temperature` bei Claude‑5‑Modellen), Modellkatalog, `TASKS` mit Empfehlungen, `generate()`, `generateImage()`.
+- Modellwahl (`resolveModel`): Auswahl pro Anfrage > eigene Auswahl der Aufgabe (`ai.tasks`) > **bevorzugtes Modell** (`ai.preferred` / `ai.preferredImage`, Einstellungen → KI oder Modell‑Knopf → „Überall als bevorzugtes Modell“) > Empfehlungen > Demo.
 - `js/core/prompts.js` – alle deutschen Prompts + Codex‑Kontext.
 - `js/ui/aiout.js` – `useGeneration()` (Streaming, Nachbessern, Fortsetzen) + Speicher‑Dialoge.
 - `js/ui/account.js` – Konto‑Menü (Avatar im Ribbon/Übersicht), Abmelden (optional mit Gerätebereinigung), Rolle wechseln, Einstellungen als Dialog.
@@ -25,7 +26,14 @@ Statische PWA ohne Build‑Schritt (GitHub Pages). UI komplett auf **Deutsch**.
 - Bilder: `data/artmap.js` (Zuordnung Zauber/Gegenstände/Kreaturen → Symbolname), `data/gameicons.js` (generiert, game-icons.net CC BY 3.0), `ui/art.js` (`SpellArt`, `ItemArt`, `MonsterArt`, `GameIcon`, `giImage` für Canvas). Gegenstände: `data/items.js` (Katalog mit Preis/Gewicht, Reichweiten), `data/magicitems-srd.js`; Monster: `data/monsters-srd.js` (317 SRD‑Monster deutsch) · `views/bestiary.js` (Kompendium + eigenes Bestiarium, KI‑Porträt).
 - Karten: `views/mapeditor.js` (Dungeon‑Editor, Typ `scrawl`: Formen → Maske → Wände/Schraffur per Dilatation, Objekte als Vektorzeichnungen, Generatoren, Export, Spielmodus; `buildGrid()` = begehbare Felder/schwieriges Gelände) · `views/maps.js` (Liste, Welt‑/Rasterkarten, Weiche `MapView`).
 - Kampf: `core/combat.js` (Zustand, `advanceTurn`, `applyHp`, `mutateCombat`, `combatantForToken`), `core/tactics.js` (Bewegung nach 5e, Entfernungen, Flächen‑Schablonen, `parseAttacks()` aus Statblöcken), `core/relay.js` (Spieler → SL: `sendEvent`, SL‑Relais `startGmRelay` läuft in `shell.js`), `views/battle.js` (Kampf‑Ebene der Karte: Initiativeleiste, Token‑Bilder/TP/Zustände, Bewegungsreichweite, Zielen, Schablonen, Pings, Monster platzieren) · `views/combat.js` (Tracker).
-- Datenwerkzeuge: `tools/build-spells.mjs`, `tools/build-icons.mjs`, `tools/build-srd.mjs` erzeugen die `data/*`‑Dateien aus heruntergeladenen Quellen (Aufruf im Dateikopf).
+- Karten & Kampf: Ribbon „Karten“ fragt „Karten oder Kampf?“; `maps.js` `openBattle()` springt zur laufenden Kampfkarte (`combat.mapId`), sonst wählt die SL eine Dungeon‑Karte. `params.play` öffnet den Dungeon‑Editor direkt im Spielmodus. Der Kampf‑Tracker (`combat`) hat keinen Ribbon‑Eintrag mehr (Kampfkarte → Liste, Befehle).
+- Suche: `ui/palette.js` – eine Palette für Notizen **und** Befehle (`>` am Anfang = nur Befehle; Strg+K/O, Strg+P startet mit `>`).
+- Chat: `views/table.js` `ChatPanel` wohnt in der rechten Seitenleiste (`codex.js` `RightSidebar`, Reiter `chat`, lazy geladen); Ungelesen‑Punkt über `ws.chatUnread` (`shell.js` `useChatUnread`). Der Spieltisch zeigt nur noch Szene, Initiative, Gruppe, Play‑by‑Post, Handouts.
+- Graph: `views/graph.js` (2D; `clampView()` hält immer einen Knoten im Bild) und `views/graph3d.js` (dieselben Knoten als drehbare Kugelwolke, eigenes 3D‑Kräftelayout mit Startpositionen aus `layout2d`; umschaltbar über `settings.graph.dim`).
+- Monsterwelten: `data/origins.js` (`ORIGINS`, `namesFor()`, `matchNames()`, `originOf()`), `data/monsternames.js` (generiert), Namensfeld mit Suchliste im Encounter‑Generator (`MonsterNameInput`), Bestiarium mit Welt‑Chips und „noch nicht im Bestiarium“ → `openView('encounter', { preset: { name, origin, ts } })`.
+- KI‑Schlüssel: auch Spieler dürfen eigene Schlüssel eintragen (Einstellungen → KI, Aufgaben nur `rules`). Schlüssel liegen nur in `users/{uid}/private/settings` bzw. im Gerätespeicher und werden bei Kontowechsel (`ensureSettingsOwner`, auch offline) und Abmelden gelöscht – nie in Kampagnen‑Dokumente schreiben.
+- Datenwerkzeuge: `tools/build-spells.mjs`, `tools/build-icons.mjs`, `tools/build-srd.mjs`, `tools/build-monsternames.mjs` erzeugen die `data/*`‑Dateien aus heruntergeladenen Quellen (Aufruf im Dateikopf).
+- **CSS‑Klassen global eindeutig halten** – `.sm` (Zauberverwaltung) kollidierte mit `.stack.sm`/`size="sm"`, `.qr` (Würfelknöpfe) mit dem QR‑Code; beides hat Layouts zerlegt. Neue Bereiche mit eigenem Präfix benennen.
 
 ## Datenmodell (Firestore‑Pfade = IndexedDB‑Pfade)
 ```
@@ -47,6 +55,8 @@ campaigns/{cid}/party/{id}     geteilte Kartenebene: { kind: tpl (Zauberfläche)
 campaigns/{cid}/signals/{uid}  { type, ts, events:[{id,type,…}] } Spieler → SL (Zugende, Initiative, Angriff, Fläche)
 ```
 - Kampf: `combat/gm` enthält `mapId`, Kämpfer mit `tokenId`; `combat/public` projiziert NSC ohne Werte (nur `hpState`, `art`).
+- Bestiarium: `monsters/{id}.origin` = Welt aus `ORIGINS` (ältere SRD‑Kopien: `srdId` ⇒ D&D).
+- Quests: Spieler dürfen bei freigegebenen Quests nur `status`, `updatedAt`, `movedBy` ändern (Regeln); scheitert das (Regeln noch nicht veröffentlicht), geht ein `quest`‑Signal an das SL‑Relais.
 - Spieler dürfen an Tokens nur `x`/`y` ändern (Regeln) – Bewegungsverbrauch zählt deshalb lokal pro Zug.
 - Spieler‑Abfragen **müssen** `where visibility == 'players'` enthalten (Regeln sind keine Filter) → `useVisibleCol()`.
 - Bilder: `core/files.js` speichert Data‑URLs in ≤ 900‑KB‑Stücken (`files/{id}/chunks/{n}`) – kein Firebase Storage nötig.
@@ -65,4 +75,5 @@ campaigns/{cid}/signals/{uid}  { type, ts, events:[{id,type,…}] } Spieler → 
 - Im Browser Ansichten per `(await import('/js/core/workspace.js')).openView('forge')` öffnen.
 
 ## Veröffentlichen
-`powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Message "…"` – aktualisiert Dateiliste + `VERSION` in `sw.js`, committet, pusht.
+`powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Message "…"` – aktualisiert Dateiliste + `VERSION` in `sw.js`, committet, pusht. `.ps1`‑Dateien als UTF‑8 **mit BOM** speichern (Windows PowerShell 5.1 liest sie sonst als ANSI).
+Geänderte `firebase/firestore.rules` veröffentlicht die SL selbst (Firebase‑Konsole → Firestore → Regeln → einfügen → Veröffentlichen).

@@ -57,17 +57,18 @@ export async function openCharacter(c) {
 
 function CharCard({ c, owner, mineInCampaign }) {
   const pct = Math.max(0, Math.min(100, ((c.hp ?? 0) / (c.maxHp || 1)) * 100));
-  return html`<div class="card click" onClick=${() => openView('character', { id: c.id, owner, title: c.name })}>
-    <div class="row nowrap">
-      ${c.portrait ? html`<span class="avatar lg"><img src=${c.portrait} alt="" /></span>` : html`<${Avatar} name=${c.name} size="lg" color=${c.color} />`}
-      <div class="grow">
-        <b style="font-size:16px">${c.name}</b>
-        <div class="small muted">${c.species} · ${c.cls}${c.subclass ? ` (${c.subclass})` : ''} · Stufe ${c.level}</div>
-        <div class="hpbar"><div class=${pct > 50 ? '' : pct > 25 ? 'mid' : 'low'} style=${{ width: `${pct}%` }}></div></div>
-        <div class="tiny faint">TP ${c.hp}/${c.maxHp} · RK ${c.ac}${mineInCampaign ? ' · in dieser Kampagne' : ''}${!c.classes?.length ? ' · alter Bogen' : ''}</div>
-      </div>
-    </div>
-  </div>`;
+  const cls = [c.cls, c.subclass].filter(Boolean).join(' · ');
+  return html`<button type="button" class="char-card" onClick=${() => openView('character', { id: c.id, owner, title: c.name })}>
+    ${c.portrait ? html`<span class="avatar lg"><img src=${c.portrait} alt="" /></span>` : html`<${Avatar} name=${c.name} size="lg" color=${c.color} />`}
+    <span class="cc-main">
+      <span class="cc-top"><b class="cc-name" title=${c.name}>${c.name}</b>${c.level ? html`<span class="badge accent">Stufe ${c.level}</span>` : null}</span>
+      ${c.species ? html`<span class="cc-line">${c.species}</span>` : null}
+      ${cls ? html`<span class="cc-line muted" title=${cls}>${cls}</span>` : null}
+      <span class="cc-hp"><span class=${pct > 50 ? '' : pct > 25 ? 'mid' : 'low'} style=${{ width: `${pct}%` }}></span></span>
+      <span class="cc-stats"><span>TP ${c.hp ?? '?'}/${c.maxHp ?? '?'}</span><span>RK ${c.ac ?? '?'}</span>
+        ${mineInCampaign ? html`<span class="badge players">in dieser Kampagne</span>` : null}${!c.classes?.length ? html`<span class="badge">alter Bogen</span>` : null}</span>
+    </span>
+  </button>`;
 }
 
 export function CharactersView({ tabId }) {
@@ -85,9 +86,9 @@ export function CharactersView({ tabId }) {
         <span class="sub">Der Assistent führt Schritt für Schritt durch die 5e-Regeln. Charaktere gehören dir und bleiben erhalten, auch wenn eine Kampagne endet.</span></div>
       <div class="section-title">Meine Charaktere</div>
       ${!mine ? html`<div class="empty"><span class="spinner" /></div>` : !mine.length ? html`<${Empty} icon="user" title="Noch kein Charakter" action=${html`<${Btn} icon="user-plus" onClick=${create}>Charakter erschaffen<//>`}>Volk, Klasse, Hintergrund, Attribute, Fertigkeiten, Zauber – alles nach den Regeln, in etwa 10 Minuten.<//>`
-        : html`<div class="grid cards">${mine.map((c) => html`<${CharCard} key=${c.id} c=${c} owner=${me} mineInCampaign=${c.campaignId === cid} />`)}</div>`}
+        : html`<div class="char-grid">${mine.map((c) => html`<${CharCard} key=${c.id} c=${c} owner=${me} mineInCampaign=${c.campaignId === cid} />`)}</div>`}
       ${gm && others.length ? html`<div class="section-title">Gruppe dieser Kampagne</div>
-        <div class="grid cards">${others.map((p) => html`<${CharCard} key=${p.char.id} c=${p.char} owner=${p.owner} />`)}</div>` : null}
+        <div class="char-grid">${others.map((p) => html`<${CharCard} key=${p.char.id} c=${p.char} owner=${p.owner} />`)}</div>` : null}
       ${gm && db.mode === 'cloud' && !others.length ? html`<div class="small faint">Sobald Spieler beitreten und ihre Charaktere verknüpfen, erscheinen sie hier.</div>` : null}
     </div>
   <//>`;

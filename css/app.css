@@ -969,10 +969,11 @@ details.callout[open] > summary::after { transform: rotate(90deg); }
 .fx-ex { gap: 6px; }
 .fx-ex button { width: 20px; height: 20px; border-radius: 50%; background: var(--bg-3); line-height: 1; font-weight: 700; }
 .quick-rolls { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
-.qr { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border); text-align: left; font-size: 13.5px; }
-.qr:hover:not(:disabled) { border-color: var(--accent); }
-.qr b { font-variant-numeric: tabular-nums; }
-.qr.prof { border-left: 3px solid var(--accent); }
+.qroll { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border); color: var(--text); text-align: left; font-size: 13.5px; }
+.qroll:hover:not(:disabled) { border-color: var(--accent); }
+.qroll small { color: var(--text-3); }
+.qroll b { font-variant-numeric: tabular-nums; }
+.qroll.prof { border-left: 3px solid var(--accent); }
 .atk-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-radius: 10px; background: var(--bg-2); }
 
 /* Charakter-Assistent */
@@ -1218,7 +1219,7 @@ details.how-to[open] > summary::after { transform: rotate(90deg); }
 .dmg-tag { display: inline-flex; align-items: center; gap: 3px; color: var(--c, var(--text-2)); font-weight: 600; white-space: nowrap; }
 
 /* ── Zauberverwaltung ───────────────────────────────────────────────── */
-.sm { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.spm { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .sm-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .sm-tab { padding: 7px 14px; border-radius: 999px; background: var(--bg-3); border: 1px solid var(--border); font-weight: 600; font-size: 13.5px; color: var(--text-2); }
 .sm-tab.active { background: var(--accent-soft); color: var(--accent-2); border-color: var(--accent); }
@@ -1524,3 +1525,96 @@ details.how-to[open] > summary::after { transform: rotate(90deg); }
   .bt-results { left: 50px; top: 72px; width: calc(100% - 64px); }
   .bt-acts { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
+
+/* ── Runde 4 ─────────────────────────────────────────────────────────── */
+/* Auswahlkarten (z. B. Regelwerk beim Anlegen einer Kampagne) */
+.radio-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 8px; }
+button.radio-card { position: relative; flex-direction: column; gap: 4px; width: 100%; text-align: left; background: var(--bg-2); color: var(--text); padding: 12px 42px 12px 14px; transition: border-color 0.12s, background 0.12s; }
+button.radio-card:hover { border-color: var(--border-2); }
+button.radio-card::after { content: ''; position: absolute; top: 13px; right: 13px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-2); box-sizing: border-box; }
+button.radio-card.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+button.radio-card.selected::after { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 40%, transparent 46%); }
+button.radio-card b { font-size: 15px; }
+
+/* Charakterkarten */
+.char-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.char-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; width: 100%; text-align: left; padding: 14px; border-radius: var(--radius-lg); background: var(--bg-panel); border: 1px solid var(--border); color: var(--text); cursor: pointer; transition: border-color 0.12s, transform 0.12s; }
+.char-card:hover { border-color: var(--border-2); transform: translateY(-1px); }
+.cc-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cc-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cc-name { flex: 1; min-width: 0; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-line { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.cc-line.muted { color: var(--text-2); }
+.cc-hp { display: block; height: 7px; border-radius: 99px; background: var(--bg-3); overflow: hidden; margin: 6px 0 2px; }
+.cc-hp > span { display: block; height: 100%; background: var(--success); transition: width 0.3s; }
+.cc-hp > span.mid { background: var(--warning); }
+.cc-hp > span.low { background: var(--danger); }
+.cc-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; color: var(--text-3); }
+
+/* Punkt für Ungelesenes (Chat) */
+.icon-btn.has-dot { position: relative; }
+.icon-btn.has-dot::after { content: ''; position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--bg-2); }
+
+/* Chat in der rechten Seitenleiste */
+.chat-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg-2); }
+.chat-panel .chat-input .row { flex-wrap: wrap; }
+.chat-hint { gap: 10px; }
+
+/* Quests */
+.kanban-col.over { border-color: var(--accent); background: var(--accent-soft); }
+.quest-card.dragging { opacity: 0.45; }
+.quest-card .icon-btn.sm { width: 26px; height: 26px; margin: -4px -4px 0 0; flex: none; }
+
+/* Einladungen */
+.invite-box { display: flex; flex-direction: column; gap: 8px; }
+.invite-row { display: flex; align-items: center; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--border); }
+.invite-code { display: block; font: 700 22px ui-monospace, 'Cascadia Mono', Consolas, monospace; letter-spacing: 0.14em; }
+.invite-inline { padding: 2px 8px 12px 34px; }
+.camp-wrap { position: relative; }
+.camp-wrap > .camp-card { width: 100%; padding-right: 88px; }
+.camp-invite { position: absolute; right: 44px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--text-2); background: var(--bg-3); border: 1px solid var(--border); }
+.camp-invite:hover { color: var(--accent-2); border-color: var(--accent); }
+
+/* Kampfkarte wählen */
+.battle-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 10px; }
+.bp-card { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text); text-align: left; min-width: 0; }
+.bp-card:hover { border-color: var(--accent); }
+.bp-img { display: grid; place-items: center; aspect-ratio: 4 / 3; border-radius: 8px; background: var(--bg-3) center / cover no-repeat; color: var(--text-3); }
+
+/* Suche & Befehle: Gruppen */
+.palette-group { padding: 8px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+
+/* 3D-Graph */
+.g3-hint { position: absolute; left: 12px; top: 10px; right: 12px; font-size: 12px; color: var(--text-3); pointer-events: none; }
+.g3-tools { position: absolute; left: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px; z-index: 2; }
+
+/* Encounter: Welt + Namenssuche */
+.monster-row { grid-template-columns: 64px minmax(110px, 165px) minmax(140px, 1fr) 36px; }
+.mn-combo { position: relative; min-width: 0; }
+.mn-combo .input { width: 100%; padding-right: 34px; }
+.mn-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: var(--text-3); }
+.mn-toggle:hover { color: var(--text); background: var(--bg-hover); }
+.mn-pop { position: absolute; left: 0; top: calc(100% + 4px); z-index: 40; min-width: 100%; width: min(460px, calc(100vw - 24px)); max-height: 360px; overflow-y: auto; background: var(--bg-panel); border: 1px solid var(--border-2); border-radius: 12px; box-shadow: var(--shadow); padding: 4px; }
+.mn-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 10px; border-radius: 8px; color: var(--text); }
+.mn-item.active { background: var(--accent-soft); }
+.mn-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mn-name small { font-weight: 400; color: var(--text-3); }
+.mn-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); white-space: nowrap; flex: none; max-width: 50%; min-width: 0; }
+.mn-empty { display: flex; align-items: center; gap: 8px; padding: 10px; font-size: 13px; color: var(--text-3); }
+@media (max-width: 640px) {
+  .monster-row { grid-template-columns: 56px minmax(0, 1fr) 36px; }
+  .monster-row .mn-combo { grid-column: 1 / -1; order: 4; }
+  .monster-row .extra { grid-column: 1 / -1; order: 5; }
+}
+
+/* Bestiarium: Welten */
+.world-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.world-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-2); font-size: 13px; font-weight: 600; }
+.world-chip.on { border-color: var(--c, var(--accent)); color: var(--text); background: color-mix(in srgb, var(--c, var(--accent)) 18%, var(--bg-2)); }
+.world-chip.none { opacity: 0.6; }
+.world-chip small { color: var(--text-3); font-weight: 500; }
+.od { width: 9px; height: 9px; border-radius: 50%; background: var(--c, var(--text-3)); flex: none; display: inline-block; }
+.name-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.name-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 10px; border: 1px dashed var(--border-2); background: transparent; color: var(--text-2); font-size: 13px; }
+.name-chip:hover { border-style: solid; border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
+.bc-origin { display: inline-flex; align-items: center; gap: 5px; }
