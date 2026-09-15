@@ -674,12 +674,14 @@ function objHit(o, x, y) {
 const BLOCK_OBJ = new Set(['pillar', 'statue', 'altar', 'fountain', 'well', 'bookshelf', 'tree', 'rock', 'throne']);
 const ROUGH_OBJ = new Set(['rubble', 'web', 'bush', 'bones', 'table', 'roundtable', 'bed', 'barrel', 'crate', 'coffin', 'cauldron', 'brazier', 'bench']);
 const ROUGH_MAT = new Set(['difficult', 'rubble', 'water', 'ice', 'blood', 'lava']);
-function buildGrid(d) {
+export function buildGrid(d) {
   const W = d.w || 36;
   const H = d.h || 26;
   const R = 4;
   const walk = new Uint8Array(W * H).fill(1);
   const cost = new Uint8Array(W * H).fill(1);
+  const opaque = new Uint8Array(W * H); // Wand/Fels: blockiert Sicht und Flächen
+  const cover = new Uint8Array(W * H); // Säulen, Statuen …: halbe Deckung
   if ((d.shapes || []).some((s) => s.op !== 'sub')) {
     const cv = canvasOf('gridmask', W * R, H * R);
     const g = cv.getContext('2d');
@@ -687,6 +689,7 @@ function buildGrid(d) {
     for (const s of d.shapes) paintShape(g, s, '#fff');
     const data = g.getImageData(0, 0, W * R, H * R).data;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) walk[y * W + x] = data[((y * R + R / 2) * W * R + x * R + R / 2) * 4 + 3] > 127 ? 1 : 0;
+    for (let i = 0; i < walk.length; i++) opaque[i] = walk[i] ? 0 : 1;
   }
   const cells = (x0, y0, x1, y1, fn) => {
     for (let y = Math.max(0, Math.floor(y0)); y <= Math.min(H - 1, Math.ceil(y1)); y++) for (let x = Math.max(0, Math.floor(x0)); x <= Math.min(W - 1, Math.ceil(x1)); x++) fn(x, y);
@@ -705,9 +708,9 @@ function buildGrid(d) {
     if (!block && !ROUGH_OBJ.has(o.t)) continue;
     const def = OBJ[o.t];
     const ext = (Math.max(def.w, def.h) * (o.s || 1)) / 2 + 1;
-    cells(o.x - ext, o.y - ext, o.x + ext, o.y + ext, (x, y) => { if (objHit(o, x + 0.5, y + 0.5)) { if (block) walk[y * W + x] = 0; else cost[y * W + x] = 2; } });
+    cells(o.x - ext, o.y - ext, o.x + ext, o.y + ext, (x, y) => { if (objHit(o, x + 0.5, y + 0.5)) { if (block) { walk[y * W + x] = 0; cover[y * W + x] = 1; } else cost[y * W + x] = 2; } });
   }
-  return { w: W, h: H, walk, cost };
+  return { w: W, h: H, walk, cost, opaque, cover };
 }
 
 // ───────────────────────── Ansicht ─────────────────────────
@@ -884,6 +887,18 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.dirty = true;
   };
 
+  // Die Karte bleibt immer teilweise im Bild (wie beim Graphen): nur so weit verschieben, dass noch Karte zu sehen ist
+  s.clampView = () => {
+    const d = s.doc;
+    if (!d || s.w < 10) return;
+    const mw = d.w * PX * s.t.k;
+    const mh = d.h * PX * s.t.k;
+    const kx = Math.min(mw, Math.max(80, s.w * 0.3));
+    const ky = Math.min(mh, Math.max(80, s.h * 0.3));
+    s.t.x = clamp(s.t.x, kx - mw, s.w - kx);
+    s.t.y = clamp(s.t.y, ky - mh, s.h - ky);
+  };
+
   // Ansicht auf einen Token schwenken (nur falls er außerhalb liegt, wenn onlyIfHidden)
   s.focusToken = (t, onlyIfHidden) => {
     const n = t.size || 1;
@@ -893,6 +908,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     if (onlyIfHidden && px > 80 && px < s.w - 80 && py > 90 && py < s.h - 170) return;
     s.t.x = s.w / 2 - (t.x + n / 2) * k;
     s.t.y = s.h / 2 - (t.y + n / 2) * k;
+    s.clampView();
     s.userMoved = true;
     s.dirty = true;
   };
@@ -912,6 +928,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       s.h = r.height;
       s.dpr = dpr;
       if (!s.fitted || !s.userMoved) fit();
+      else s.clampView();
       s.dirty = true;
     });
     ro.observe(el);
@@ -1074,6 +1091,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       s.t.x = p.x - (p.x - s.t.x) * real;
       s.t.y = p.y - (p.y - s.t.y) * real;
       s.t.k = k;
+      s.clampView();
       s.userMoved = true;
       s.zooming = true;
       s.dirty = true;
@@ -1266,6 +1284,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         if (Math.hypot(p.x - a.sx, p.y - a.sy) > 6) { a.far = true; clearTimeout(s.lp); }
         s.t.x = a.tx + p.x - a.sx;
         s.t.y = a.ty + p.y - a.sy;
+        s.clampView();
         s.userMoved = true;
         s.dirty = true;
         return;

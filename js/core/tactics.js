@@ -228,3 +228,80 @@ export function monsterSpeed(m) {
   if (r) return Math.round(num(r[1]) * 0.3 * 10) / 10;
   return 9;
 }
+
+// ───────────────────────── Sichtlinie & Deckung ─────────────────────────
+// Alle Felder, die eine Strecke berührt (Amanatides & Woo)
+export function cellsOnLine(x0, y0, x1, y1) {
+  const out = [];
+  let cx = Math.floor(x0);
+  let cy = Math.floor(y0);
+  const ex = Math.floor(x1);
+  const ey = Math.floor(y1);
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const sx = Math.sign(dx);
+  const sy = Math.sign(dy);
+  const tdx = dx ? Math.abs(1 / dx) : Infinity;
+  const tdy = dy ? Math.abs(1 / dy) : Infinity;
+  let tx = dx ? (sx > 0 ? cx + 1 - x0 : x0 - cx) * tdx : Infinity;
+  let ty = dy ? (sy > 0 ? cy + 1 - y0 : y0 - cy) * tdy : Infinity;
+  out.push([cx, cy]);
+  let guard = 0;
+  while ((cx !== ex || cy !== ey) && guard++ < 600) {
+    if (Math.abs(tx - ty) < 1e-9) { tx += tdx; ty += tdy; cx += sx; cy += sy; } else if (tx < ty) { tx += tdx; cx += sx; } else { ty += tdy; cy += sy; }
+    out.push([cx, cy]);
+  }
+  return out;
+}
+function lineFree(grid, ax, ay, bx, by, opaque) {
+  const cells = cellsOnLine(ax, ay, bx, by);
+  for (let i = 1; i < cells.length - 1; i++) {
+    const [x, y] = cells[i];
+    if (x < 0 || y < 0 || x >= grid.w || y >= grid.h) return false;
+    if (opaque(y * grid.w + x)) return false;
+  }
+  return true;
+}
+const samplePts = (t) => {
+  const n = t.size || 1;
+  const o = [[t.x + n / 2, t.y + n / 2]];
+  for (const fx of [0.12, 0.88]) for (const fy of [0.12, 0.88]) o.push([t.x + fx * n, t.y + fy * n]);
+  return o;
+};
+// Sichtlinie zwischen zwei Tokens: frei, wenn irgendeine Linie zwischen Punkten ihrer Felder nicht durch Wand
+// (bzw. einen stark verschleierten Bereich in `blocks`) führt
+export function lineOfSight(grid, a, b, { blocks = null } = {}) {
+  if (!grid || !a || !b) return true;
+  const opaque = (i) => !!grid.opaque?.[i] || !!blocks?.has(i);
+  for (const [ax, ay] of samplePts(a)) for (const [bx, by] of samplePts(b)) if (lineFree(grid, ax, ay, bx, by, opaque)) return true;
+  return false;
+}
+// Sicht von einem Token auf einen Punkt (Ursprung einer Fläche)
+export function pointInSight(grid, a, px, py, { blocks = null } = {}) {
+  if (!grid || !a) return true;
+  const opaque = (i) => !!grid.opaque?.[i] || !!blocks?.has(i);
+  return samplePts(a).some(([ax, ay]) => lineFree(grid, ax, ay, px, py, opaque));
+}
+// Wirkt eine Fläche vom Ursprung aus auf dieses Feld? (Wände halten Flächen auf)
+export function areaReaches(grid, ox, oy, cx, cy) {
+  if (!grid) return true;
+  return lineFree(grid, ox, oy, cx + 0.5, cy + 0.5, (i) => !!grid.opaque?.[i]) || (Math.floor(ox) === cx && Math.floor(oy) === cy);
+}
+// Halbe Deckung (+2 RK / GES-Rettungswurf): andere Kreaturen oder Säulen/Statuen zwischen Angreifer und Ziel
+export function coverBetween(grid, a, b, others = []) {
+  if (!a || !b) return 0;
+  const [ax, ay] = samplePts(a)[0];
+  const [bx, by] = samplePts(b)[0];
+  const occ = new Set();
+  for (const o of others) {
+    if (o.id === a.id || o.id === b.id) continue;
+    const n = o.size || 1;
+    for (let dy = 0; dy < n; dy++) for (let dx = 0; dx < n; dx++) occ.add(`${o.x + dx},${o.y + dy}`);
+  }
+  const own = (t, x, y) => x >= t.x && y >= t.y && x < t.x + (t.size || 1) && y < t.y + (t.size || 1);
+  for (const [x, y] of cellsOnLine(ax, ay, bx, by)) {
+    if (own(a, x, y) || own(b, x, y)) continue;
+    if (occ.has(`${x},${y}`) || (grid && grid.cover?.[y * grid.w + x])) return 2;
+  }
+  return 0;
+}

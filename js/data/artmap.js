@@ -224,6 +224,10 @@ export const UI_ART = [
   'fist', 'running-shoe', 'dodging', 'shield-bash', 'hand', 'trade', 'hidden', 'magnifying-glass', 'hourglass', 'sprint', 'backup', 'overhead',
   'crossed-swords', 'bow-arrow', 'fire-spell-cast', 'coins', 'weight', 'swap-bag', 'strong', 'person', 'target-arrows', 'broken-shield', 'heart-plus',
   'skull-crossed-bones', 'crowned-skull', 'magic-swirl', 'star-swirl', 'shield', 'round-shield', 'walking-boot', 'wingfoot', 'backpack', 'knapsack',
+  // Kampfleiste: Standardaktionen, Klassenmerkmale, Gegenstände
+  'run', 'exit-door', 'cloak-dagger', 'body-balance', 'push', 'grab', 'enrage', 'sword-wound', 'healing', 'sands-of-time', 'hood', 'punch-blast',
+  'meditation', 'wind-slap', 'hand-bandage', 'holy-symbol', 'lyre', 'dragon-breath', 'health-potion', 'sword-clash', 'magic-shield', 'stopwatch',
+  'bullseye', 'teleport', 'heart-bottle', 'boot-prints', 'death-skull', 'heavy-fall', 'invisible', 'third-eye', 'fire-breath', 'hourglass',
 ];
 
 export function allIconNames() {

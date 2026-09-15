@@ -9,6 +9,7 @@ import {
   saveCombat, makeCombatant, combatantsFromMonsters, combatantFromCharacter, sortByInit, EMPTY_COMBAT, hpState, advanceTurn, applyHp as applyHpCore, resort, isOut, pushCharHp,
 } from '../core/combat.js';
 import { sendEvent } from '../core/relay.js';
+import { makeCtx } from '../core/actions.js';
 import { MonsterArt } from '../ui/art.js';
 import { loadParty, watchParty } from '../core/party.js';
 import { doRoll } from '../core/rolls.js';
@@ -149,7 +150,7 @@ function GmCombat({ tabId }) {
     if (changed) update((x) => { x.combatants = combatants; return x; });
   }), [cid]);
 
-  const nextTurn = () => update((x) => advanceTurn(x));
+  const nextTurn = () => update((x) => advanceTurn(x, makeCtx(x)));
   const prevTurn = () => update((x) => {
     if (!x.combatants.length) return x;
     x.turn--;

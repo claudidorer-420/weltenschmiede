@@ -25,15 +25,33 @@ function entries(v) {
   const arr = Array.isArray(v) ? v : [v];
   return arr.map((e) => (typeof e === 'string' ? { name: '', desc: e } : { name: String(e.name || e.title || ''), desc: String(e.value ?? e.text ?? e.desc ?? '') })).filter((e) => e.name || e.desc);
 }
-function spellEntries(v) {
-  if (!v) return [];
-  const arr = Array.isArray(v) ? v : [v];
-  return arr.map((e) => {
-    if (typeof e === 'string') return { name: 'Zauberwirken', desc: e };
-    const parts = [e.value || e.text || e.intro || ''];
-    for (const [k, x] of Object.entries(e)) if (!['name', 'value', 'text', 'intro'].includes(k)) parts.push(typeof x === 'string' ? x : Array.isArray(x) ? x.map((y) => (typeof y === 'string' ? y : Object.values(y).join(': '))).join(' · ') : '');
-    return { name: String(e.name || 'Zauberwirken'), desc: parts.filter(Boolean).join(' ') };
+// Zauberwirken: lesbarer Text für den Statblock + strukturierte Liste für den Kampf (SG, Angriff, Plätze, Zaubernamen)
+const groupLevel = (l) => (/zaubertrick/i.test(String(l)) ? 0 : /^\d+$/.test(String(l).trim()) ? Number(l) : null);
+function spellText(e, innate) {
+  const text = String(e['spellcasting-text'] || e.value || e.text || e.intro || '');
+  const groups = (e.spells || []).map((g) => {
+    const lvl = groupLevel(g.level);
+    const head = lvl === 0 ? 'Zaubertricks' : lvl ? `${lvl}. Grad` : String(g.level || '');
+    const slots = g.slots ? ` (${/^\d+$/.test(String(g.slots)) ? `${g.slots} Plätze` : g.slots})` : '';
+    return `${head}${slots}: ${(g.list || []).map((s) => (typeof s === 'string' ? s : s.name)).join(', ')}`;
   });
+  return { name: innate ? 'Angeborenes Zauberwirken' : 'Zauberwirken', desc: [text, ...groups].filter(Boolean).join(' · ') };
+}
+function spellEntries(v, innate = false) {
+  if (!v) return [];
+  return (Array.isArray(v) ? v : [v]).map((e) => (typeof e === 'string' ? { name: 'Zauberwirken', desc: e } : spellText(e, innate)));
+}
+function castingOf(v, innate = false) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const text = String(v['spellcasting-text'] || v.value || v.text || '');
+  const dc = Number((/SG\s*(\d+)/.exec(text) || [])[1]) || null;
+  const attack = Number((/([+-]\d+)\s*auf Treffer mit Zauberangriffen/.exec(text) || [])[1]) || null;
+  const ability = /Intelligenz/.test(text) ? 'int' : /Weisheit/.test(text) ? 'wis' : /Charisma/.test(text) ? 'cha' : null;
+  const groups = (v.spells || []).map((g) => ({
+    level: groupLevel(g.level), per: groupLevel(g.level) == null ? String(g.level || '') : null,
+    slots: /^\d+$/.test(String(g.slots || '')) ? Number(g.slots) : null, names: (g.list || []).map((s) => (typeof s === 'string' ? s : s.name)),
+  }));
+  return groups.length ? { innate, dc, attack, ability, groups } : null;
 }
 
 let sample = null;
@@ -52,9 +70,11 @@ const monsters = load('de51-monster.json').filter((m) => m && m.name).map((m) =>
     saves: list(m['saving-throws']), skills: list(m.skills), vulnerabilities: list(m['damage-vulnerabilitys']), resistances: list(m['damage-resistances']),
     immunities: list(m['damage-immunitys']), conditionImmunities: list(m['condition-immunitys']), senses: list(m.senses), languages: list(m.languages).replace(/^-$/, '–'),
     cr: String(m.challenge || ''), xp: Number(String(m.xp || '0').replace(/\./g, '')) || 0,
-    traits: [...entries(m.traits), ...spellEntries(m['spellcasting-trait']), ...spellEntries(m['spellcasting-innate-trait'])],
+    traits: [...entries(m.traits), ...spellEntries(m['spellcasting-trait']), ...spellEntries(m['spellcasting-innate-trait'], true)],
     actions: entries(m.actions), reactions: entries(m.reactions), legendary, legendaryCount: legendary.length ? 3 : 0, source: 'SRD 5.1',
+    casting: [castingOf(m['spellcasting-trait']), castingOf(m['spellcasting-innate-trait'], true)].filter(Boolean),
   };
+  if (!out.casting.length) delete out.casting;
   for (const k of ['saves', 'skills', 'vulnerabilities', 'resistances', 'immunities', 'conditionImmunities', 'acNote']) if (!out[k]) delete out[k];
   for (const k of ['reactions', 'legendary']) if (!out[k].length) delete out[k];
   if (!out.legendaryCount) delete out.legendaryCount;

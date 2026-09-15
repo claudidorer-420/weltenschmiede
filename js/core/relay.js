@@ -1,51 +1,81 @@
-// Signale zwischen Spielern und Spielleitung: Spieler melden Zugende, Initiative, Angriffe und Zauberflächen;
-// die SL verarbeitet sie hier – egal, welche Ansicht gerade offen ist (Kampf-Tracker, Karte, Codex …).
-import { createStore } from './store.js';
+// Signale zwischen Spielern und Spielleitung: Spieler melden Aktionen (mit ihren Würfen), Schadenswürfe, Bewegung,
+// Zugende, Initiative und Antworten auf Rückfragen; die SL wertet sie hier der Reihe nach aus – egal, welche Ansicht offen ist.
 import { db } from './db.js';
-import { app, col, myUid, bridge } from './app.js';
-import { mutateCombat, advanceTurn, resort } from './combat.js';
+import { app, col, myUid } from './app.js';
+import { mutateCombat, loadCombat, advanceTurn, resort } from './combat.js';
+import { answerPrompt, promptTarget, setRemotePrompts } from './react.js';
 import { now, uid } from '../lib/util.js';
 
-// Meldungen der Spieler für die SL (Angriffe/Flächen) – die Kampfkarte zeigt sie als Karten mit „Anwenden“
-export const inbox = createStore({ items: [] });
-export function dropInbox(id) {
-  inbox.set({ items: inbox.get().items.filter((x) => x.id !== id) });
+const actions = () => import('./actions.js');
+let recent = [];
+let chain = Promise.resolve();
+
+// Nacheinander auswerten (ein Schadenswurf wartet, bis sein Angriff aufgelöst ist) – Antworten auf Rückfragen sofort,
+// sonst würde eine wartende Reaktionsfrage die eigene Antwort blockieren.
+function dispatch(from, e) {
+  if (e.type === 'answer') return handleEvent(from, e);
+  const run = chain.then(() => handleEvent(from, e));
+  chain = run.catch((err) => console.warn('[Signal]', err));
+  return run;
 }
 
-let recent = [];
 // Spieler: Ereignis an die SL senden (die letzten Ereignisse bleiben im Dokument, damit nichts verloren geht)
 export async function sendEvent(ev) {
   const e = { id: uid(8), ts: now(), ...ev };
   if (db.mode !== 'cloud' || app.get().role === 'gm') {
-    await handleEvent(myUid(), e);
+    await dispatch(myUid(), e);
     return e;
   }
-  recent = [...recent, e].slice(-6);
-  await db.set(col('signals'), myUid(), { type: e.type, ts: e.ts, value: e.value ?? null, charId: e.charId ?? null, events: recent });
+  recent = [...recent, e].slice(-8);
+  await db.set(col('signals'), myUid(), { type: e.type, ts: e.ts, value: e.value ?? null, charId: e.charId ?? null, events: JSON.parse(JSON.stringify(recent)) });
   return e;
 }
 
+// Wege kommen flach an ([x1, y1, x2, y2 …]) – Firestore kennt keine verschachtelten Listen
+const pairs = (p) => (Array.isArray(p) && typeof p[0] === 'number' ? Array.from({ length: Math.floor(p.length / 2) }, (_, i) => [p[i * 2], p[i * 2 + 1]]) : p || []);
+async function owns(from, cbId) {
+  if (from === myUid()) return true;
+  const x = await loadCombat();
+  const c = (x.combatants || []).find((y) => y.id === cbId);
+  return !!c && !!c.ownerUid && c.ownerUid === from;
+}
+
 async function handleEvent(from, e) {
-  if (e.type === 'endTurn') {
+  if (e.type === 'answer') {
+    const to = promptTarget(e.promptId);
+    if (to === undefined || (to && to !== from && from !== myUid())) return;
+    answerPrompt(e.promptId, e.choice ?? null);
+  } else if (e.type === 'endTurn') {
+    const A = await actions();
+    const x0 = await loadCombat();
+    await A.ensureBattleContext(x0.mapId);
     await mutateCombat((x) => {
       const cur = x.combatants[x.turn];
-      if (x.active && cur && (cur.ownerUid === from || app.get().role === 'gm')) advanceTurn(x);
+      if (x.active && cur && (from === myUid() || cur.ownerUid === from)) advanceTurn(x, A.makeCtx(x));
       return x;
     });
   } else if (e.type === 'init') {
     await mutateCombat((x) => {
       const c = x.combatants.find((cc) => (e.charId && cc.charId === e.charId) || (!e.charId && cc.ownerUid === from));
-      if (c) {
+      if (c && (from === myUid() || c.ownerUid === from)) {
         c.init = e.value;
-        x.log.push({ ts: now(), text: `${c.name} meldet Initiative ${e.value}` });
+        x.log.push({ ts: now(), text: `🎲 ${c.name} meldet Initiative ${e.value}` });
         resort(x);
       }
       return x;
     });
-  } else if (e.type === 'attack' || e.type === 'area') {
-    if (app.get().role !== 'gm') return;
-    inbox.set({ items: [...inbox.get().items.filter((x) => x.id !== e.id), { ...e, from }].slice(-20) });
-    bridge.toast(`${e.byName || 'Spieler'}: ${e.summary || (e.type === 'attack' ? 'Angriff' : 'Zauberfläche')}`, 'info', { duration: 8000 });
+  } else if (e.type === 'act' || e.type === 'move' || e.type === 'endConc') {
+    if (!(await owns(from, e.actor))) return;
+    const A = await actions();
+    if (e.type === 'act') await A.handleAct({ ...e, uid: from });
+    else if (e.type === 'move') await A.handleMove({ ...e, path: pairs(e.path), uid: from });
+    else await A.handleEndConc(e);
+  } else if (e.type === 'dmg') {
+    const x = await loadCombat();
+    const rec = (x.results || []).find((r) => r.id === e.resultId);
+    if (!rec || !(await owns(from, rec.actor))) return;
+    const A = await actions();
+    await A.handleDamage({ ...e, uid: from });
   } else if (e.type === 'quest') {
     // Quest-Status, den ein Spieler verschoben hat (nur freigegebene Quests)
     if (app.get().role !== 'gm' || !e.questId || !e.status) return;
@@ -54,15 +84,19 @@ async function handleEvent(from, e) {
   }
 }
 
-// SL: Signale der Spieler beobachten (nur im Cloud-Modus nötig). Gibt eine Abmeldefunktion zurück.
+// SL: Signale der Spieler beobachten (nur im Cloud-Modus nötig) und Rückfragen an Spieler über den Kampfzustand stellen.
 export function startGmRelay() {
   const { cid } = app.get();
   if (!cid || db.mode !== 'cloud') return () => {};
+  setRemotePrompts(
+    (p) => mutateCombat((x) => { x.prompts = [...(x.prompts || []).filter((q) => (q.expires || 0) > now()), p]; return x; }),
+    (id) => mutateCombat((x) => { x.prompts = (x.prompts || []).filter((q) => q.id !== id && (q.expires || 0) > now()); return x; }),
+  );
   const key = `ws.sigev.${cid}`;
   let handled;
   try { handled = new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch { handled = new Set(); }
   const since = now() - 120000;
-  return db.watchCol(col('signals'), {}, (docs) => {
+  const unsub = db.watchCol(col('signals'), {}, (docs) => {
     let changed = false;
     for (const d of docs) {
       const evs = d.events?.length ? d.events : d.type && d.ts ? [{ id: `${d.id}:${d.ts}`, type: d.type, ts: d.ts, value: d.value, charId: d.charId }] : [];
@@ -72,11 +106,15 @@ export function startGmRelay() {
         handled.add(id);
         changed = true;
         if ((e.ts || 0) < since && e.type !== 'quest') continue; // alte Kampfsignale verwerfen, Quest-Verschiebungen nachholen
-        handleEvent(d.id, { ...e, id }).catch((err) => console.warn('[Signal]', err));
+        dispatch(d.id, { ...e, id }).catch((err) => console.warn('[Signal]', err));
       }
     }
     if (changed) {
-      try { localStorage.setItem(key, JSON.stringify([...handled].slice(-300))); } catch { /* voll */ }
+      try { localStorage.setItem(key, JSON.stringify([...handled].slice(-400))); } catch { /* voll */ }
     }
   }, () => {});
+  return () => {
+    unsub();
+    setRemotePrompts(null, null);
+  };
 }

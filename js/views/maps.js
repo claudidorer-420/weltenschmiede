@@ -359,6 +359,16 @@ function LegacyMapView({ params, active, tabId }) {
     s.localEdit = false;
   }, 500), [params.id]);
 
+  // Die Karte bleibt immer teilweise im Bild: nur so weit verschieben, dass noch Karte zu sehen ist
+  s.clampView = () => {
+    if (!s.W || !s.H || s.w < 10) return;
+    const mw = s.W * s.t.k;
+    const mh = s.H * s.t.k;
+    const kx = Math.min(mw, Math.max(80, s.w * 0.3));
+    const ky = Math.min(mh, Math.max(80, s.h * 0.3));
+    s.t.x = Math.min(s.w - kx, Math.max(kx - mw, s.t.x));
+    s.t.y = Math.min(s.h - ky, Math.max(ky - mh, s.t.y));
+  };
   const fit = () => {
     if (s.w < 10) return;
     const k = Math.min((s.w - 40) / s.W, (s.h - 40) / s.H);
@@ -545,6 +555,7 @@ function LegacyMapView({ params, active, tabId }) {
       s.t.x = p.x - (p.x - s.t.x) * real;
       s.t.y = p.y - (p.y - s.t.y) * real;
       s.t.k = k;
+      s.clampView();
       s.userMoved = true;
       s.dirty = true;
     };
@@ -645,6 +656,7 @@ function LegacyMapView({ params, active, tabId }) {
         if (Math.abs(dx) + Math.abs(dy) > 4) a.moved = true;
         s.t.x = a.tx + dx;
         s.t.y = a.ty + dy;
+        s.clampView();
         s.userMoved = true;
         s.dirty = true;
       }
@@ -818,8 +830,8 @@ function LegacyMapView({ params, active, tabId }) {
       <div class="map-toolbar">
         ${tools.map(([id, icon, label]) => html`<${IconBtn} icon=${icon} title=${label} active=${tool === id} onClick=${() => { setTool(id); setPlacing(null); if (id !== 'measure') { s.measure = null; setMeasureText(''); s.dirty = true; } }} />`)}
         <div class="sep"></div>
-        <${IconBtn} icon="zoom-in" title="Hineinzoomen" onClick=${() => { const c = { x: s.w / 2, y: s.h / 2 }; const k = Math.min(8, s.t.k * 1.3); s.t.x = c.x - (c.x - s.t.x) * (k / s.t.k); s.t.y = c.y - (c.y - s.t.y) * (k / s.t.k); s.t.k = k; s.userMoved = true; s.dirty = true; }} />
-        <${IconBtn} icon="zoom-out" title="Herauszoomen" onClick=${() => { const c = { x: s.w / 2, y: s.h / 2 }; const k = Math.max(0.03, s.t.k / 1.3); s.t.x = c.x - (c.x - s.t.x) * (k / s.t.k); s.t.y = c.y - (c.y - s.t.y) * (k / s.t.k); s.t.k = k; s.userMoved = true; s.dirty = true; }} />
+        <${IconBtn} icon="zoom-in" title="Hineinzoomen" onClick=${() => { const c = { x: s.w / 2, y: s.h / 2 }; const k = Math.min(8, s.t.k * 1.3); s.t.x = c.x - (c.x - s.t.x) * (k / s.t.k); s.t.y = c.y - (c.y - s.t.y) * (k / s.t.k); s.t.k = k; s.clampView(); s.userMoved = true; s.dirty = true; }} />
+        <${IconBtn} icon="zoom-out" title="Herauszoomen" onClick=${() => { const c = { x: s.w / 2, y: s.h / 2 }; const k = Math.max(0.03, s.t.k / 1.3); s.t.x = c.x - (c.x - s.t.x) * (k / s.t.k); s.t.y = c.y - (c.y - s.t.y) * (k / s.t.k); s.t.k = k; s.clampView(); s.userMoved = true; s.dirty = true; }} />
       </div>
       ${measureText ? html`<div class="map-pop" style="left:60px;top:10px;width:auto"><${Icon} name="ruler" size=${14} /> <b>${measureText}</b>${!battle && gm ? html` <${Btn} size="sm" kind="ghost" onClick=${setScale}>Als Maßstab<//>` : null}</div>` : null}
       ${placing ? html`<div class="map-pop" style="left:50%;top:10px;transform:translateX(-50%);width:auto">Tippe auf die Karte, um „${noteById(placing)?.title}“ zu platzieren · <a href="#" onClick=${(e) => { e.preventDefault(); setPlacing(null); }}>Abbrechen</a></div>` : null}

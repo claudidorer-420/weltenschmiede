@@ -2,7 +2,7 @@
 // - App-Dateien: "network first" (Updates greifen sofort), offline aus dem Cache
 // - CDN-Bibliotheken (versionierte URLs): "cache first"
 // tools/publish.ps1 erhöht bei jeder Veröffentlichung die VERSION und aktualisiert die Dateiliste.
-const VERSION = 'ws-2026-09-15-2117';
+const VERSION = 'ws-2026-09-16-0021';
 const CDN_CACHE = 'ws-cdn-v1';
 // @@FILES-START@@
 const SHELL = [
@@ -12,6 +12,7 @@ const SHELL = [
   './manifest.webmanifest',
   './icons/icon.svg',
   './js/config.js',
+  './js/core/actions.js',
   './js/core/ai.js',
   './js/core/app.js',
   './js/core/archive.js',
@@ -19,11 +20,13 @@ const SHELL = [
   './js/core/db.js',
   './js/core/db-cloud.js',
   './js/core/db-local.js',
+  './js/core/engine.js',
   './js/core/files.js',
   './js/core/groups.js',
   './js/core/hooks.js',
   './js/core/party.js',
   './js/core/prompts.js',
+  './js/core/react.js',
   './js/core/relay.js',
   './js/core/rolls.js',
   './js/core/settings.js',
@@ -42,6 +45,7 @@ const SHELL = [
   './js/data/monsters-srd.js',
   './js/data/origins.js',
   './js/data/rules5e.js',
+  './js/data/spellfx.js',
   './js/data/spells.js',
   './js/data/spells-2014.js',
   './js/data/spells-2024.js',
@@ -63,11 +67,13 @@ const SHELL = [
   './js/ui/dicetray.js',
   './js/ui/frame.js',
   './js/ui/palette.js',
+  './js/ui/prompthost.js',
   './js/ui/shell.js',
   './js/ui/statblock.js',
   './js/views/archive.js',
   './js/views/auth.js',
   './js/views/battle.js',
+  './js/views/battlebar.js',
   './js/views/bestiary.js',
   './js/views/campaign.js',
   './js/views/characters.js',
