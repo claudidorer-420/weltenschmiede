@@ -2,7 +2,7 @@
 // Würfe für den eigenen Charakter (Proben, Rettungswürfe, Angriffe), Makros, Attribute auswürfeln, Verlauf.
 import { html, useState, useMemo, useEffect } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { app } from '../core/app.js';
+import { app, useEdition } from '../core/app.js';
 import { db } from '../core/db.js';
 import { rolls, prepareRoll, commitRoll, clearRollLog } from '../core/rolls.js';
 import { settings, updateSettings } from '../core/settings.js';
@@ -50,7 +50,7 @@ export function DiceView({ tabId }) {
   const log = useStore(rolls, (s) => s.log);
   const macros = useStore(settings, (s) => s.diceMacros || DEFAULT_MACROS);
   const share = useStore(settings, (s) => s.shareRolls !== false);
-  const edition = useStore(settings, (s) => s.rulesVersion || '2014');
+  const edition = useEdition();
   const cid = useStore(app, (s) => s.cid);
   const role = useStore(app, (s) => s.role);
   const me = useStore(app, (s) => s.user?.uid);

@@ -15,12 +15,16 @@
 | **Speichern** | In den Codex (legt verlinkte NPCs/Orte automatisch als eigene Notizen an), an Notiz anhängen, Handout an Spieler, Markdown, Teilen, E‑Mail, Drucken/PDF – und alles automatisch im **Archiv der Welten** |
 | **NPC‑Schmiede** | Blitz‑NPCs offline (Namen, Aussehen, Marotte, Motiv, Geheimnis) + KI‑Dossiers mit Stimme, Zitaten, Bemal‑Guide, **Porträt** und **Statblock** |
 | **Encounter** | Monster aus jeder Welt (Witcher, Herr der Ringe …) lore‑getreu in 5e, **Schwierigkeit 1–10 von der KI *und* nach DMG‑Formel** (2014 oder 2024), Taktik, Gelände, Beute, Bestiarium, SRD‑Import |
+| **Bestiarium** | **317 SRD‑Monster auf Deutsch** mit Bildern, Suche, Filter nach Kreaturentyp und Herausforderungsgrad, eigenes Bestiarium, KI‑Porträts, direkt in den Kampf oder auf die Karte |
+| **Kampf auf der Karte** (wie Roll20) | Initiativeleiste über der Karte, Tokens mit Bild, TP‑Ring und Zuständen, **Bewegungsreichweite nach 5e** (Wände, schwieriges Gelände, Diagonalen, Spurt), Pfad mit Meterangabe, **Angriffs‑ und Zauberreichweiten**, Ziele in Reichweite, Flächen‑Schablonen (Kegel, Kugel, Linie, Würfel) mit automatischen Rettungswürfen und Schaden, Pings, Monster platzieren, Angriffe aus Statblöcken; Spieler bewegen ihre Figur und würfeln selbst, die SL übernimmt den Schaden |
 | **Kampf‑Tracker** | Initiative, Runden, TP/Temp‑TP, Zustände mit Dauer, Konzentrations‑Hinweis, Todesrettungswürfe, legendäre Aktionen, Statblocks mit klickbaren Würfen; Spieler sehen die Reihenfolge und beenden ihren Zug selbst |
 | **Karten** | **Dungeon‑Editor** im Stil von Dungeon Scrawl: Räume, runde Räume, Polygone, Gänge und Höhlen aufziehen – Wände, Schraffur und Raster entstehen automatisch; Türen, Treppen, 35 Objekte, Gelände (Wasser, Lava, Gras …), Raumnummern mit verknüpften Notizen, 4 Stile, Generatoren (Dungeon, Höhle, Taverne, Lichtung), Rückgängig, PNG‑Export, Bild als Vorlage, Spielmodus mit Tokens, **Nebel des Krieges** und Maßband. Dazu Weltkarten mit Pins (Farbcode‑Notizen) und KI‑gemalte Karten |
 | **Spieltisch** | Live‑Chat mit Würfeln (`/r 1d20+5`), Flüstern an die SL, Szenen mit Bild, Gruppenübersicht, Initiative; **Play‑by‑Post** mit „Wer ist dran?“ für asynchrones Spielen; Handouts |
-| **Kampagnen‑Manager** | Sitzungen (Lazy‑DM‑Vorbereitung, Live‑Notizen, KI‑Rückblick „Was bisher geschah“), Quests als Kanban, Mitspieler & Einladungen |
+| **Kampagnen‑Manager** | Sitzungen (Lazy‑DM‑Vorbereitung, Live‑Notizen, KI‑Rückblick „Was bisher geschah“), Quests als Kanban, Mitspieler & Einladungen. Das **Regelwerk (5e 2014 oder 2024) wird beim Anlegen der Kampagne gewählt** und gilt für alle |
 | **Charaktere & Tagebuch** | **Charakter‑Assistent nach den 5e‑Regeln** (2014 oder 2024): Klasse, Volk/Spezies, Hintergrund, Attribute (Standardwerte, Punktekauf, 4W6), Fertigkeiten, Talente, Ausrüstung, Zauber. Der Bogen zeigt die Werte nur an – ändern geht beim **geführten Stufenaufstieg** (TP würfeln/Durchschnitt, Unterklasse, Attributswerterhöhung/Talent, Mehrklassen). Ressourcen, Zauberplätze, Rasten, Zustände. Charaktere gehören dem Spieler und **bleiben für die nächste Kampagne erhalten** |
-| **Werkzeuge** | **Würfelschale mit Animation** (Würfel rollen von der Seite herein, Summe erst wenn alle liegen), Würfelbecher mit Anzahl, Effekte wie Vorteil, Elfische Präzision, Halblingsglück, Glückspunkt, Verlässliches Talent, Segen, Bardische Inspiration, Kritischer Treffer, Kampf mit Großwaffen, Wilder Angreifer; Würfe direkt für den eigenen Charakter. Dazu Zufallsgeneratoren, Regel‑Nachschlagewerk + KI‑Regelfragen, **Orakel** (Chat mit deinem Codex) |
+| **Charakterbogen** | Aufbau wie bei D&D Beyond, nur aufgeräumter: Attributskästen, Rettungswürfe, Sinne, Fertigkeiten, Tabs für **Aktionen, Zauber, Inventar, Merkmale, Übungen, Hintergrund, Notizen**; Inventar mit Bildern, Gewicht, Traglast, Einstimmung und Münzen; Inspirationsstern; Persönlichkeit nur im Korrektur‑Modus |
+| **Zauber** | Alle Zauber des deutschen SRD (2014: 319, 2024: 339) mit Klassenlisten und Bildern je Schule/Schadensart. **Zauberverwaltung nach Klasse** (bekannt, vorbereitet, Zauberbuch, Hexenmeister‑Arkanum), **Pflichtwahl beim Stufenaufstieg**, Wirken verbraucht Zauberplätze, Konzentration, Schaden je Grad |
+| **Werkzeuge** | **3D‑Würfel** (rollen über die App, Ergebniskarte unten links) und Würfelschale, Würfelbecher mit Anzahl, Effekte wie Vorteil, Elfische Präzision, Halblingsglück, Glückspunkt, Verlässliches Talent, Segen, Bardische Inspiration, Kritischer Treffer, Kampf mit Großwaffen, Wilder Angreifer; Würfe direkt für den eigenen Charakter. Dazu Zufallsgeneratoren, Regel‑Nachschlagewerk + KI‑Regelfragen, **Orakel** (Chat mit deinem Codex) |
 | **KI flexibel** | Google Gemini, Anthropic Claude, OpenAI, OpenRouter, eigener Server (Ollama/LM Studio) – Modell pro Aufgabe wählbar, mit Empfehlungen |
 
 ---
@@ -167,17 +171,18 @@ js/main.js            Einstieg
 js/config.js          Firebase-Konfiguration (optional)
 js/lib/               Preact/htm, Markdown, Würfel, ZIP, Bilder, Icons, Helfer
 js/core/              Zustand, Datenbank (IndexedDB/Firestore), KI, Prompts, Kampf, Gruppe …
-js/data/              5e-Regeldaten, Themenblöcke, Zufallstabellen, Vorlagen, Kartengeneratoren
+js/data/              5e-Regeldaten, Zauber/Monster/Gegenstände (SRD, generiert), Symbole, Themenblöcke, Zufallstabellen, Vorlagen, Kartengeneratoren
 js/ui/                Hülle (Tabs/Seitenleisten), Komponenten, Statblock, Befehlspalette
 js/views/             Alle Module (Codex, Graph, Weltenschmiede, Encounter, Karten, Spieltisch …)
 firebase/             Sicherheitsregeln
-tools/                serve.mjs (lokal), setup-github.ps1, publish.ps1, check-imports.mjs
+tools/                serve.mjs (lokal), setup-github.ps1, publish.ps1, check-imports.mjs,
+                      build-spells.mjs / build-srd.mjs / build-icons.mjs (erzeugen die Daten in js/data/)
 ```
 
 ## Ideen für später
 
-Geräusch‑/Musik‑Kulisse per WebAudio · Reiseplaner mit Tagesetappen auf der Weltkarte · In‑Game‑Kalender & Zeitleiste · Push‑Benachrichtigungen für Play‑by‑Post (Firebase Cloud Messaging) · Versionsverlauf pro Notiz · QR‑Code für Einladungen · Zauber‑Datenbank (SRD).
+Geräusch‑/Musik‑Kulisse per WebAudio · Reiseplaner mit Tagesetappen auf der Weltkarte · In‑Game‑Kalender & Zeitleiste · Push‑Benachrichtigungen für Play‑by‑Post (Firebase Cloud Messaging) · Versionsverlauf pro Notiz · QR‑Code für Einladungen · Sichtlinien und dynamisches Licht auf der Kampfkarte.
 
 ---
 
-*Enthält Material aus dem System Reference Document 5.1 („SRD 5.1“) von Wizards of the Coast LLC (CC‑BY‑4.0). „Dungeons & Dragons“ ist eine Marke von Wizards of the Coast – dies ist ein privates Fan‑Werkzeug ohne Verbindung zu Wizards of the Coast.*
+*Enthält Material aus dem System Reference Document 5.1 und 5.2.1 (deutsche Fassungen, „SRD 5.1“/„SRD 5.2.1“) von Wizards of the Coast LLC, lizenziert unter CC‑BY‑4.0. Symbole von [game-icons.net](https://game-icons.net) (Lorc, Delapouite u. a.), CC BY 3.0. „Dungeons & Dragons“ ist eine Marke von Wizards of the Coast – dies ist ein privates Fan‑Werkzeug ohne Verbindung zu Wizards of the Coast.*

@@ -191,8 +191,12 @@ function LookSection() {
 function GameSection() {
   const s = useStore(settings, (x) => x);
   const mode = useStore(app, (x) => x.mode);
+  const role = useStore(app, (x) => x.role);
+  const camp = useStore(app, (x) => x.campaign);
+  const ed = camp?.settings?.rulesVersion === '2024' ? '2024' : '2014';
   return html`<div class="stack lg">
-    <${Field} label="Regelwerk" hint="Beeinflusst Charaktererschaffung, Encounter-Formel (DMG 2014 mit Multiplikator bzw. 2024 mit EP-Budget) und KI-Prompts."><${Segmented} value=${s.rulesVersion} onChange=${(v) => updateSettings({ rulesVersion: v })} options=${[{ value: '2014', label: 'D&D 5e (2014)' }, { value: '2024', label: 'D&D 5e (2024)' }]} /><//>
+    ${role === 'gm' && camp ? html`<div class="callout"><div class="callout-title">Regelwerk dieser Kampagne: D&D 5e (${ed})</div>
+      <div class="callout-content small">Festgelegt beim Anlegen von „${camp.name}“ – gilt für alle Mitglieder: Charaktere, Zauber, Würfel, Encounter und KI. Für ein anderes Regelwerk legst du eine neue Kampagne an.</div></div>` : null}
     <${Field} label="Entfernungen"><${Segmented} value=${s.units} onChange=${(v) => updateSettings({ units: v })} options=${[{ value: 'm', label: 'Meter (dt. Regelwerk)' }, { value: 'ft', label: 'Fuß' }]} /><//>
     <${Toggle} checked=${s.diceAnim !== false} onChange=${(v) => updateSettings({ diceAnim: v })} label="Würfel-Animation (Würfel rollen über den Tisch)" />
     <${Toggle} checked=${s.shareRolls !== false} onChange=${(v) => updateSettings({ shareRolls: v })} label="Würfe automatisch im Spieltisch-Chat zeigen" />
@@ -238,9 +242,14 @@ function DataSection() {
 function AboutSection() {
   const keys = [['Strg + O', 'Schnellwechsler (Notiz öffnen/anlegen)'], ['Strg + P', 'Befehlspalette'], ['Strg + N', 'Neue Notiz'], ['Strg + E', 'Lesen ↔ Bearbeiten'], ['Strg + G', 'Graph'], ['Strg + ⇧ + F', 'Volltextsuche'], ['Alt + ← / →', 'Zurück / Vor'], ['[[', 'Notiz verlinken (Autovervollständigung)']];
   return html`<div class="stack lg">
-    <div class="row"><img src="icons/icon.svg" width="56" height="56" alt="" /><div><b style="font-size:18px">Weltenschmiede</b><div class="small muted">D&D-5e-Kampagnen-Werkstatt · Version 1.1 (2026-09)</div></div></div>
+    <div class="row"><img src="icons/icon.svg" width="56" height="56" alt="" /><div><b style="font-size:18px">Weltenschmiede</b><div class="small muted">D&D-5e-Kampagnen-Werkstatt · Version 1.2 (2026-09)</div></div></div>
     <div class="card"><div class="card-head"><h3><${Icon} name="command" size=${18} />Tastenkürzel</h3></div><table class="xp-table">${keys.map(([k, d]) => html`<tr><td><span class="kbd">${k}</span></td><td>${d}</td></tr>`)}</table></div>
-    <div class="small faint" style="line-height:1.6">Gebaut mit Preact + htm (ohne Build-Schritt), Firebase für Konten & Sync. Regelzusammenfassungen in eigenen Worten; Regeldaten nach dem System Reference Document 5.1 und 5.2 von Wizards of the Coast LLC, CC-BY-4.0. „Dungeons & Dragons“ ist eine Marke von Wizards of the Coast – dies ist ein privates Fan-Werkzeug.</div>
+    <div class="card stack sm small" style="line-height:1.6">
+      <b>Quellen & Lizenzen</b>
+      <div>Zauber, Monster und magische Gegenstände: System Reference Document 5.1 und 5.2.1 (deutsche Fassungen) von Wizards of the Coast LLC, lizenziert unter <a href="https://creativecommons.org/licenses/by/4.0/legalcode.de" target="_blank" rel="noopener">CC-BY-4.0</a>. Maschinenlesbare Aufbereitung des SRD 5.1: openrpg.de; ergänzende Metadaten (Klassen, Schaden, Flächen): dnd5eapi.co.</div>
+      <div>Symbole für Zauber, Gegenstände und Monster: <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> (Lorc, Delapouite u. a.), lizenziert unter CC BY 3.0.</div>
+      <div class="faint">Gebaut mit Preact + htm (ohne Build-Schritt), Firebase für Konten & Sync. Regelzusammenfassungen in eigenen Worten. „Dungeons & Dragons“ ist eine Marke von Wizards of the Coast – dies ist ein privates Fan-Werkzeug.</div>
+    </div>
   </div>`;
 }
 

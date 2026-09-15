@@ -29,9 +29,15 @@ export async function loadSampleCampaign() {
   toast('Beispielkampagne geladen', 'success');
 }
 
+const EDITIONS = [
+  { value: '2024', label: 'D&D 5e (2024)', desc: 'Aktuelle Regeln: Spielerhandbuch 2024 – Hintergründe geben die Attributswerte, Waffenmeisterschaften, neue Zauber.' },
+  { value: '2014', label: 'D&D 5e (2014)', desc: 'Klassische Regeln: Völker mit Attributsboni, Unterrassen, Encounter-Formel mit Multiplikator.' },
+];
+
 function NewCampaignForm({ close }) {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
+  const [edition, setEdition] = useState(settings.get().rulesVersion === '2014' ? '2014' : '2024');
   const [sample, setSample] = useState(false);
   const [busy, setBusy] = useState(false);
   const submit = async (e) => {
@@ -39,7 +45,8 @@ function NewCampaignForm({ close }) {
     if (!name.trim()) return;
     setBusy(true);
     try {
-      const cid = await createCampaign({ name: name.trim(), description: desc.trim() });
+      updateSettings({ rulesVersion: edition });
+      const cid = await createCampaign({ name: name.trim(), description: desc.trim(), edition });
       await openCampaign(cid);
       if (sample) await seedSample();
       toast(`Kampagne „${name.trim()}“ angelegt`, 'success');
@@ -53,6 +60,10 @@ function NewCampaignForm({ close }) {
     <div class="modal-body stack">
       <${Field} label="Name"><input class="input" value=${name} onInput=${(e) => setName(e.target.value)} placeholder="z. B. Reiche von Arkonis" autoFocus /><//>
       <${Field} label="Kurzbeschreibung (optional)"><textarea class="textarea" value=${desc} onInput=${(e) => setDesc(e.target.value)} placeholder="Worum geht es? Ton, Setting, Gruppe …" /><//>
+      <${Field} label="Regelwerk" hint="Gilt für alle in dieser Kampagne – Charaktere, Zauber, Würfel, Encounter und KI. Kann später nicht mehr geändert werden.">
+        <div class="radio-cards">${EDITIONS.map((o) => html`<button type="button" class=${`radio-card${edition === o.value ? ' selected' : ''}`} onClick=${() => setEdition(o.value)}>
+          <b>${o.label}</b><span class="small muted">${o.desc}</span></button>`)}</div>
+      <//>
       <label class="check"><input type="checkbox" checked=${sample} onChange=${(e) => setSample(e.target.checked)} /> Mit Beispielnotizen starten</label>
     </div>
     <div class="modal-foot"><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" type="submit" loading=${busy} icon="plus">Anlegen<//></div>

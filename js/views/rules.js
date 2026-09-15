@@ -1,7 +1,7 @@
 // Regel-Nachschlagewerk: Zustände, Kampfaktionen, Deckung, SG, Reisen, Münzen … + Regelfrage an die KI.
 import { html, useState, useRef } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { isGM, createNote } from '../core/app.js';
+import { isGM, createNote, useEdition } from '../core/app.js';
 import { openNote } from '../core/workspace.js';
 import { settings, updateSettings } from '../core/settings.js';
 import { generate } from '../core/ai.js';
@@ -12,7 +12,7 @@ import { Icon, Btn, MarkdownView, ModelPicker, Segmented, toast, AutoTextarea } 
 
 export function RulesView({ tabId }) {
   const [q, setQ] = useState('');
-  const version = useStore(settings, (s) => s.rulesVersion);
+  const version = useEdition();
   const [open, setOpen] = useState(() => new Set(['aktionen']));
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
@@ -51,7 +51,7 @@ export function RulesView({ tabId }) {
     <div class="page stack lg">
       <div class="page-head">
         <h1><${Icon} name="book" size=${24} />Regeln</h1><span class="grow"></span>
-        <${Segmented} value=${version} onChange=${(v) => updateSettings({ rulesVersion: v })} options=${[{ value: '2014', label: '5e 2014' }, { value: '2024', label: '5e 2024' }]} />
+        <span class="badge" title="Regelwerk der Kampagne">D&D 5e ${version}</span>
       </div>
       <div class="search-box" style="margin:0"><${Icon} name="search" size=${16} /><input class="input" placeholder="Regel suchen (z. B. Deckung, gepackt, Sturz) …" value=${q} onInput=${(e) => setQ(e.target.value)} /></div>
 

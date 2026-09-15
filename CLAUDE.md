@@ -18,9 +18,14 @@ Statische PWA ohne Build‑Schritt (GitHub Pages). UI komplett auf **Deutsch**.
 - `js/ui/aiout.js` – `useGeneration()` (Streaming, Nachbessern, Fortsetzen) + Speicher‑Dialoge.
 - `js/ui/account.js` – Konto‑Menü (Avatar im Ribbon/Übersicht), Abmelden (optional mit Gerätebereinigung), Rolle wechseln, Einstellungen als Dialog.
 - Start: `views/auth.js` (Rollenwahl Spielleitung/Spieler → Name + Geheimwort) → `views/home.js` `Lobby` (ohne offene Kampagne) → Kampagne. Firebase‑Config ist in `js/config.js` fest eingebaut; `#/offline` startet den Offline‑Modus (lokal, ohne Konto).
-- Würfel: `lib/dice.js` `rollDetailed()` (jeder physische Würfel + Effekte wie Vorteil, Halblingsglück, Verlässliches Talent, Großwaffen …), `core/rolls.js` `prepareRoll/commitRoll/doRoll`, `ui/dicetray.js` (Animation: `DiceTray`, schwebende `DiceOverlay` für alle Würfe).
-- Charaktere: `data/chargen.js` (Völker/Spezies, Hintergründe, Klassen je Regelstand, Talente, Rüstungen, Waffen, Zaubertabellen, `charMods()`), `views/charwizard.js` (Assistent, Stufenaufstieg, `derive()`, Übernahme alter Bögen), `views/characters.js` (Bogen: Werte fest, Spielstand änderbar).
-- Karten: `views/mapeditor.js` (Dungeon‑Editor, Typ `scrawl`: Formen → Maske → Wände/Schraffur per Dilatation, Objekte als Vektorzeichnungen, Generatoren, Export, Spielmodus) · `views/maps.js` (Liste, Welt‑/Rasterkarten, Weiche `MapView`).
+- Würfel: `lib/dice.js` `rollDetailed()` (jeder physische Würfel + Effekte wie Vorteil, Halblingsglück, Verlässliches Talent, Großwaffen …), `core/rolls.js` `prepareRoll/commitRoll/doRoll`, `ui/dice3d.js` (3D‑Würfel ohne Bibliothek: Polyeder, Licht, Physik mit Teilschritten, Zielfläche zum Betrachter), `ui/dicetray.js` (`DiceTray` in der Würfel‑Ansicht, `DiceOverlay` = Würfel über der App + Ergebniskarten unten links).
+- Regelwerk: wird beim Anlegen der Kampagne gewählt (`campaigns/{cid}.settings.rulesVersion`) und gilt für alle – `rulesEdition()` / `useEdition()` aus `core/app.js`. Spieler haben keine Regelwerk‑Einstellung.
+- Charaktere: `data/chargen.js` (Völker/Spezies, Hintergründe, Klassen je Regelstand, Talente, Rüstungen, Waffen, Zaubertabellen, `charMods()`), `views/charwizard.js` (Assistent, Stufenaufstieg mit Pflicht‑Zauberwahl, `derive()`, Übernahme alter Bögen), `views/characters.js` (Bogen im D&D‑Beyond‑Aufbau: Werte fest, Spielstand änderbar; Persönlichkeit nur im Korrektur‑Modus).
+- Zauber: `data/spells-2014.js` / `spells-2024.js` (generiert, SRD 5.1/5.2.1 deutsch, CC‑BY‑4.0), `data/spells.js` (Laden, Klassenlisten, `spellNeeds()` je Klasse: known/prepare/book, Anzeige‑Helfer), `views/spellbook.js` (`SpellManager`, `checkSpells()`, `openSpellManager`, `SpellDetail`). Eintrag im Bogen: `{ id, ref, name, level, cls, prepared, book, always, arcanum, source }`.
+- Bilder: `data/artmap.js` (Zuordnung Zauber/Gegenstände/Kreaturen → Symbolname), `data/gameicons.js` (generiert, game-icons.net CC BY 3.0), `ui/art.js` (`SpellArt`, `ItemArt`, `MonsterArt`, `GameIcon`, `giImage` für Canvas). Gegenstände: `data/items.js` (Katalog mit Preis/Gewicht, Reichweiten), `data/magicitems-srd.js`; Monster: `data/monsters-srd.js` (317 SRD‑Monster deutsch) · `views/bestiary.js` (Kompendium + eigenes Bestiarium, KI‑Porträt).
+- Karten: `views/mapeditor.js` (Dungeon‑Editor, Typ `scrawl`: Formen → Maske → Wände/Schraffur per Dilatation, Objekte als Vektorzeichnungen, Generatoren, Export, Spielmodus; `buildGrid()` = begehbare Felder/schwieriges Gelände) · `views/maps.js` (Liste, Welt‑/Rasterkarten, Weiche `MapView`).
+- Kampf: `core/combat.js` (Zustand, `advanceTurn`, `applyHp`, `mutateCombat`, `combatantForToken`), `core/tactics.js` (Bewegung nach 5e, Entfernungen, Flächen‑Schablonen, `parseAttacks()` aus Statblöcken), `core/relay.js` (Spieler → SL: `sendEvent`, SL‑Relais `startGmRelay` läuft in `shell.js`), `views/battle.js` (Kampf‑Ebene der Karte: Initiativeleiste, Token‑Bilder/TP/Zustände, Bewegungsreichweite, Zielen, Schablonen, Pings, Monster platzieren) · `views/combat.js` (Tracker).
+- Datenwerkzeuge: `tools/build-spells.mjs`, `tools/build-icons.mjs`, `tools/build-srd.mjs` erzeugen die `data/*`‑Dateien aus heruntergeladenen Quellen (Aufruf im Dateikopf).
 
 ## Datenmodell (Firestore‑Pfade = IndexedDB‑Pfade)
 ```
@@ -37,7 +42,12 @@ campaigns/{cid}/members/{uid}  { role: gm|player, characterId }
 campaigns/{cid}/notes|sessions|quests|maps|pins|tokens|handouts|files   (visibility: gm|players)
 campaigns/{cid}/secrets|gm|trash|monsters|encounters                    (nur SL)
 campaigns/{cid}/combat/{gm|public}  chat  whispers  posts  signals  party
+campaigns/{cid}/tokens/{id}    { mapId, x, y, size, label, color, ownerUid, visibility, charId?, combatantId?, mref:{src:srd|bst,id}?, art:{icon,color}? }
+campaigns/{cid}/party/{id}     geteilte Kartenebene: { kind: tpl (Zauberfläche) | ping, mapId, … } – alle Mitglieder dürfen schreiben
+campaigns/{cid}/signals/{uid}  { type, ts, events:[{id,type,…}] } Spieler → SL (Zugende, Initiative, Angriff, Fläche)
 ```
+- Kampf: `combat/gm` enthält `mapId`, Kämpfer mit `tokenId`; `combat/public` projiziert NSC ohne Werte (nur `hpState`, `art`).
+- Spieler dürfen an Tokens nur `x`/`y` ändern (Regeln) – Bewegungsverbrauch zählt deshalb lokal pro Zug.
 - Spieler‑Abfragen **müssen** `where visibility == 'players'` enthalten (Regeln sind keine Filter) → `useVisibleCol()`.
 - Bilder: `core/files.js` speichert Data‑URLs in ≤ 900‑KB‑Stücken (`files/{id}/chunks/{n}`) – kein Firebase Storage nötig.
 - **Neue Sammlung?** → `firebase/firestore.rules` ergänzen, ggf. `SUBCOLLECTIONS` in `app.js` (Löschen) und `COLLS` in `views/importexport.js` (Backup/Migration).

@@ -2,7 +2,7 @@
 // - App-Dateien: "network first" (Updates greifen sofort), offline aus dem Cache
 // - CDN-Bibliotheken (versionierte URLs): "cache first"
 // tools/publish.ps1 erhöht bei jeder Veröffentlichung die VERSION und aktualisiert die Dateiliste.
-const VERSION = 'ws-2026-09-14-0443';
+const VERSION = 'ws-2026-09-15-1804';
 const CDN_CACHE = 'ws-cdn-v1';
 // @@FILES-START@@
 const SHELL = [
@@ -24,15 +24,25 @@ const SHELL = [
   './js/core/hooks.js',
   './js/core/party.js',
   './js/core/prompts.js',
+  './js/core/relay.js',
   './js/core/rolls.js',
   './js/core/settings.js',
   './js/core/store.js',
+  './js/core/tactics.js',
   './js/core/workspace.js',
+  './js/data/artmap.js',
   './js/data/blocks.js',
   './js/data/chargen.js',
   './js/data/demo.js',
+  './js/data/gameicons.js',
+  './js/data/items.js',
+  './js/data/magicitems-srd.js',
   './js/data/mapgen.js',
+  './js/data/monsters-srd.js',
   './js/data/rules5e.js',
+  './js/data/spells.js',
+  './js/data/spells-2014.js',
+  './js/data/spells-2024.js',
   './js/data/tables.js',
   './js/data/templates.js',
   './js/lib/dice.js',
@@ -45,7 +55,9 @@ const SHELL = [
   './js/main.js',
   './js/ui/account.js',
   './js/ui/aiout.js',
+  './js/ui/art.js',
   './js/ui/components.js',
+  './js/ui/dice3d.js',
   './js/ui/dicetray.js',
   './js/ui/frame.js',
   './js/ui/palette.js',
@@ -53,6 +65,8 @@ const SHELL = [
   './js/ui/statblock.js',
   './js/views/archive.js',
   './js/views/auth.js',
+  './js/views/battle.js',
+  './js/views/bestiary.js',
   './js/views/campaign.js',
   './js/views/characters.js',
   './js/views/charwizard.js',
@@ -72,6 +86,7 @@ const SHELL = [
   './js/views/oracle.js',
   './js/views/rules.js',
   './js/views/settings.js',
+  './js/views/spellbook.js',
   './js/views/table.js',
 ];
 // @@FILES-END@@

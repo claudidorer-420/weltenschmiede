@@ -1,5 +1,5 @@
 // Zentraler App-Zustand: Anmeldung, Kampagnen, Mitgliedschaft/Rollen, Codex (Notizen) + Index.
-import { createStore } from './store.js';
+import { createStore, useStore } from './store.js';
 import { db, connectCloud, useLocalDb } from './db.js';
 import {
   settings, getCloudConfig, setCloudConfig, modePref, setCloudSettingsSync, mergeRemoteSettings, applyTheme, ensureSettingsOwner, clearAiKeys,
@@ -205,6 +205,16 @@ export async function setAccountKind(kind) {
 
 export const isGmAccount = () => (app.get().user?.kind || 'gm') === 'gm';
 
+// Regelwerk: wird beim Anlegen der Kampagne festgelegt und gilt für alle Mitglieder.
+// Ohne offene Kampagne (Übersicht) zählt die zuletzt gewählte Voreinstellung des Geräts.
+const edNorm = (v) => (v === '2024' ? '2024' : '2014');
+export const rulesEdition = () => edNorm(app.get().campaign?.settings?.rulesVersion || settings.get().rulesVersion);
+export function useEdition() {
+  const camp = useStore(app, (s) => s.campaign?.settings?.rulesVersion || null);
+  const dev = useStore(settings, (s) => s.rulesVersion || '2014');
+  return edNorm(camp || dev);
+}
+
 export function renameLocalProfile(name) {
   if (app.get().mode !== 'local') return;
   app.set({ user: { ...app.get().user, name } });
@@ -219,15 +229,16 @@ export async function refreshCampaigns() {
   return list;
 }
 
-export async function createCampaign({ name, description = '', world = '' }) {
+export async function createCampaign({ name, description = '', world = '', edition = settings.get().rulesVersion || '2014' }) {
   const u = app.get().user;
   const cid = uid(20);
+  const ed = edition === '2024' ? '2024' : '2014';
   await db.set('campaigns', cid, {
     name, description, world, ownerUid: u.uid, createdAt: now(), updatedAt: now(), folders: [], pbpWaiting: [],
-    settings: { rulesVersion: settings.get().rulesVersion || '2014', units: settings.get().units || 'm' },
+    settings: { rulesVersion: ed, units: settings.get().units || 'm' },
   });
   await db.set(`campaigns/${cid}/members`, u.uid, { uid: u.uid, name: u.name, role: 'gm', joinedAt: now() });
-  await db.set(`users/${u.uid}/campaigns`, cid, { name, role: 'gm', joinedAt: now() });
+  await db.set(`users/${u.uid}/campaigns`, cid, { name, role: 'gm', joinedAt: now(), edition: ed });
   await refreshCampaigns();
   return cid;
 }

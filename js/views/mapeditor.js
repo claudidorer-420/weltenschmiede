@@ -1,7 +1,7 @@
 // Dungeon-Editor (angelehnt an Dungeon Scrawl): Räume, Gänge und Höhlen einfach aufziehen – Wände, Schraffur und
 // Raster entstehen automatisch. Dazu Türen, Treppen, Objekte, Gelände, Raumnummern, Stile, Generatoren, PNG-Export
 // und ein Spielmodus mit Tokens, Nebel des Krieges und Maßband (live für alle Mitspieler).
-import { html, useState, useEffect, useRef } from '../lib/preact.js';
+import { html, useState, useEffect, useRef, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import { app, vault, col, myUid, noteById } from '../core/app.js';
 import { db } from '../core/db.js';
@@ -9,7 +9,12 @@ import { openNote } from '../core/workspace.js';
 import { settings } from '../core/settings.js';
 import { fileUrl } from '../core/files.js';
 import { loadParty } from '../core/party.js';
-import { loadCombat } from '../core/combat.js';
+import { loadCombat, mutateCombat } from '../core/combat.js';
+import { sizeCells } from '../core/tactics.js';
+import { monsterIconName, creatureType } from '../ui/art.js';
+import {
+  useBattle, drawBattle, BattleHud, MonsterPlacer, onDown as battleDown, onTokenDrop, selectToken, arm, ping, animating, startCombat, clearTemplates, placeMonster,
+} from './battle.js';
 import { ViewFrame } from '../ui/frame.js';
 import { Icon, IconBtn, Btn, Field, Select, Segmented, Toggle, NotePicker, openModal, promptDialog, confirmDialog, toast, pickFiles } from '../ui/components.js';
 import { useCol } from '../core/hooks.js';
@@ -611,7 +616,8 @@ const HINTS = {
   door: 'Nahe einer Wand antippen – die Tür rastet an der Kante ein',
   object: 'Objekt rechts wählen, dann auf die Karte tippen',
   text: 'Antippen = nächste Raumnummer bzw. Text setzen',
-  pan: 'Ziehen = verschieben · Mausrad/zwei Finger = zoomen',
+  pan: 'Ziehen = verschieben · Mausrad/zwei Finger = zoomen · im Spiel: Token antippen = Aktionen, lange drücken = Ping',
+  place: 'Antippen = Monster setzen · Esc = fertig',
   measure: 'Ziehen = Entfernung messen',
   reveal: 'Über die Karte wischen = Nebel aufdecken',
   hide: 'Über die Karte wischen = Nebel verdecken',
@@ -662,6 +668,46 @@ function objHit(o, x, y) {
   const ly = dx * Math.sin(a) + dy * Math.cos(a);
   const s = o.s || 1;
   return Math.abs(lx) <= (def.w * s) / 2 + 0.08 && Math.abs(ly) <= (def.h * s) / 2 + 0.08;
+}
+
+// Begehbare Felder für die Kampfbewegung: Boden aus den Formen, Gelände (schwierig bzw. Grube), Objekte
+const BLOCK_OBJ = new Set(['pillar', 'statue', 'altar', 'fountain', 'well', 'bookshelf', 'tree', 'rock', 'throne']);
+const ROUGH_OBJ = new Set(['rubble', 'web', 'bush', 'bones', 'table', 'roundtable', 'bed', 'barrel', 'crate', 'coffin', 'cauldron', 'brazier', 'bench']);
+const ROUGH_MAT = new Set(['difficult', 'rubble', 'water', 'ice', 'blood', 'lava']);
+function buildGrid(d) {
+  const W = d.w || 36;
+  const H = d.h || 26;
+  const R = 4;
+  const walk = new Uint8Array(W * H).fill(1);
+  const cost = new Uint8Array(W * H).fill(1);
+  if ((d.shapes || []).some((s) => s.op !== 'sub')) {
+    const cv = canvasOf('gridmask', W * R, H * R);
+    const g = cv.getContext('2d');
+    g.setTransform(R, 0, 0, R, 0, 0);
+    for (const s of d.shapes) paintShape(g, s, '#fff');
+    const data = g.getImageData(0, 0, W * R, H * R).data;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) walk[y * W + x] = data[((y * R + R / 2) * W * R + x * R + R / 2) * 4 + 3] > 127 ? 1 : 0;
+  }
+  const cells = (x0, y0, x1, y1, fn) => {
+    for (let y = Math.max(0, Math.floor(y0)); y <= Math.min(H - 1, Math.ceil(y1)); y++) for (let x = Math.max(0, Math.floor(x0)); x <= Math.min(W - 1, Math.ceil(x1)); x++) fn(x, y);
+  };
+  const mat = new Array(W * H).fill(null);
+  for (const s of d.terrain || []) {
+    const p = s.pts || [];
+    let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
+    for (let i = 0; i < p.length; i += 2) { x0 = Math.min(x0, p[i]); x1 = Math.max(x1, p[i]); y0 = Math.min(y0, p[i + 1]); y1 = Math.max(y1, p[i + 1]); }
+    const m = (s.w || 0) / 2 + 1;
+    cells(x0 - m, y0 - m, x1 + m, y1 + m, (x, y) => { if (shapeHit(s, x + 0.5, y + 0.5)) mat[y * W + x] = s.op === 'sub' ? null : s.mat; });
+  }
+  for (let i = 0; i < mat.length; i++) { if (mat[i] === 'pit') walk[i] = 0; else if (ROUGH_MAT.has(mat[i])) cost[i] = 2; }
+  for (const o of d.objects || []) {
+    const block = BLOCK_OBJ.has(o.t);
+    if (!block && !ROUGH_OBJ.has(o.t)) continue;
+    const def = OBJ[o.t];
+    const ext = (Math.max(def.w, def.h) * (o.s || 1)) / 2 + 1;
+    cells(o.x - ext, o.y - ext, o.x + ext, o.y + ext, (x, y) => { if (objHit(o, x + 0.5, y + 0.5)) { if (block) walk[y * W + x] = 0; else cost[y * W + x] = 2; } });
+  }
+  return { w: W, h: H, walk, cost };
 }
 
 // ───────────────────────── Ansicht ─────────────────────────
@@ -743,6 +789,10 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
 
   const pickDoc = (m) => ({ w: m.w || 36, h: m.h || 26, style: m.style || 'klassisch', gridOn: m.gridOn !== false, hatch: m.hatch ?? 1, bgAlpha: m.bgAlpha ?? 0.5, shapes: m.shapes || [], terrain: m.terrain || [], objects: m.objects || [], labels: m.labels || [] });
   if (!s.doc) s.doc = pickDoc(map);
+  s.fogOn = !!map.fog?.enabled;
+  const grid = useMemo(() => buildGrid(s.doc), [s.geom, s.doc.w, s.doc.h]);
+  const B = useBattle({ cid, mapId: params.id, gm, me, tokens, grid, gridKey: s.geom, redraw: () => { s.dirty = true; }, rerender });
+  s.B = B;
   // Änderungen anderer übernehmen, solange hier nichts ungespeichert ist
   useEffect(() => {
     if (!s.localDirty) {
@@ -834,6 +884,19 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.dirty = true;
   };
 
+  // Ansicht auf einen Token schwenken (nur falls er außerhalb liegt, wenn onlyIfHidden)
+  s.focusToken = (t, onlyIfHidden) => {
+    const n = t.size || 1;
+    const k = s.t.k * PX;
+    const px = s.t.x + (t.x + n / 2) * k;
+    const py = s.t.y + (t.y + n / 2) * k;
+    if (onlyIfHidden && px > 80 && px < s.w - 80 && py > 90 && py < s.h - 170) return;
+    s.t.x = s.w / 2 - (t.x + n / 2) * k;
+    s.t.y = s.h / 2 - (t.y + n / 2) * k;
+    s.userMoved = true;
+    s.dirty = true;
+  };
+
   // Größe
   useEffect(() => {
     const el = wrapRef.current;
@@ -873,6 +936,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       }
       if (s.zooming) settleT = t;
       s.zooming = false;
+      if (s.mode === 'play' && animating(s.B) && t - (s.lastAnim || 0) > 33) { s.dirty = true; s.lastAnim = t; }
       if (s.dirty) {
         draw();
         s.dirty = false;
@@ -907,20 +971,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     }
     for (const o of d.objects) drawObject(ctx, o, st);
     for (const l of d.labels) drawLabel(ctx, l, st);
-    // Tokens
+    // Kampf-Ebene: Schablonen, Bewegung, Reichweiten, Tokens, Pings
     if (s.mode === 'play') {
-      for (const t of s.tokens) {
-        const hidden = !s.gm && s.doc && map.fog?.enabled && s.fog && s.fog[Math.floor(t.y) * d.w + Math.floor(t.x)] !== '1';
-        if (hidden) continue;
-        const size = t.size || 1;
-        const cx = (t.dragX ?? t.x) + size / 2;
-        const cy = (t.dragY ?? t.y) + size / 2;
-        const r = size / 2 - 0.08;
-        ctx.globalAlpha = t.visibility === 'players' ? 1 : 0.6;
-        circ(ctx, cx, cy, r, t.color || '#e0b24a', t.ownerUid === s.me ? '#ffffff' : 'rgba(0,0,0,.65)', 0.07);
-        utext(ctx, initials(t.label).slice(0, 2), cx, cy + 0.02, Math.max(0.28, r * 0.8), '#111');
-        ctx.globalAlpha = 1;
-      }
+      drawBattle(ctx, s, k);
       // Nebel
       if (map.fog?.enabled && s.fog) {
         ctx.fillStyle = s.gm ? 'rgba(0,0,0,.5)' : '#000';
@@ -1097,6 +1150,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         return;
       }
       if (s.mode === 'play') {
+        if (e.altKey && e.button === 0) { ping(s.B, w); return; }
+        if (s.B && battleDown(s.B, w, s.doc.w, s.doc.h)) return;
+        if (tl === 'place' && s.gm) { await placeMonster(s.B, w, s.doc.w, s.doc.h); return; }
         if (tl === 'measure') { s.measure = { a: w, b: w }; s.act = { kind: 'measure' }; s.dirty = true; return; }
         if ((tl === 'reveal' || tl === 'hide') && s.gm) { s.act = { kind: 'fog' }; fogPaint(w); return; }
         if (tl === 'token' && s.gm) {
@@ -1105,10 +1161,17 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           return;
         }
         const t = [...s.tokens].reverse().find((x) => w.x >= x.x && w.x < x.x + (x.size || 1) && w.y >= x.y && w.y < x.y + (x.size || 1));
-        if (t && (s.gm || t.ownerUid === s.me)) { s.act = { kind: 'token', t, off: { x: w.x - t.x, y: w.y - t.y }, moved: false, sx: p.x, sy: p.y }; return; }
+        if (t) {
+          if (s.gm || t.ownerUid === s.me) s.act = { kind: 'token', t, off: { x: w.x - t.x, y: w.y - t.y }, moved: false, sx: p.x, sy: p.y };
+          else selectToken(s.B, t.id);
+          return;
+        }
         const lab = s.doc.labels.find((l) => l.noteId && Math.hypot(l.x - w.x, l.y - w.y) < (l.size || 0.7));
         if (lab) { const n = noteById(lab.noteId); if (n) openNote(n.id, { newTab: true }); return; }
-        s.act = { kind: 'pan', sx: p.x, sy: p.y, tx: s.t.x, ty: s.t.y };
+        s.act = { kind: 'pan', sx: p.x, sy: p.y, tx: s.t.x, ty: s.t.y, play: true };
+        // Lange drücken = Ping für alle
+        clearTimeout(s.lp);
+        s.lp = setTimeout(() => { if (s.act?.kind === 'pan' && s.act.play && !s.act.far && s.pointers.size === 1) { ping(s.B, w); s.act = null; } }, 650);
         return;
       }
       // Bauen
@@ -1187,6 +1250,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       const w = toW(p);
       const a = s.act;
       if (!a) {
+        if (s.mode === 'play' && s.B) { s.B.hover = w; if (s.B.pending) s.dirty = true; }
         if (s.mode === 'build' && (s.tool === 'door' || s.tool === 'object') && e.pointerType !== 'touch') {
           s.hover = s.tool === 'door' ? placeDoor(w, s.doorType) : placeObj(w, s.objType, e);
           s.dirty = true;
@@ -1199,6 +1263,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         return;
       }
       if (a.kind === 'pan') {
+        if (Math.hypot(p.x - a.sx, p.y - a.sy) > 6) { a.far = true; clearTimeout(s.lp); }
         s.t.x = a.tx + p.x - a.sx;
         s.t.y = a.ty + p.y - a.sy;
         s.userMoved = true;
@@ -1217,6 +1282,8 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         if (Math.hypot(p.x - a.sx, p.y - a.sy) > 4) a.moved = true;
         a.t.dragX = w.x - a.off.x;
         a.t.dragY = w.y - a.off.y;
+        const n = a.t.size || 1;
+        if (s.B && a.moved) s.B.drag = { t: a.t, x: clamp(Math.round(a.t.dragX), 0, s.doc.w - n), y: clamp(Math.round(a.t.dragY), 0, s.doc.h - n) };
         s.dirty = true;
         return;
       }
@@ -1255,10 +1322,12 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     const up = async (e) => {
       const p = pos(e);
       s.pointers.delete(e.pointerId);
+      clearTimeout(s.lp);
       if (s.pinch) { if (s.pointers.size < 2) s.pinch = null; return; }
       const a = s.act;
       s.act = null;
       if (!a) return;
+      if (a.kind === 'pan' && a.play && !a.far && s.B?.sel && !s.B.pending) { selectToken(s.B, null); return; }
       if (a.kind === 'drag') {
         const dr = s.draft;
         if (dr && (dr.pts[0] === dr.pts[2] || dr.pts[1] === dr.pts[3])) { s.draft = null; s.dirty = true; return; }
@@ -1280,20 +1349,19 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       if (a.kind === 'token') {
         const t = a.t;
         const d = s.doc;
+        if (s.B) s.B.drag = null;
         if (a.moved) {
           const nx = clamp(Math.round(t.dragX), 0, d.w - (t.size || 1));
           const ny = clamp(Math.round(t.dragY), 0, d.h - (t.size || 1));
           delete t.dragX;
           delete t.dragY;
+          s.dirty = true;
+          if (nx === t.x && ny === t.y) return;
+          if (s.B && !onTokenDrop(s.B, t, nx, ny, d.w, d.h)) return;
           t.x = nx;
           t.y = ny;
-          s.dirty = true;
           await db.update(col('tokens'), t.id, { x: nx, y: ny }).catch((err) => toast(err.message, 'error'));
-        } else if (s.gm) {
-          const r = await openModal(({ close }) => html`<${TokenForm} close=${close} token=${t} members=${Object.values(vault.get().members)} />`, { title: t.label, icon: 'user' });
-          if (r?._delete) await db.remove(col('tokens'), t.id);
-          else if (r) await db.update(col('tokens'), t.id, { label: r.label, color: r.color, size: r.size, ownerUid: r.ownerUid || null, visibility: r.visibility });
-        }
+        } else if (s.B) selectToken(s.B, t.id);
         void p;
       }
     };
@@ -1334,6 +1402,12 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+      if (s.mode === 'play' && e.key === 'Escape') {
+        if (s.B?.pending) arm(s.B, null);
+        else if (s.tool === 'place') { s.B.placing = null; setTool('pan'); } else if (s.B?.sel) selectToken(s.B, null);
+        s.dirty = true;
+        return;
+      }
       if (s.mode !== 'build' || !s.gm) return;
       if (e.key === 'Escape') { s.draft = null; setSel(null); s.dirty = true; return; }
       if (e.key === 'Enter' && s.draft) { s.finishDraft?.(); return; }
@@ -1436,10 +1510,17 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     let i = 0;
     for (const c of stc.combatants) {
       if (c.isPC || (tokensRaw || []).some((t) => t.combatantId === c.id)) continue;
-      await db.add(col('tokens'), { mapId: params.id, x: s.doc.w - 2 - (i % 5), y: 1 + Math.floor(i / 5), label: c.name, color: '#ef5a5f', size: 1, ownerUid: null, combatantId: c.id, visibility: c.hidden ? 'gm' : 'players', createdAt: now() });
+      const n = c.statblock ? sizeCells(c.statblock) : 1;
+      const art = c.statblock ? { icon: monsterIconName(c.statblock), color: creatureType(c.statblock.type).color } : null;
+      await db.add(col('tokens'), { mapId: params.id, x: Math.max(0, s.doc.w - 1 - n - (i % 5)), y: 1 + Math.floor(i / 5) * n, label: c.name, color: art?.color || '#ef5a5f', size: n, ...(art ? { art } : {}), ownerUid: null, combatantId: c.id, visibility: c.hidden ? 'gm' : 'players', createdAt: now() });
       i++;
     }
+    if (i) await mutateCombat((x) => { x.mapId = params.id; return x; }).catch(() => {});
     toast(i ? `${i} Gegner-Tokens gesetzt` : 'Keine Gegner im Kampf-Tracker', i ? 'success' : 'error');
+  };
+  const editToken = async (t) => {
+    const r = await openModal(({ close }) => html`<${TokenForm} close=${close} token=${t} members=${Object.values(vault.get().members)} />`, { title: t.label, icon: 'user' });
+    if (r?._delete) { await db.remove(col('tokens'), t.id); selectToken(B, null); } else if (r) await db.update(col('tokens'), t.id, { label: r.label, color: r.color, size: r.size, ownerUid: r.ownerUid || null, visibility: r.visibility });
   };
 
   const d = s.doc;
@@ -1463,7 +1544,8 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           <${IconBtn} icon="plus" title="Hinzufügen" active=${op === 'add'} onClick=${() => setOp('add')} />
           <${IconBtn} icon="eraser" title="Entfernen / ausschneiden" active=${op === 'sub'} onClick=${() => setOp('sub')} />` : null}
       </div>
-      <div class="map-hint">${s.draft && (s.draft.kind === 'poly' || s.draft.kind === 'path') ? html`<span>${HINTS[tool]}</span> <${Btn} size="sm" kind="primary" onClick=${() => s.finishDraft?.()}>Fertig<//> <${Btn} size="sm" kind="ghost" onClick=${() => { s.draft = null; s.dirty = true; rerender(); }}>Abbrechen<//>` : HINTS[tool]}</div>
+      ${mode === 'play' && (B.sel || B.pending) ? null : html`<div class="map-hint">${s.draft && (s.draft.kind === 'poly' || s.draft.kind === 'path') ? html`<span>${HINTS[tool]}</span> <${Btn} size="sm" kind="primary" onClick=${() => s.finishDraft?.()}>Fertig<//> <${Btn} size="sm" kind="ghost" onClick=${() => { s.draft = null; s.dirty = true; rerender(); }}>Abbrechen<//>` : HINTS[tool]}</div>`}
+      ${mode === 'play' ? html`<${BattleHud} B=${B} s=${s} editToken=${gm ? editToken : null} />` : null}
       ${measureText ? html`<div class="map-pop" style="left:60px;top:10px;width:auto"><${Icon} name="ruler" size=${14} /> <b>${measureText}</b></div>` : null}
       ${side && gm ? html`<div class="map-side stack scrawl-side">
         ${mode === 'build' ? html`
@@ -1516,7 +1598,11 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           <div class="btn-row"><${Btn} size="sm" icon="eye" onClick=${() => fogAll('1')}>Alles aufdecken<//><${Btn} size="sm" icon="eye-off" onClick=${() => fogAll('0')}>Alles verdecken<//></div>
           <b>Tokens</b>
           <div class="btn-row"><${Btn} size="sm" icon="users" onClick=${addPartyTokens}>Gruppe<//><${Btn} size="sm" icon="sword" onClick=${addCombatTokens}>Gegner aus Kampf<//></div>
-          <div class="tiny faint">Token antippen = bearbeiten · ziehen = bewegen. Spieler bewegen ihre eigenen Tokens. Beschriftungen mit verknüpfter Notiz (blauer Punkt) öffnen die Notiz.</div>
+          <div class="tiny faint">Token antippen = Aktionen, Reichweiten & Bewegung · ziehen = bewegen · lange drücken oder Alt-Klick = Ping. Spieler bewegen ihre eigenen Tokens.</div>
+          <${MonsterPlacer} B=${B} active=${tool === 'place'} onPick=${(m) => { B.placing = m; setTool('place'); s.dirty = true; }} onStop=${() => { B.placing = null; setTool('pan'); }} />
+          <b>Kampf</b>
+          <div class="btn-row">${!B.combat.active ? html`<${Btn} size="sm" kind="primary" icon="swords" onClick=${() => startCombat(B)}>Kampf starten<//>` : null}<${Btn} size="sm" kind="ghost" icon="eraser" onClick=${() => clearTemplates(B)}>Schablonen entfernen<//></div>
+          <${Toggle} checked=${!!B.showNames} onChange=${(v) => { B.showNames = v; s.dirty = true; rerender(); }} label="Namen auf der Karte zeigen" />
         `}
       </div>` : null}
     </div>

@@ -1,7 +1,9 @@
 // Charakter-Assistent: Erschaffung Schritt für Schritt nach den 5e-Regeln (2014 oder 2024) und Stufenaufstieg.
 // Werte (Attribute, Übungen, TP) entstehen nur hier – der Bogen zeigt sie danach nur noch an.
-import { html, useState, useMemo } from '../lib/preact.js';
-import { app, myUid } from '../core/app.js';
+import { html, useState, useMemo, useEffect } from '../lib/preact.js';
+import { SpellManager, casterNeeds, checkSpells, normalizeEntries } from './spellbook.js';
+import { useSpells, spellNeeds } from '../data/spells.js';
+import { app, myUid, rulesEdition } from '../core/app.js';
 import { db } from '../core/db.js';
 import { settings } from '../core/settings.js';
 import { prepareRoll, doRoll } from '../core/rolls.js';
@@ -35,7 +37,7 @@ const CLASS_BLURB = {
 
 // ───────────────────────── Berechnung ─────────────────────────
 function blankDraft(campaignId) {
-  const ed = settings.get().rulesVersion === '2024' ? '2024' : '2014';
+  const ed = rulesEdition();
   return {
     name: '', edition: ed, level: 1, campaignId: campaignId ?? (app.get().cid || ''),
     cls: '', subclass: '', style: '',
@@ -45,7 +47,7 @@ function blankDraft(campaignId) {
     classSkills: [], anySkills: [], speciesSkill: '', skilledPicks: [], expertise: [],
     humanFeat: '', variantFeat: '', variantFeatAb: '', asis: {},
     equipClass: 'A', equipBg: 'A', gold2014: null, armorBody: '', shield: false, weapons: [], weaponsTouched: false,
-    cantrips: [], spells: [],
+    cantrips: [], spells: [], spellList: [],
     alignment: '', languages: ['Gemeinsprache'], appearance: '', personality: { traits: '', ideals: '', bonds: '', flaws: '' }, backstory: '',
   };
 }
@@ -304,7 +306,9 @@ export function buildCharacter(d) {
     languages: d.languages, alignment: d.alignment, appearance: d.appearance, personality: d.personality, backstory: d.backstory, notes: '',
     spell: {
       used: {}, pactUsed: 0,
-      list: [...d.cantrips.map((n) => ({ id: uid(5), name: n, level: 0, prepared: true })), ...d.spells.map((n) => ({ id: uid(5), name: n, level: 1, prepared: true }))],
+      list: d.spellList?.length
+        ? d.spellList.map((e) => ({ ...e }))
+        : [...d.cantrips.map((n) => ({ id: uid(5), name: n, level: 0, prepared: true })), ...d.spells.map((n) => ({ id: uid(5), name: n, level: 1, prepared: true }))],
     },
     resUsed: {}, conditions: [], exhaustion: 0, inspiration: false, deathSaves: { s: 0, f: 0 }, xp: XP_LEVELS[d.level - 1] || 0,
     inventory: [...ci.items, ...bi.items].map((it) => ({ id: uid(5), name: it.name, qty: it.qty, notes: '' })),
@@ -371,6 +375,7 @@ function problems(d, step) {
       else if (a.type === 'feat' && featAsi(findFeat(a.feat), d.edition) && !a.featAb) p.push(`Stufe ${l.level}: Attribut für das Talent wählen.`);
     }
   }
+  if (step === 'zauber') p.push(...checkSpells(d.spellList || [], casterNeeds(buildPreview(d)), { mode: 'create' }));
   return p;
 }
 
@@ -429,7 +434,9 @@ function StepBasis({ d, set, setEdition }) {
     <p class="muted" style="margin:0">Der Assistent führt dich durch die Regeln des Spielerhandbuchs. Werte wie Attribute, Übungen und Trefferpunkte entstehen hier – im Charakterbogen änderst du sie später nur beim Stufenaufstieg.</p>
     <${Field} label="Name"><input class="input" value=${d.name} onInput=${(e) => set({ name: e.target.value })} placeholder="z. B. Thorin Eisenfaust" autoFocus /><//>
     <${Field} label="Regelwerk" hint=${d.edition === '2024' ? 'Spielerhandbuch 2024: Attributsboni und ein Herkunftstalent kommen vom Hintergrund, die Spezies gibt Merkmale.' : 'Spielerhandbuch 2014: Attributsboni kommen vom Volk, der Hintergrund gibt Fertigkeiten, Werkzeuge und ein Merkmal.'}>
-      <${Segmented} value=${d.edition} onChange=${setEdition} options=${[{ value: '2014', label: 'D&D 5e (2014)' }, { value: '2024', label: 'D&D 5e (2024)' }]} />
+      ${app.get().cid
+        ? html`<div class="row"><span class="badge accent">D&D 5e (${d.edition})</span><span class="small muted">vorgegeben durch die Kampagne „${app.get().campaign?.name || ''}“</span></div>`
+        : html`<${Segmented} value=${d.edition} onChange=${setEdition} options=${[{ value: '2014', label: 'D&D 5e (2014)' }, { value: '2024', label: 'D&D 5e (2024)' }]} />`}
     <//>
     <div class="grid two">
       <${Field} label="Startstufe" hint="Normal ist Stufe 1. Bei höheren Stufen gibt es Trefferpunkte nach Durchschnitt, und du triffst die Aufstiegs-Entscheidungen im Schritt „Talente & Stufen“.">
@@ -723,21 +730,17 @@ function StepZauber({ d, set }) {
   const cm = charMods(prev);
   const sc = cm.spell[0];
   const slots = spellSlots(prev);
+  const needs = casterNeeds(prev);
   const extra = draftFeats(d).filter((f) => f.key.startsWith('magic-initiate'));
   return html`<div class="stack lg">
-    ${sc ? html`<div class="card stack sm">
-      <div class="row" style="gap:8px">
-        <span class="badge accent">Zaubertricks: ${sc.cantrips}</span>
-        <span class="badge accent">Zauber ${sc.mode}: ${sc.count}</span>
-        ${sc.spellbook ? html`<span class="badge">Zauberbuch: ${sc.spellbook} Zauber</span>` : null}
-        <span class="badge">SG ${sc.dc} · Angriff ${fmtMod(sc.attack)}</span>
-      </div>
-      <div class="small muted">Plätze: ${Object.entries(slots.slots).map(([g, n]) => `${g}. Grad × ${n}`).join(' · ') || '–'}${slots.pact ? ` · Pakt: ${slots.pact.count} × ${slots.pact.level}. Grad` : ''}</div>
-    </div>` : html`<div class="small muted">Deine Klasse wirkt auf dieser Stufe noch keine Zauber.</div>`}
-    ${extra.length ? html`<div class="small muted">Dazu durch ${extra.map((f) => f.name).join(', ')}: je 2 Zaubertricks und 1 Zauber 1. Grades.</div>` : null}
-    <${Field} label="Zaubertricks"><${ChipInput} values=${d.cantrips} onChange=${(v) => set({ cantrips: v })} placeholder="z. B. Feuerpfeil, Magierhand" /><//>
-    <${Field} label="Zauber (1. Grad und höher)"><${ChipInput} values=${d.spells} onChange=${(v) => set({ spells: v })} placeholder="z. B. Magisches Geschoss, Schild" /><//>
-    <div class="tiny faint">Die Zauber kannst du auch später im Bogen eintragen, Grade dort anpassen und vorbereitete Zauber markieren.</div>
+    ${sc ? html`<div class="row small muted" style="gap:8px">
+      <span class="badge">SG ${sc.dc} · Zauberangriff ${fmtMod(sc.attack)}</span>
+      <span>Plätze: ${Object.entries(slots.slots).map(([g, n]) => `${g}. Grad × ${n}`).join(' · ') || '–'}${slots.pact ? ` · Pakt: ${slots.pact.count} × ${slots.pact.level}. Grad` : ''}</span>
+    </div>` : null}
+    ${needs.length
+      ? html`<${SpellManager} c=${prev} entries=${d.spellList || []} onChange=${(v) => set({ spellList: v })} mode="create" needs=${needs} />`
+      : html`<div class="small muted">Deine Klasse wirkt auf dieser Stufe noch keine Zauber.</div>`}
+    ${extra.length ? html`<div class="small muted"><${Icon} name="info" size=${14} /> Zauber aus ${extra.map((f) => f.name).join(', ')} trägst du nach dem Erstellen im Bogen unter „Zauber verwalten → Talente & Gegenstände“ ein.</div>` : null}
   </div>`;
 }
 
@@ -894,7 +897,8 @@ export function applyLevelUp(c, lu) {
   x.skills = { ...(x.skills || {}) };
   for (const k of lu.skills || []) if (!x.skills[k]) x.skills[k] = 1;
   for (const k of lu.expertise || []) if (x.skills[k]) x.skills[k] = 2;
-  if (lu.spells?.length) x.spell = { ...(x.spell || {}), list: [...(x.spell?.list || []), ...lu.spells.map((n) => ({ id: uid(5), name: n, level: 1, prepared: true }))] };
+  if (lu.spellList) x.spell = { ...(x.spell || {}), list: lu.spellList.map((e) => ({ ...e })) };
+  else if (lu.spells?.length) x.spell = { ...(x.spell || {}), list: [...(x.spell?.list || []), ...lu.spells.map((n) => ({ id: uid(5), name: n, level: 1, prepared: true }))] };
   x.levelLog = [...(x.levelLog || []), { level: totalLevel(x), cls: lu.cls, hp: lu.hp, ts: now() }];
   const d = derive(x);
   d.xp = Math.max(Number(d.xp) || 0, XP_LEVELS[d.level - 1] || 0);
@@ -913,7 +917,10 @@ function LevelUp({ c, close }) {
   const [style, setStyle] = useState('');
   const [skills, setSkills] = useState([]);
   const [expertise, setExpertise] = useState([]);
-  const [spells, setSpells] = useState([]);
+  const allSpells = useSpells(ed);
+  const baseline = useMemo(() => (allSpells ? normalizeEntries(c.spell?.list, allSpells, c) : null), [allSpells]);
+  const [spellList, setSpellList] = useState(null);
+  useEffect(() => { if (baseline) setSpellList(baseline); }, [baseline, clsKey]);
   const cls = findClass(clsKey);
   const entry = c.classes?.find((x) => x.cls === clsKey);
   const newLvl = (entry?.level || 0) + 1;
@@ -941,13 +948,16 @@ function LevelUp({ c, close }) {
   if (needStyle && !style) probs.push('Kampfstil wählen.');
   if (expertise.length !== expN) probs.push(`${expN} Fertigkeiten für Expertise wählen.`);
   if (skills.length !== mcSkill) probs.push('Eine Fertigkeit für die neue Klasse wählen.');
+  const nextNeeds = cls ? spellNeeds({ cls: clsKey, level: newLvl, subclass: entry?.subclass || sub }, ed, cm.mods) : null;
+  if (nextNeeds && !spellList) probs.push('Zauberliste wird geladen …');
+  if (nextNeeds && spellList) probs.push(...checkSpells(spellList, [nextNeeds], { mode: 'levelup', baseline }));
 
   const rollHp = () => {
     const r = doRoll(`1d${cls.hd}`, { label: `${c.name}: Trefferpunkte (W${cls.hd})`, kind: 'free', share: false });
     if (r) { setHp(r.total); setHpMode('roll'); }
   };
   const apply = async () => {
-    const next = applyLevelUp(c, { cls: clsKey, hp, subclass: needSub ? sub : '', asi: asiF ? { ...asi, boon: asiF.kind === 'boon' } : null, style: needStyle ? style : '', skills, expertise, spells });
+    const next = applyLevelUp(c, { cls: clsKey, hp, subclass: needSub ? sub : '', asi: asiF ? { ...asi, boon: asiF.kind === 'boon' } : null, style: needStyle ? style : '', skills, expertise, spellList: nextNeeds ? spellList : null });
     close(next);
   };
   const profSkills = ALL_SKILLS.filter((k) => c.skills?.[k] === 1);
@@ -994,7 +1004,10 @@ function LevelUp({ c, close }) {
         ${mcSkill ? html`<div class="stack sm"><b>Fertigkeit der neuen Klasse</b><${SkillGrid} list=${classSkills(cls, ed).list.filter((k) => !c.skills?.[k])} picked=${skills} max=${1} onChange=${setSkills} /></div>` : null}
         ${!feats.length && !needSub ? html`<div class="small faint">Auf dieser Stufe gibt es kein neues Klassenmerkmal – nur mehr Trefferpunkte${nextX ? ' und ggf. Zauber' : ''}.</div>` : null}
       </div>
-      ${nextX ? html`<div class="card stack sm"><b>4. Neue Zauber (optional)</b><${ChipInput} values=${spells} onChange=${setSpells} placeholder="Zaubername + Enter" /></div>` : null}
+      ${nextNeeds ? html`<div class="card stack sm"><b>4. Zauber (Pflicht)</b>
+        <div class="small muted">Wähle, was deine Klasse auf Stufe ${newLvl} neu dazubekommt. Die Zähler zeigen, was noch fehlt – erst dann geht der Aufstieg.</div>
+        ${spellList ? html`<${SpellManager} c=${c} entries=${spellList} onChange=${setSpellList} mode="levelup" baseline=${baseline} needs=${[nextNeeds]} />` : html`<div class="empty"><span class="spinner" /></div>`}
+      </div>` : null}
     ` : null}
     ${probs.length ? html`<div class="small warn-text"><${Icon} name="info" size=${14} /> ${probs[0]}</div>` : null}
     <div class="modal-foot" style="margin:0 -16px -16px">
@@ -1005,7 +1018,7 @@ function LevelUp({ c, close }) {
 }
 
 export function openLevelUp(c) {
-  return openModal(({ close }) => html`<${LevelUp} c=${c} close=${close} />`, { title: `Stufenaufstieg: ${c.name}`, icon: 'arrow-up', size: 'lg' });
+  return openModal(({ close }) => html`<${LevelUp} c=${c} close=${close} />`, { title: `Stufenaufstieg: ${c.name}`, icon: 'arrow-up', size: 'xl' });
 }
 
 // ───────────────────────── Alte Bögen übernehmen ─────────────────────────

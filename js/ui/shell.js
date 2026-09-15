@@ -1,7 +1,8 @@
 // App-Hülle: Anmeldung/Start, Ribbon, Seitenleisten, Tabs, Ansichten (lazy geladen), Statusleiste.
-import { html, useState, useEffect, useLayoutEffect } from '../lib/preact.js';
+import { html, useState, useEffect, useLayoutEffect, useRef } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import { app, vault, noteById } from '../core/app.js';
+import { settings, updateSettings } from '../core/settings.js';
 import {
   ws, currentOf, openView, closeTab, setActive, newTab, toggleLeft, toggleRight, restoreTabs,
   showLeftPanel, closeOtherTabs, moveTab,
@@ -14,6 +15,7 @@ import { AuthScreen } from '../views/auth.js';
 import { Lobby } from '../views/home.js';
 import { accountMenu } from './account.js';
 import { DiceOverlay } from './dicetray.js';
+import { startGmRelay } from '../core/relay.js';
 
 const LOADERS = {
   home: () => import('../views/home.js'),
@@ -22,6 +24,7 @@ const LOADERS = {
   forge: () => import('../views/forge.js'),
   npc: () => import('../views/npc.js'),
   encounter: () => import('../views/encounter.js'),
+  bestiary: () => import('../views/bestiary.js'),
   combat: () => import('../views/combat.js'),
   maps: () => import('../views/maps.js'),
   table: () => import('../views/table.js'),
@@ -47,7 +50,7 @@ export const VIEWS = {
   archive: { title: 'Archiv der Welten', icon: 'archive', gm: true, mod: 'archive', comp: 'ArchiveView' },
   npc: { title: 'NPC-Schmiede', icon: 'mask', gm: true, mod: 'npc', comp: 'NpcView' },
   encounter: { title: 'Encounter', icon: 'swords', gm: true, mod: 'encounter', comp: 'EncounterView' },
-  bestiary: { title: 'Bestiarium', icon: 'ghost', gm: true, mod: 'encounter', comp: 'BestiaryView' },
+  bestiary: { title: 'Bestiarium', icon: 'ghost', gm: true, mod: 'bestiary', comp: 'BestiaryView' },
   combat: { title: 'Kampf', icon: 'sword', mod: 'combat', comp: 'CombatView' },
   maps: { title: 'Karten', icon: 'map', mod: 'maps', comp: 'MapsView' },
   map: { title: 'Karte', icon: 'map', mod: 'maps', comp: 'MapView' },
@@ -76,50 +79,51 @@ export function viewTitle(cur) {
 }
 
 const RIBBON_GM = [
-  { view: 'home', icon: 'home', title: 'Start' },
-  { action: () => openPalette('switcher'), icon: 'search', title: 'Schnellwechsler (Strg+O)' },
-  { view: 'graph', icon: 'graph', title: 'Graph-Ansicht (Strg+G)' },
+  { view: 'home', icon: 'home', title: 'Start', label: 'Start' },
+  { action: () => openPalette('switcher'), icon: 'search', title: 'Schnellwechsler (Strg+O)', label: 'Suche' },
+  { view: 'graph', icon: 'graph', title: 'Graph-Ansicht (Strg+G)', label: 'Graph' },
   '|',
-  { view: 'forge', icon: 'anvil', title: 'Weltenschmiede (KI)' },
-  { view: 'npc', icon: 'mask', title: 'NPC-Schmiede' },
-  { view: 'encounter', icon: 'swords', title: 'Encounter & Statblocks' },
-  { view: 'combat', icon: 'sword', title: 'Kampf-Tracker' },
-  { view: 'maps', icon: 'map', title: 'Karten' },
+  { view: 'forge', icon: 'anvil', title: 'Weltenschmiede (KI)', label: 'Schmiede' },
+  { view: 'npc', icon: 'mask', title: 'NPC-Schmiede', label: 'NPCs' },
+  { view: 'encounter', icon: 'swords', title: 'Encounter & Statblocks', label: 'Encounter' },
+  { view: 'bestiary', icon: 'ghost', title: 'Bestiarium (SRD + eigene Monster)', label: 'Bestiarium' },
+  { view: 'combat', icon: 'sword', title: 'Kampf-Tracker', label: 'Kampf' },
+  { view: 'maps', icon: 'map', title: 'Karten', label: 'Karten' },
   '|',
-  { view: 'table', icon: 'message', title: 'Spieltisch (online)' },
-  { view: 'sessions', icon: 'calendar', title: 'Sitzungen' },
-  { view: 'quests', icon: 'list-checks', title: 'Quests' },
-  { view: 'characters', icon: 'users', title: 'Charaktere' },
+  { view: 'table', icon: 'message', title: 'Spieltisch (online)', label: 'Spieltisch' },
+  { view: 'sessions', icon: 'calendar', title: 'Sitzungen', label: 'Sitzungen' },
+  { view: 'quests', icon: 'list-checks', title: 'Quests', label: 'Quests' },
+  { view: 'characters', icon: 'users', title: 'Charaktere', label: 'Charaktere' },
   '|',
-  { view: 'dice', icon: 'd20', title: 'Würfel' },
-  { view: 'generators', icon: 'dices', title: 'Zufallsgeneratoren' },
-  { view: 'oracle', icon: 'sparkles', title: 'Orakel (Codex-KI)' },
-  { view: 'rules', icon: 'book', title: 'Regeln' },
-  { view: 'archive', icon: 'archive', title: 'Archiv der Welten' },
+  { view: 'dice', icon: 'd20', title: 'Würfel', label: 'Würfel' },
+  { view: 'generators', icon: 'dices', title: 'Zufallsgeneratoren', label: 'Zufall' },
+  { view: 'oracle', icon: 'sparkles', title: 'Orakel (Codex-KI)', label: 'Orakel' },
+  { view: 'rules', icon: 'book', title: 'Regeln & Zauber', label: 'Regeln' },
+  { view: 'archive', icon: 'archive', title: 'Archiv der Welten', label: 'Archiv' },
   '~',
-  { action: () => openPalette('commands'), icon: 'command', title: 'Befehle (Strg+P)' },
-  { view: 'import', icon: 'upload', title: 'Import & Export' },
-  { view: 'settings', icon: 'settings', title: 'Einstellungen' },
+  { action: () => openPalette('commands'), icon: 'command', title: 'Befehle (Strg+P)', label: 'Befehle' },
+  { view: 'import', icon: 'upload', title: 'Import & Export', label: 'Import' },
+  { view: 'settings', icon: 'settings', title: 'Einstellungen', label: 'Optionen' },
 ];
 
 const RIBBON_PLAYER = [
-  { view: 'home', icon: 'home', title: 'Start' },
-  { action: () => openPalette('switcher'), icon: 'search', title: 'Schnellwechsler (Strg+O)' },
-  { view: 'graph', icon: 'graph', title: 'Graph-Ansicht' },
+  { view: 'home', icon: 'home', title: 'Start', label: 'Start' },
+  { action: () => openPalette('switcher'), icon: 'search', title: 'Schnellwechsler (Strg+O)', label: 'Suche' },
+  { view: 'graph', icon: 'graph', title: 'Graph-Ansicht', label: 'Graph' },
   '|',
-  { view: 'table', icon: 'message', title: 'Spieltisch' },
-  { view: 'characters', icon: 'user', title: 'Mein Charakter' },
-  { view: 'journal', icon: 'feather', title: 'Mein Tagebuch' },
-  { view: 'combat', icon: 'sword', title: 'Kampf' },
-  { view: 'maps', icon: 'map', title: 'Karten' },
-  { view: 'quests', icon: 'list-checks', title: 'Quests' },
-  { view: 'sessions', icon: 'calendar', title: 'Sitzungen' },
-  { view: 'handouts', icon: 'scroll', title: 'Handouts' },
+  { view: 'table', icon: 'message', title: 'Spieltisch', label: 'Spieltisch' },
+  { view: 'characters', icon: 'user', title: 'Mein Charakter', label: 'Charakter' },
+  { view: 'journal', icon: 'feather', title: 'Mein Tagebuch', label: 'Tagebuch' },
+  { view: 'combat', icon: 'sword', title: 'Kampf', label: 'Kampf' },
+  { view: 'maps', icon: 'map', title: 'Karten', label: 'Karten' },
+  { view: 'quests', icon: 'list-checks', title: 'Quests', label: 'Quests' },
+  { view: 'sessions', icon: 'calendar', title: 'Sitzungen', label: 'Sitzungen' },
+  { view: 'handouts', icon: 'scroll', title: 'Handouts', label: 'Handouts' },
   '|',
-  { view: 'dice', icon: 'd20', title: 'Würfel' },
-  { view: 'rules', icon: 'book', title: 'Regeln' },
+  { view: 'dice', icon: 'd20', title: 'Würfel', label: 'Würfel' },
+  { view: 'rules', icon: 'book', title: 'Regeln & Zauber', label: 'Regeln' },
   '~',
-  { view: 'settings', icon: 'settings', title: 'Einstellungen' },
+  { view: 'settings', icon: 'settings', title: 'Einstellungen', label: 'Optionen' },
 ];
 
 // ───────────────────────── Wurzel ─────────────────────────
@@ -149,6 +153,9 @@ function Workspace() {
     }
   }, [cid]);
   useEffect(() => registerShortcuts(), []);
+  // SL: Signale der Spieler (Zugende, Initiative, Angriffe) verarbeiten – unabhängig von der offenen Ansicht
+  const role = useStore(app, (x) => x.role);
+  useEffect(() => (cid && role === 'gm' ? startGmRelay() : undefined), [cid, role]);
   useEffect(() => {
     const h = location.hash;
     const m = /#\/(dice|table)$/.exec(h);
@@ -161,30 +168,113 @@ function Workspace() {
     ${views}
     ${!mobile ? html`<${StatusBar} />` : null}
   </main>`;
-  if (mobile) {
-    return html`<div class="app">
-      ${main}
-      ${s.drawer ? html`<div class="drawer-backdrop" onClick=${() => ws.set({ drawer: null })} />` : null}
-      <div class=${`drawer left${s.drawer === 'left' ? ' open' : ''}`}><${Ribbon} /><${LeftSidebar} /></div>
-      <div class=${`drawer right${s.drawer === 'right' ? ' open' : ''}`}><${RightSidebar} /></div>
-    </div>`;
-  }
+  if (mobile) return html`<div class="app">${main}<${MobileDrawers} drawer=${s.drawer} /></div>`;
   return html`<div class="app"><${Ribbon} />${s.leftOpen ? html`<${LeftSidebar} />` : null}${main}${s.rightOpen ? html`<${RightSidebar} />` : null}</div>`;
+}
+
+// Schubladen (Handy): zum Schließen wegwischen, vom Bildschirmrand hereinziehen zum Öffnen
+function MobileDrawers({ drawer }) {
+  const left = useRef(null);
+  const right = useRef(null);
+  const back = useRef(null);
+  useEffect(() => {
+    let st = null;
+    const els = () => ({ left: left.current, right: right.current });
+    // Kann ein Element unter dem Finger selbst waagerecht scrollen? Dann nicht die Schublade ziehen.
+    const scrollsX = (node, mx) => {
+      for (let n = node; n && n !== document.body; n = n.parentElement) {
+        if (n.classList?.contains('drawer')) break;
+        if (n.scrollWidth > n.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(n).overflowX)) {
+          if (mx < 0 && n.scrollLeft + n.clientWidth < n.scrollWidth - 1) return true;
+          if (mx > 0 && n.scrollLeft > 0) return true;
+        }
+      }
+      return false;
+    };
+    const onStart = (e) => {
+      st = null;
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const open = ws.get().drawer;
+      const W = window.innerWidth;
+      if (open) {
+        const el = els()[open];
+        if (!el || (!el.contains(e.target) && e.target !== back.current)) return;
+        st = { mode: 'close', side: open, el, x: t.clientX, y: t.clientY, t: performance.now(), dx: 0, target: e.target };
+      } else if (t.clientX < 20 || t.clientX > W - 20) {
+        const side = t.clientX < 20 ? 'left' : 'right';
+        st = { mode: 'open', side, el: els()[side], x: t.clientX, y: t.clientY, t: performance.now(), dx: 0 };
+      }
+    };
+    const onMove = (e) => {
+      if (!st) return;
+      const t = e.touches[0];
+      const mx = t.clientX - st.x;
+      const my = t.clientY - st.y;
+      if (!st.active) {
+        if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+        const horizontal = Math.abs(mx) > Math.abs(my) * 1.3;
+        const dirOk = st.mode === 'close' ? (st.side === 'left' ? mx < 0 : mx > 0) : (st.side === 'left' ? mx > 0 : mx < 0);
+        if (!horizontal || !dirOk || !st.el || (st.mode === 'close' && scrollsX(st.target, mx))) { st = null; return; }
+        st.active = true;
+        st.w = st.el.offsetWidth || 320;
+        st.el.style.transition = 'none';
+        if (back.current) { back.current.style.transition = 'none'; back.current.classList.add('show'); }
+      }
+      e.preventDefault();
+      const { w } = st;
+      const off = st.mode === 'close'
+        ? (st.side === 'left' ? Math.min(0, mx) : Math.max(0, mx))
+        : (st.side === 'left' ? Math.min(0, -w + mx) : Math.max(0, w + mx));
+      st.dx = off;
+      st.el.style.transform = `translateX(${off}px)`;
+      if (back.current) back.current.style.opacity = String(Math.max(0, 1 - Math.abs(off) / w));
+    };
+    const onEnd = () => {
+      if (!st?.active) { st = null; return; }
+      const { el, w, dx, mode, side } = st;
+      const moved = mode === 'close' ? Math.abs(dx) : w - Math.abs(dx);
+      const v = moved / Math.max(1, performance.now() - st.t);
+      el.style.transition = '';
+      el.style.transform = '';
+      if (back.current) { back.current.style.transition = ''; back.current.style.opacity = ''; back.current.classList.remove('show'); }
+      if (mode === 'close') ws.set({ drawer: moved > w * 0.28 || v > 0.5 ? null : side });
+      else ws.set({ drawer: moved > w * 0.3 || v > 0.5 ? side : null });
+      st = null;
+    };
+    document.addEventListener('touchstart', onStart, { passive: true });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('touchcancel', onEnd);
+    return () => {
+      document.removeEventListener('touchstart', onStart);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('touchcancel', onEnd);
+    };
+  }, []);
+  return html`
+    <div ref=${back} class=${`drawer-backdrop${drawer ? ' show' : ''}`} onClick=${() => ws.set({ drawer: null })} />
+    <div ref=${left} class=${`drawer left${drawer === 'left' ? ' open' : ''}`}><${Ribbon} /><${LeftSidebar} /></div>
+    <div ref=${right} class=${`drawer right${drawer === 'right' ? ' open' : ''}`}><${RightSidebar} /></div>`;
 }
 
 function Ribbon() {
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
   const user = useStore(app, (s) => s.user);
+  const labels = useStore(settings, (s) => s.layout?.ribbonLabels !== false);
   const current = useStore(ws, (s) => currentOf(s.tabs.find((t) => t.id === s.active)).view);
   const items = gm ? RIBBON_GM : RIBBON_PLAYER;
-  return html`<nav class="ribbon" aria-label="Module">
+  return html`<nav class=${`ribbon${labels ? ' labeled' : ''}`} aria-label="Module">
     ${items.map((it, i) => {
       if (it === '|') return html`<div class="ribbon-sep" key=${`s${i}`} />`;
       if (it === '~') return html`<div class="grow" key=${`g${i}`} />`;
       return html`<button key=${it.title} type="button" class=${`ribbon-btn${it.view && current === it.view ? ' active' : ''}`} title=${it.title} aria-label=${it.title}
-        onClick=${(e) => (it.action ? it.action() : openView(it.view, {}, { newTab: e.ctrlKey || e.metaKey }))}><${Icon} name=${it.icon} size=${19} /></button>`;
+        onClick=${(e) => (it.action ? it.action() : openView(it.view, {}, { newTab: e.ctrlKey || e.metaKey }))}><${Icon} name=${it.icon} size=${labels ? 18 : 19} />${labels ? html`<span class="rb-label">${it.label}</span>` : null}</button>`;
     })}
-    <button type="button" class="ribbon-btn ribbon-avatar" title=${`${user?.name || 'Konto'} – Konto, Übersicht, Abmelden`} aria-label="Konto" onClick=${accountMenu}><${Avatar} name=${user?.name} size="sm" /></button>
+    <button type="button" class="ribbon-btn ribbon-toggle" title=${labels ? 'Beschriftung ausblenden (schmale Leiste)' : 'Beschriftung einblenden'} onClick=${() => updateSettings({ layout: { ribbonLabels: !labels } })}>
+      <${Icon} name=${labels ? 'chevron-left' : 'chevron-right'} size=${14} /></button>
+    <button type="button" class="ribbon-btn ribbon-avatar" title=${`${user?.name || 'Konto'} – Konto, Übersicht, Abmelden`} aria-label="Konto" onClick=${accountMenu}><${Avatar} name=${user?.name} size="sm" />${labels ? html`<span class="rb-label">Konto</span>` : null}</button>
   </nav>`;
 }
 

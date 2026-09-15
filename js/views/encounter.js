@@ -79,7 +79,9 @@ export async function monsterToNote(m) {
 }
 
 export function EncounterView({ tabId }) {
-  const version = useStore(settings, (s) => s.rulesVersion);
+  const campEd = useStore(app, (s) => s.campaign?.settings?.rulesVersion);
+  const devEd = useStore(settings, (s) => s.rulesVersion);
+  const version = (campEd || devEd) === '2024' ? '2024' : '2014';
   const [draft, setDraft] = useState(() => settings.get().encounterDraft || defaultDraft());
   const [result, setResult] = useState(null);
   const [model, setModel] = useState(null);
@@ -207,7 +209,7 @@ export function EncounterView({ tabId }) {
             <//>
             <${Field} label="Zusatzwünsche"><${AutoTextarea} value=${draft.extra} onInput=${(e) => set({ extra: e.target.value })} minRows=${2} placeholder="z. B. Der Anführer soll eine Hortaktion haben; Silberschwäche wie im Witcher" /><//>
             <div class="row">
-              <${Segmented} value=${version} onChange=${(v) => updateSettings({ rulesVersion: v })} options=${[{ value: '2014', label: '5e 2014' }, { value: '2024', label: '5e 2024' }]} />
+              <span class="badge" title="Regelwerk der Kampagne – festgelegt beim Anlegen">D&D 5e ${version}</span>
               <${Toggle} checked=${draft.paint} onChange=${(v) => set({ paint: v })} label="Bemal-Guide" />
             </div>
           </div>

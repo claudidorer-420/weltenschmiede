@@ -1,5 +1,5 @@
 // KI-Prompts (deutsch) für alle Generatoren + Kontext aus dem Codex.
-import { app, getIndex, noteById } from './app.js';
+import { app, getIndex, noteById, rulesEdition } from './app.js';
 import { settings } from './settings.js';
 
 export function worldContext() {
@@ -130,7 +130,7 @@ export const MONSTER_SCHEMA = `{
   "scaling": "wie man den Kampf leichter bzw. schwerer macht"
 }`;
 
-export function encounterSystemPrompt({ version = settings.get().rulesVersion, paint = false } = {}) {
+export function encounterSystemPrompt({ version = rulesEdition(), paint = false } = {}) {
   return `Du bist ein erfahrener D&D-5e-Encounter-Designer. Du erstellst lore-getreue Statblocks für vorgegebene Kreaturen – auch aus anderen Welten (The Witcher, Herr der Ringe, Elder Scrolls, Dark Souls …), die du stimmig in 5e-Regeln überträgst – und bewertest, wie schwer der Kampf für die Gruppe wird.
 
 Regeln:
@@ -182,7 +182,7 @@ ${worldContext()}
 ${context || '(keine Notizen ausgewählt)'}`;
 }
 
-export function rulesSystemPrompt(version = settings.get().rulesVersion) {
+export function rulesSystemPrompt(version = rulesEdition()) {
   return `Du bist ein präziser Regelexperte für D&D 5e (${version}) und antwortest auf Deutsch. Erkläre die Regel knapp, nenne den relevanten Mechanismus (Aktion, Rettungswurf, Vorteil …), gib ein kurzes Beispiel und – falls strittig – gängige Auslegungen plus eine Empfehlung für die Spielleitung. Keine langen wörtlichen Zitate aus Regelwerken. Entfernungen in ${unitsText()}. Markdown.`;
 }
 

@@ -1,4 +1,4 @@
-<#
+﻿<#
   Weltenschmiede – Änderungen veröffentlichen
   -------------------------------------------
   Aufruf im Projektordner:

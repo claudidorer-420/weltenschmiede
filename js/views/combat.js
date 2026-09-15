@@ -6,8 +6,10 @@ import { app, col, myUid } from '../core/app.js';
 import { db } from '../core/db.js';
 import { openView } from '../core/workspace.js';
 import {
-  saveCombat, makeCombatant, combatantsFromMonsters, combatantFromCharacter, sortByInit, EMPTY_COMBAT, hpState,
+  saveCombat, makeCombatant, combatantsFromMonsters, combatantFromCharacter, sortByInit, EMPTY_COMBAT, hpState, advanceTurn, applyHp as applyHpCore, resort, isOut, pushCharHp,
 } from '../core/combat.js';
+import { sendEvent } from '../core/relay.js';
+import { MonsterArt } from '../ui/art.js';
 import { loadParty, watchParty } from '../core/party.js';
 import { doRoll } from '../core/rolls.js';
 import { roll, modifier, fmtMod } from '../lib/dice.js';
@@ -16,20 +18,6 @@ import { ViewFrame } from '../ui/frame.js';
 import { Icon, IconBtn, Btn, Field, Toggle, Statblock, openMenu, openModal, promptDialog, confirmDialog, toast, Empty } from '../ui/components.js';
 import { useCol, useDoc } from '../core/hooks.js';
 import { now, debounce, fmtTime } from '../lib/util.js';
-
-const isOut = (c) => !c.isPC && c.hp <= 0;
-
-function resort(x) {
-  const curId = x.combatants[x.turn]?.id;
-  x.combatants = sortByInit(x.combatants);
-  x.turn = Math.max(0, x.combatants.findIndex((c) => c.id === curId));
-  return x;
-}
-
-function pushCharHp(c) {
-  if (!c.isPC || !c.charId || !c.ownerUid) return;
-  db.update(`users/${c.ownerUid}/characters`, c.charId, { hp: c.hp, tempHp: c.tempHp || 0 }).catch(() => {});
-}
 
 function hpClass(c) {
   const r = c.hp / (c.maxHp || 1);
@@ -86,7 +74,7 @@ function CombatantRow({ c, current, selected, onSelect, onHp, onMenu, onInit, on
   return html`<div class=${`cbt ${c.isPC ? 'pc' : 'npc'}${current ? ' current' : ''}${c.hp <= 0 ? ' down' : ''}${c.hidden ? ' hidden-c' : ''}`} onClick=${(e) => { if (!e.target.closest('button,input')) onSelect(c.id); }}>
     <button type="button" class="init" title="Initiative ändern / würfeln" onClick=${() => onInit(c)}>${c.init ?? '–'}</button>
     <div style="min-width:0">
-      <div class="nm">${c.name}
+      <div class="nm">${c.statblock ? html`<${MonsterArt} m=${c.statblock} size=${22} />` : null}${c.name}
         ${c.isPC ? html`<span class="badge players">SC</span>` : null}
         ${c.hidden ? html`<span class="badge"><${Icon} name="eye-off" size=${11} />verborgen</span>` : null}
         ${c.concentration ? html`<span class="badge warn" title="Konzentriert sich">Konz.</span>` : null}
@@ -116,7 +104,6 @@ function CombatantRow({ c, current, selected, onSelect, onHp, onMenu, onInit, on
 function GmCombat({ tabId }) {
   const cid = useStore(app, (s) => s.cid);
   const remote = useDoc(cid ? col('combat') : null, 'gm');
-  const signals = useCol(db.mode === 'cloud' && cid ? col('signals') : null);
   const [st, setSt] = useState(null);
   const [sel, setSel] = useState(null);
   const [showLog, setShowLog] = useState(false);
@@ -162,33 +149,7 @@ function GmCombat({ tabId }) {
     if (changed) update((x) => { x.combatants = combatants; return x; });
   }), [cid]);
 
-  const nextTurn = () => update((x) => {
-    const n = x.combatants.length;
-    if (!n) return x;
-    let t = x.turn;
-    let guard = 0;
-    do {
-      t++;
-      if (t >= n) {
-        t = 0;
-        x.round++;
-        log(x, `— Runde ${x.round} —`);
-      }
-      guard++;
-    } while (guard < n && isOut(x.combatants[t]));
-    x.turn = t;
-    const c = x.combatants[t];
-    c.legendaryUsed = 0;
-    c.conditions = (c.conditions || []).map((k) => (k.rounds ? { ...k, rounds: k.rounds - 1 } : k)).filter((k) => {
-      if (k.rounds === 0) {
-        log(x, `${c.name}: „${k.name}“ endet`);
-        return false;
-      }
-      return true;
-    });
-    log(x, `${c.name} ist am Zug`);
-    return x;
-  });
+  const nextTurn = () => update((x) => advanceTurn(x));
   const prevTurn = () => update((x) => {
     if (!x.combatants.length) return x;
     x.turn--;
@@ -199,59 +160,8 @@ function GmCombat({ tabId }) {
     return x;
   });
 
-  // Spieler-Signale (Zug beenden, Initiative melden)
-  useEffect(() => {
-    if (!signals || !st) return;
-    const key = `ws.signals.${cid}`;
-    let handled = {};
-    try { handled = JSON.parse(localStorage.getItem(key) || '{}'); } catch { /* leer */ }
-    let dirtyH = false;
-    for (const s of signals) {
-      if (!s.ts || (handled[s.id] || 0) >= s.ts) continue;
-      handled[s.id] = s.ts;
-      dirtyH = true;
-      if (Date.now() - s.ts > 120000) continue;
-      if (s.type === 'endTurn') {
-        const cur = st.combatants[st.turn];
-        if (cur && cur.ownerUid === s.id) nextTurn();
-      } else if (s.type === 'init') {
-        update((x) => {
-          const c = x.combatants.find((cc) => (s.charId && cc.charId === s.charId) || (!s.charId && cc.ownerUid === s.id));
-          if (c) {
-            c.init = s.value;
-            log(x, `${c.name} meldet Initiative ${s.value}`);
-            resort(x);
-          }
-          return x;
-        });
-      }
-    }
-    if (dirtyH) localStorage.setItem(key, JSON.stringify(handled));
-  }, [signals]);
-
-  const applyHp = (id, delta) => update((x) => {
-    const c = x.combatants.find((cc) => cc.id === id);
-    if (!c) return x;
-    if (delta < 0) {
-      let dmg = -delta;
-      if (c.tempHp) {
-        const t = Math.min(c.tempHp, dmg);
-        c.tempHp -= t;
-        dmg -= t;
-      }
-      const before = c.hp;
-      c.hp = Math.max(0, c.hp - dmg);
-      if (c.isPC && before === 0 && dmg > 0) c.deathSaves.f = Math.min(3, c.deathSaves.f + 1);
-      if (c.concentration) toast(`${c.name}: Konzentration prüfen – KON-Rettungswurf SG ${Math.max(10, Math.floor(-delta / 2))}`, 'info', { duration: 7000 });
-      log(x, `${c.name} erleidet ${-delta} Schaden → ${c.hp}/${c.maxHp}${c.hp === 0 ? (c.isPC ? ' – bewusstlos!' : ' – besiegt!') : ''}`);
-    } else {
-      c.hp = Math.min(c.maxHp, c.hp + delta);
-      if (c.hp > 0) c.deathSaves = { s: 0, f: 0 };
-      log(x, `${c.name} heilt ${delta} → ${c.hp}/${c.maxHp}`);
-    }
-    pushCharHp(c);
-    return x;
-  });
+  // Spieler-Signale (Zug beenden, Initiative, Angriffe) verarbeitet jetzt core/relay.js – auch ohne offenen Tracker.
+  const applyHp = (id, delta) => update((x) => { applyHpCore(x, id, delta); return x; });
 
   const setInit = async (c) => {
     const v = await promptDialog(`Initiative für ${c.name}`, c.init != null ? String(c.init) : '', { title: 'Initiative', hint: `Leer lassen = würfeln (W20 ${fmtMod(c.initBonus || 0)})`, ok: 'Übernehmen' });
@@ -366,6 +276,7 @@ function GmCombat({ tabId }) {
         : html`<${Btn} kind="primary" icon="play" disabled=${!st.combatants.length} onClick=${start}>Kampf starten<//>`}
       <${Btn} icon="d20" onClick=${() => rollInit(false)}>NSC-Initiative<//>
       <${Btn} icon="plus" onClick=${addMenu}>Hinzufügen<//>
+      ${st.mapId ? html`<${Btn} icon="map" onClick=${() => openView('map', { id: st.mapId })}>Kampfkarte<//>` : null}
       ${current ? html`<span class="grow"></span><span class="small muted">Am Zug: <b>${current.name}</b></span>` : null}
     </div>
     ${showLog ? html`<div class="card" style="margin:12px 16px 0"><div class="combat-log">${[...(st.log || [])].reverse().map((l) => html`<div><span class="faint tiny">${fmtTime(l.ts)}</span> ${l.text}</div>`)}</div></div>` : null}
@@ -393,13 +304,13 @@ function PlayerCombat({ tabId }) {
   const mine = cur && cur.ownerUid === me;
   const myChar = (myChars || []).find((c) => c.campaignId === cid);
   const endTurn = async () => {
-    await db.set(col('signals'), me, { type: 'endTurn', ts: now() });
+    await sendEvent({ type: 'endTurn' });
     toast('Zug beendet', 'success');
   };
   const sendInit = async () => {
     const bonus = modifier(myChar?.abilities?.dex ?? 10) + (Number(myChar?.initBonus) || 0);
     const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, { label: 'Initiative', character: myChar?.name });
-    if (r) await db.set(col('signals'), me, { type: 'init', value: r.total, charId: myChar?.id || null, ts: now() });
+    if (r) await sendEvent({ type: 'init', value: r.total, charId: myChar?.id || null });
   };
   return html`<${ViewFrame} tabId=${tabId} title="Kampf">
     <div class="page narrow stack lg">
@@ -408,12 +319,13 @@ function PlayerCombat({ tabId }) {
           <span class="round-badge">Runde ${pub?.round || 1}</span>
           ${mine ? html`<b>Du bist am Zug!</b><span class="grow"></span><${Btn} kind="primary" icon="check" onClick=${endTurn}>Zug beenden<//>` : html`<span>Am Zug: <b>${cur?.name || '…'}</b></span>`}
         </div>
-        <div class="row"><${Btn} icon="d20" onClick=${sendInit}>Initiative würfeln & melden<//><${Btn} icon="user" disabled=${!myChar} onClick=${() => openView('character', { id: myChar.id, owner: me, title: myChar.name })}>Mein Bogen<//></div>
+        <div class="row"><${Btn} icon="d20" onClick=${sendInit}>Initiative würfeln & melden<//><${Btn} icon="user" disabled=${!myChar} onClick=${() => openView('character', { id: myChar.id, owner: me, title: myChar.name })}>Mein Bogen<//>
+          ${pub?.mapId ? html`<${Btn} kind="primary" icon="map" onClick=${() => openView('map', { id: pub.mapId })}>Zur Kampfkarte<//>` : null}</div>
         <div class="combatants" style="padding:0">
           ${list.map((c) => html`<div class=${`cbt ${c.isPC ? 'pc' : 'npc'}${c.id === pub.currentId ? ' current' : ''}${c.down ? ' down' : ''}`} key=${c.id}>
             <div class="init">${c.init ?? '–'}</div>
             <div>
-              <div class="nm">${c.name}${c.ownerUid === me ? html`<span class="badge players">du</span>` : null}</div>
+              <div class="nm">${c.art ? html`<${MonsterArt} m=${c.art} size=${22} />` : null}${c.name}${c.ownerUid === me ? html`<span class="badge players">du</span>` : null}</div>
               <div class="sub">${c.hp != null ? html`<span><${Icon} name="heart" size=${12} /> ${c.hp}/${c.maxHp}${c.tempHp ? ` +${c.tempHp}` : ''}</span>` : html`<span>${c.hpState}</span>`}</div>
               ${c.hp != null ? html`<div class="hpbar"><div class=${c.hp / (c.maxHp || 1) > 0.5 ? '' : c.hp / (c.maxHp || 1) > 0.25 ? 'mid' : 'low'} style=${{ width: `${Math.max(0, Math.min(100, (c.hp / (c.maxHp || 1)) * 100))}%` }}></div></div>` : null}
               ${c.conditions?.length ? html`<div class="conds">${c.conditions.map((k) => html`<span class="cond-chip">${k.name}${k.rounds ? ` (${k.rounds})` : ''}</span>`)}</div>` : null}

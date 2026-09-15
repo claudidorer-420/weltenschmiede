@@ -2,7 +2,7 @@
 // prepareRoll würfelt nur (für die Animation), commitRoll protokolliert/teilt, doRoll macht beides.
 import { createStore } from './store.js';
 import { rollDetailed } from '../lib/dice.js';
-import { app, vault, col, myUid, myName, gmUids } from './app.js';
+import { app, vault, col, myUid, myName, gmUids, rulesEdition } from './app.js';
 import { db } from './db.js';
 import { settings } from './settings.js';
 import { now } from '../lib/util.js';
@@ -24,9 +24,9 @@ export function sharingActive() {
   return db.mode === 'cloud' && !!app.get().cid && settings.get().shareRolls !== false;
 }
 
-export function prepareRoll(expr, { label = '', kind = 'auto', fx = {}, character = '' } = {}) {
+export function prepareRoll(expr, { label = '', kind = 'auto', fx = {}, character = '', edition } = {}) {
   try {
-    const r = rollDetailed(expr, { kind, fx, label, edition: settings.get().rulesVersion || '2014' });
+    const r = rollDetailed(expr, { kind, fx, label, edition: edition || rulesEdition() });
     if (character) r.character = character;
     return r;
   } catch (e) {
