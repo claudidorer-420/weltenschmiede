@@ -634,7 +634,7 @@ tool('kampf_status', 'Kampf ansehen', 'Zeigt den laufenden Kampf: Runde, wer am 
   const st = await ctx.fs.get(k.p(k.gm ? 'combat/gm' : 'combat/public'));
   if (!st) return { aktiv: false };
   const n = a.protokoll ?? 20;
-  if (!k.gm) return { aktiv: st.active, runde: st.round, amZug: st.list?.find((c) => c.id === st.currentId)?.name || null, kaempfer: st.list, protokoll: (st.log || []).slice(-n) };
+  if (!k.gm) return { aktiv: st.active, runde: st.round, amZug: st.list?.find((c) => c.id === st.currentId)?.name || null, kaempfer: st.list, protokoll: (n > 0 ? (st.log || []).slice(-n) : []) };
   const cur = st.combatants?.[st.turn];
   return {
     aktiv: !!st.active, runde: st.round, amZug: cur?.name || null, karteId: st.mapId || null,
@@ -643,7 +643,7 @@ tool('kampf_status', 'Kampf ansehen', 'Zeigt den laufenden Kampf: Runde, wer am 
       zustaende: (c.conditions || []).map((x) => x.name || x), konzentration: c.concentration?.name || null, tot: !!c.dead, versteckt: !!c.hidden,
     })),
     zonen: (st.zones || []).map((z) => z.name || z.label || z.id),
-    protokoll: (st.log || []).slice(-n).map((l) => l.text || l),
+    protokoll: (n > 0 ? (st.log || []).slice(-n) : []).map((l) => l.text || l),
   };
 });
 
