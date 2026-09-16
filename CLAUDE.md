@@ -32,6 +32,7 @@ Statische PWA ohne Build‑Schritt (GitHub Pages). UI komplett auf **Deutsch**.
   - `buildGrid()` = begehbare Felder, schwieriges Gelände, `opaque` (Wände blockieren Sicht), `cover` (Säulen) **und `wallE`/`wallS`** (dünne Wände zwischen zwei Feldern; Türen öffnen die Kante). `core/tactics.js` prüft diese Kanten in `reachable()` und `lineFree()`.
   - Eigene Pakete (Forgotten Adventures, Crosshead …) dürfen **nicht** mitgeliefert werden: `core/userassets.js` legt sie in einer eigenen IndexedDB ab (nie hochladen). Karten mit `u:`‑Objekten bekommen für Mitspieler ein gebackenes Bild (`map.bake.fileId`, `renderMapImage` → `core/files.js`).
   - Bausteine erzeugen: `tools/stamp-studio.html` (+ `tools/stamp-studio.mjs`, Preview „stamp-studio“) rendert Poly‑Haven‑Modelle von oben und lädt Texturen; `tools/mapassets.src.json` = Liste, `node tools/build-mapassets.mjs` → `js/data/mapassets.js`. Dateien liegen in `assets/stamps/` und `assets/tex/` (Vorschauen in `t/`) und werden vom Service Worker in `ws-assets-v1` dauerhaft zwischengespeichert (nicht in der Dateiliste von `sw.js`).
+  - `views/mapgen.js` = Stile (`STYLES`), Geländematerialien (`MATS`), Streu-Sets (`SETS`) und Generatoren (`SCRAWL_GENERATORS`) ohne UI – gemeinsam mit dem MCP-Server genutzt. `mapgen.js`, `maprender.js`, `mapassets.js` dürfen beim Laden kein DOM/keine Modul-URL voraussetzen (Worker).
   - `s.clampView()` hält die Karte beim Verschieben/Zoomen im Bild – ebenso in `maps.js`.
 - `views/maps.js` (Liste, Welt‑/Rasterkarten, Weiche `MapView`).
 - Kampf (Rundenspiel nach 5e, 2014 und 2024):
@@ -94,7 +95,7 @@ campaigns/{cid}/signals/{uid}  { type, ts, events:[{id,type,…}] } Spieler → 
 - Im Browser Ansichten per `(await import('/js/core/workspace.js')).openView('forge')` öffnen.
 
 ## MCP-Server (`mcp/`)
-Cloudflare Worker, damit Claude die App als Connector bedienen kann (`mcp/README.md`). OAuth‑Anmeldung mit Name + Geheimwort → Firebase‑Refresh‑Token versiegelt im Token (`SEAL_SECRET`, zustandslos), Zugriffe per Firestore‑REST mit dem Nutzerkonto (Regeln gelten). Werkzeuge in `mcp/src/tools.js` – bei neuen Sammlungen/Feldern mitpflegen. Bündelt `js/lib/markdown.js`, `js/lib/dice.js`, `js/ui/statblock.js` und SRD‑Daten (diese Module dürfen beim Laden kein DOM anfassen). Veröffentlichen: `powershell -ExecutionPolicy Bypass -File mcp\deploy.ps1`.
+Cloudflare Worker, damit Claude die App als Connector bedienen kann (`mcp/README.md`). OAuth‑Anmeldung mit Name + Geheimwort → Firebase‑Refresh‑Token versiegelt im Token (`SEAL_SECRET`, zustandslos), Zugriffe per Firestore‑REST mit dem Nutzerkonto (Regeln gelten). Werkzeuge in `mcp/src/tools.js`, Kartenwerkstatt in `mcp/src/maps.js` (`karten_katalog`, `karte_lesen`, `karte_erstellen`; Katalog/Generatoren kommen automatisch aus der App, neue Elementlisten der Karte ggf. in `LISTS` eintragen) – bei neuen Sammlungen/Feldern mitpflegen. Bündelt `js/lib/markdown.js`, `js/lib/dice.js`, `js/ui/statblock.js` und SRD‑Daten (diese Module dürfen beim Laden kein DOM anfassen). Veröffentlichen: `powershell -ExecutionPolicy Bypass -File mcp\deploy.ps1`.
 
 ## Veröffentlichen
 `powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Message "…"` – aktualisiert Dateiliste + `VERSION` in `sw.js`, committet, pusht. `.ps1`‑Dateien als UTF‑8 **mit BOM** speichern (Windows PowerShell 5.1 liest sie sonst als ANSI).

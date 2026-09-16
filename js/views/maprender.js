@@ -4,7 +4,8 @@
 import { STAMPS, TEXTURES } from '../data/mapassets.js';
 import { userAssetInfo, userAssetImage, userThumb, onUserAssets } from '../core/userassets.js';
 
-const ASSETS = new URL('../../assets/', import.meta.url).href;
+// Im MCP-Server (Cloudflare Worker) gibt es keine Modul-URL – dort werden keine Bilder geladen
+const ASSETS = (() => { try { return new URL('../../assets/', import.meta.url).href; } catch { return 'assets/'; } })();
 export const STAMP_BY_ID = new Map(STAMPS.map((s) => [s.id, s]));
 export const TEX_BY_ID = new Map(TEXTURES.map((t) => [t.id, t]));
 export const texUrl = (id, thumb = false) => `${ASSETS}tex/${thumb ? 't/' : ''}${id}.webp`;

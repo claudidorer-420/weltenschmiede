@@ -8,6 +8,7 @@ import { SPELLS as SPELLS_2014 } from '../../js/data/spells-2014.js';
 import { SPELLS as SPELLS_2024 } from '../../js/data/spells-2024.js';
 import { DND } from '../../js/data/origins.js';
 import { cleanPath, newId } from './firestore.js';
+import { registerMapTools } from './maps.js';
 
 const now = () => Date.now();
 const low = (s) => String(s ?? '').toLowerCase();
@@ -647,11 +648,13 @@ tool('kampf_status', 'Kampf ansehen', 'Zeigt den laufenden Kampf: Runde, wer am 
   };
 });
 
-tool('karten', 'Karten', 'Listet Welt-, Raster- und Dungeon-Karten (Name, Typ, Größe, Sichtbarkeit). Karten selbst zeichnet man in der App.', S({ kampagne: KAMPAGNE }), RO, async (ctx, a) => {
+tool('karten', 'Karten', 'Listet Welt-, Raster- und Dungeon-Karten (Name, Typ, Größe, Sichtbarkeit). Bauen: karten_katalog, karte_lesen, karte_erstellen.', S({ kampagne: KAMPAGNE }), RO, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   const list = await ctx.visibleList(k, 'maps');
   return list.map((m) => ({ id: m.id, name: m.name || m.title, typ: m.type, breite: m.w, hoehe: m.h, stil: m.style, sichtbarkeit: m.visibility, objekte: (m.objects || []).length, formen: (m.shapes || []).length }));
 });
+
+registerMapTools({ tool, S, str, num, bool, KAMPAGNE, RO, RW, needGM });
 
 // ───────────────────────── Direkter Datenzugriff ─────────────────────────
 const PFAD = str('Firestore-Pfad, z. B. „campaigns/{kampagnenId}/encounters“ oder „users/{uid}/notes/{id}“ (siehe Datenmodell der App)');
