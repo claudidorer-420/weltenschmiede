@@ -169,7 +169,7 @@ export function MapsView({ tabId }) {
     openView('map', { id, title: r.name });
   };
   const createScrawl = async () => {
-    const r = await openModal(({ close }) => html`<${NewScrawlForm} close=${close} />`, { title: 'Neuer Dungeon', icon: 'castle' });
+    const r = await openModal(({ close }) => html`<${NewScrawlForm} close=${close} />`, { title: 'Neue Karte', icon: 'castle' });
     if (!r) return;
     const id = await db.add(col('maps'), newScrawlMap(r));
     openView('map', { id, title: r.name });
@@ -197,8 +197,8 @@ export function MapsView({ tabId }) {
   return html`<${ViewFrame} tabId=${tabId} title="Karten">
     <div class="page wide stack lg">
       <div class="page-head"><h1><${Icon} name="map" size=${24} />Karten</h1><span class="grow"></span>
-        ${gm ? html`<${Btn} kind="primary" icon="castle" onClick=${createScrawl}>Dungeon-Editor<//><${Btn} icon="map" loading=${busy === 'world'} onClick=${createWorld}>Weltkarte hochladen<//><${Btn} icon="sparkles" loading=${busy === 'ai'} onClick=${createAi}>Per KI malen<//><${Btn} kind="ghost" icon="grid" onClick=${createBattle}>Einfache Rasterkarte<//>` : null}
-        <span class="sub">${gm ? 'Dungeon-Editor: Räume und Gänge aufziehen – Wände, Schraffur und Raster entstehen automatisch, dazu Türen, Objekte, Tokens und Nebel. Weltkarten mit verlinkten Pins (Farbcodes wie „(Blau 2)“ werden erkannt). Spieler sehen nur, was du freigibst.' : 'Karten, die die Spielleitung freigegeben hat.'}</span></div>
+        ${gm ? html`<${Btn} kind="primary" icon="castle" onClick=${createScrawl}>Kartenwerkstatt<//><${Btn} icon="map" loading=${busy === 'world'} onClick=${createWorld}>Weltkarte hochladen<//><${Btn} icon="sparkles" loading=${busy === 'ai'} onClick=${createAi}>Per KI malen<//><${Btn} kind="ghost" icon="grid" onClick=${createBattle}>Einfache Rasterkarte<//>` : null}
+        <span class="sub">${gm ? 'Kartenwerkstatt: Räume, Gänge und Gelände aufziehen – texturierte Böden, Wände und Licht entstehen automatisch, dazu über 300 Objekte, Streu-Pinsel, Tokens und Nebel. Weltkarten mit verlinkten Pins (Farbcodes wie „(Blau 2)“ werden erkannt). Spieler sehen nur, was du freigibst.' : 'Karten, die die Spielleitung freigegeben hat.'}</span></div>
       ${!maps ? html`<div class="empty"><span class="spinner" /></div>` : !maps.length ? html`<${Empty} icon="map" title="Noch keine Karten">${gm ? 'Lade deine Weltkarte hoch oder erstelle eine Battlemap.' : 'Die Spielleitung hat noch keine Karte freigegeben.'}<//>`
         : html`<div class="grid cards">${sortBy(maps, (m) => m.createdAt || 0, -1).map((m) => html`<${MapCard} key=${m.id} m=${m} gm=${gm} />`)}</div>`}
     </div>
