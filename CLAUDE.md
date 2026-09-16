@@ -93,6 +93,9 @@ campaigns/{cid}/signals/{uid}  { type, ts, events:[{id,type,…}] } Spieler → 
 - Ohne Konto testen: `http://localhost:5173/#/offline` (lokale IndexedDB, Nutzer `local`, Rolle Spielleitung). Zurück zur Anmeldung: Konto‑Menü → „Offline‑Modus beenden“.
 - Im Browser Ansichten per `(await import('/js/core/workspace.js')).openView('forge')` öffnen.
 
+## MCP-Server (`mcp/`)
+Cloudflare Worker, damit Claude die App als Connector bedienen kann (`mcp/README.md`). OAuth‑Anmeldung mit Name + Geheimwort → Firebase‑Refresh‑Token versiegelt im Token (`SEAL_SECRET`, zustandslos), Zugriffe per Firestore‑REST mit dem Nutzerkonto (Regeln gelten). Werkzeuge in `mcp/src/tools.js` – bei neuen Sammlungen/Feldern mitpflegen. Bündelt `js/lib/markdown.js`, `js/lib/dice.js`, `js/ui/statblock.js` und SRD‑Daten (diese Module dürfen beim Laden kein DOM anfassen). Veröffentlichen: `powershell -ExecutionPolicy Bypass -File mcp\deploy.ps1`.
+
 ## Veröffentlichen
 `powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Message "…"` – aktualisiert Dateiliste + `VERSION` in `sw.js`, committet, pusht. `.ps1`‑Dateien als UTF‑8 **mit BOM** speichern (Windows PowerShell 5.1 liest sie sonst als ANSI).
 Geänderte `firebase/firestore.rules` veröffentlicht die SL selbst (Firebase‑Konsole → Firestore → Regeln → einfügen → Veröffentlichen).

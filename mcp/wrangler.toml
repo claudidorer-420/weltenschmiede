@@ -1,0 +1,15 @@
+# Weltenschmiede MCP-Server – Cloudflare Worker
+# Einrichten: siehe README.md in diesem Ordner.
+name = "weltenschmiede-mcp"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+FIREBASE_API_KEY = "AIzaSyDlDyPSUlgtKNiWe69SFagDBU_kuwF8doA"
+FIREBASE_PROJECT = "weltenschmiede"
+APP_URL = "https://claudidorer-420.github.io/weltenschmiede/"
+# Erlaubte Rücksprung-Adressen nach der Anmeldung (OAuth)
+ALLOWED_REDIRECT_HOSTS = "claude.ai,claude.com,localhost,127.0.0.1"
+
+# Geheimnis (nicht hier eintragen!):  npx wrangler secret put SEAL_SECRET
