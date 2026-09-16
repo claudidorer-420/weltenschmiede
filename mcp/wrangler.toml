@@ -5,6 +5,12 @@ main = "src/index.js"
 compatibility_date = "2026-09-01"
 workers_dev = true
 
+# Entwicklerdoku (CLAUDE.md) als Text bündeln – Werkzeug app_doku
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true
+
 [vars]
 FIREBASE_API_KEY = "AIzaSyDlDyPSUlgtKNiWe69SFagDBU_kuwF8doA"
 FIREBASE_PROJECT = "weltenschmiede"

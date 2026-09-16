@@ -1,7 +1,8 @@
 // MCP-Werkzeuge der Weltenschmiede. Alles läuft mit dem Konto des Nutzers → Firestore-Regeln gelten wie in der App,
 // Änderungen erscheinen sofort live in allen offenen Browsern.
-import { parseFrontmatter, extractLinks, extractTags, renameLinkTarget } from '../../js/lib/markdown.js';
-import { roll } from '../../js/lib/dice.js';
+import { renameLinkTarget } from '../../js/lib/markdown.js';
+import { deriveNoteFields, searchNoteList, cleanTitle, cleanPath as cleanFolder, uniqueTitleIn as uniqueTitle } from '../../js/lib/notes.js';
+import { roll, rollDetailed } from '../../js/lib/dice.js';
 import { normalizeMonster } from '../../js/ui/statblock.js';
 import { MONSTERS } from '../../js/data/monsters-srd.js';
 import { SPELLS as SPELLS_2014 } from '../../js/data/spells-2014.js';
@@ -14,31 +15,25 @@ const now = () => Date.now();
 const low = (s) => String(s ?? '').toLowerCase();
 
 // ───────────────────────── Hilfen ─────────────────────────
-function deriveNoteFields(body) {
-  const { props } = parseFrontmatter(body || '');
-  const al = props.aliases ?? props.alias ?? [];
-  const aliases = (Array.isArray(al) ? al : String(al).split(',')).map((x) => String(x).trim()).filter(Boolean);
-  const kind = low(props.typ || props.type || props.kind) || null;
-  return { tags: extractTags(body || '', props), links: extractLinks(body || ''), aliases, kind };
-}
-
-const cleanTitle = (t) => String(t || '').replace(/[\\/:*?"<>|#^[\]]/g, '-').replace(/\s+/g, ' ').trim();
-const cleanFolder = (p) => String(p || '').split('/').map((s) => s.trim().replace(/[\\:*?"<>|]/g, '-')).filter(Boolean).join('/');
-
-function uniqueTitle(notes, title, excludeId) {
-  const base = cleanTitle(title) || 'Unbenannt';
-  const taken = new Set(notes.filter((n) => n.id !== excludeId).map((n) => low(n.title)));
-  if (!taken.has(low(base))) return base;
-  for (let i = 1; ; i++) if (!taken.has(low(`${base} ${i}`))) return `${base} ${i}`;
-}
-
-function snippet(body, at, len) {
-  const s = Math.max(0, at - 80);
-  const e = Math.min(body.length, at + len + 120);
-  return (s > 0 ? '…' : '') + body.slice(s, e).replace(/\s+/g, ' ') + (e < body.length ? '…' : '');
-}
+// Notiz-Logik (abgeleitete Felder, Titel, Suche) kommt aus js/lib/notes.js – dieselbe wie in der App.
 
 const vis = (v) => (v === 'players' || v === 'spieler' ? 'players' : 'gm');
+
+// Zukunftssicher: frei durchgereichte Felder („felder“) und beim Lesen alle Felder, die kein eigenes Ausgabefeld haben
+const INTERNAL = new Set(['id']);
+function mergeFelder(patch, felder, blocked = []) {
+  for (const [k, v] of Object.entries(felder || {})) {
+    if (INTERNAL.has(k) || blocked.includes(k)) throw new Error(`Feld „${k}“ lässt sich hier nicht setzen.`);
+    patch[k] = v;
+  }
+  return patch;
+}
+function weitere(doc, known) {
+  const out = {};
+  for (const [k, v] of Object.entries(doc || {})) if (!INTERNAL.has(k) && !known.includes(k)) out[k] = v;
+  return Object.keys(out).length ? { weitere: out } : {};
+}
+const FELDER = { type: 'object', additionalProperties: true, description: 'Weitere Felder genau wie in der App gespeichert (auch künftige). Überschreiben die benannten Parameter nicht.' };
 const date = (ts) => (ts ? new Date(ts).toISOString().slice(0, 16).replace('T', ' ') : null);
 
 class Ctx {
@@ -146,16 +141,18 @@ tool('kampagne', 'Kampagne ansehen', 'Überblick einer Kampagne: Beschreibung, W
     id: k.cid, name: c.name, deineRolle: k.role, beschreibung: c.description || '', welt: c.world || '',
     regelwerk: c.settings?.rulesVersion || '2014', einheiten: c.settings?.units || 'm', szene: c.scene || null,
     ordner: c.folders || [], ordnerMarkierungen: c.folderMeta || {}, pbpWartetAuf: (c.pbpWaiting || []).map((u) => ms.find((m) => m.id === u)?.name || u),
-    mitglieder: ms.map((m) => ({ uid: m.id, name: m.name, rolle: m.role, charakterId: m.characterId || null })),
+    mitglieder: ms.map((m) => ({ uid: m.id, name: m.name, rolle: m.role, charakterId: m.characterId || null, ...weitere(m, ['uid', 'name', 'role', 'characterId']) })),
+    ...weitere(c, ['name', 'description', 'world', 'scene', 'folders', 'folderMeta', 'pbpWaiting']),
   };
 });
 
-tool('kampagne_aendern', 'Kampagne ändern', 'Ändert Name, Beschreibung oder Weltbeschreibung der Kampagne (nur Spielleitung).', S({
-  kampagne: KAMPAGNE, name: str('Neuer Name'), beschreibung: str('Kurzbeschreibung'), welt: str('Weltbeschreibung / Setting (Markdown)'),
+tool('kampagne_aendern', 'Kampagne ändern', 'Ändert Name, Beschreibung, Weltbeschreibung oder beliebige weitere Felder der Kampagne, z. B. settings (nur Spielleitung).', S({
+  kampagne: KAMPAGNE, name: str('Neuer Name'), beschreibung: str('Kurzbeschreibung'), welt: str('Weltbeschreibung / Setting (Markdown)'), felder: FELDER,
 }), RW, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   needGM(k);
-  const patch = { updatedAt: now() };
+  const patch = mergeFelder({}, a.felder, ['ownerUid']);
+  patch.updatedAt = now();
   if (a.name != null) patch.name = a.name;
   if (a.beschreibung != null) patch.description = a.beschreibung;
   if (a.welt != null) patch.world = a.welt;
@@ -174,43 +171,16 @@ tool('notizen_suchen', 'Codex durchsuchen', 'Sucht Notizen im Codex (Markdown, O
     const f = low(cleanFolder(a.ordner));
     notes = notes.filter((n) => low(n.folder) === f || low(n.folder).startsWith(`${f}/`));
   }
-  const terms = [];
-  for (const part of String(a.suche || '').match(/"[^"]+"|\S+/g) || []) {
-    if (/^tag:/i.test(part)) {
-      const t = low(part.slice(4).replace(/^#/, ''));
-      notes = notes.filter((n) => (n.tags || []).some((x) => low(x) === t || low(x).startsWith(`${t}/`)));
-    } else if (/^path:/i.test(part)) {
-      const p = low(part.slice(5).replace(/^"|"$/g, ''));
-      notes = notes.filter((n) => low(n.folder).includes(p));
-    } else if (/^typ:/i.test(part)) {
-      const p = low(part.slice(4));
-      notes = notes.filter((n) => (n.kind || '') === p);
-    } else terms.push(low(part.replace(/^"|"$/g, '')));
-  }
-  const out = [];
-  for (const n of notes) {
-    const title = low(n.title);
-    const body = low(n.body);
-    let score = terms.length ? 0 : 1;
-    let at = -1;
-    let ok = true;
-    for (const t of terms) {
-      const ti = title.indexOf(t);
-      const bi = body.indexOf(t);
-      if (ti < 0 && bi < 0 && !(n.aliases || []).some((x) => low(x).includes(t))) { ok = false; break; }
-      if (ti >= 0) score += ti === 0 ? 40 : 20;
-      if (bi >= 0) { score += 4; if (at < 0) at = bi; }
-    }
-    if (!ok) continue;
-    out.push({ n, score, at, len: terms[0]?.length || 0 });
-  }
-  out.sort((x, y) => y.score - x.score || String(x.n.title).localeCompare(String(y.n.title), 'de'));
-  const lim = Math.max(1, Math.min(500, a.limit || (terms.length ? 40 : 300)));
+  // Suche genau wie in der App (js/lib/notes.js); ohne Suchtext alle Titel
+  notes.sort((x, y) => String(x.title).localeCompare(String(y.title), 'de'));
+  const q = String(a.suche || '').trim();
+  const out = q ? searchNoteList(notes, q, { limit: 100000 }) : notes.map((note) => ({ note, snippet: '' }));
+  const lim = Math.max(1, Math.min(500, a.limit || (q ? 40 : 300)));
   return {
     gesamt: out.length,
-    treffer: out.slice(0, lim).map(({ n, at, len }) => ({
+    treffer: out.slice(0, lim).map(({ note: n, snippet }) => ({
       id: n.id, titel: n.title, ordner: n.folder || '', tags: n.tags || [], typ: n.kind || null, sichtbarkeit: n.visibility,
-      ...(at >= 0 ? { auszug: snippet(n.body || '', at, len) } : {}), geaendert: date(n.updatedAt),
+      ...(snippet ? { auszug: snippet } : {}), geaendert: date(n.updatedAt),
     })),
   };
 });
@@ -228,12 +198,13 @@ tool('notiz_lesen', 'Notiz lesen', 'Liest eine Notiz vollständig (per ID oder T
     id: n.id, titel: n.title, ordner: n.folder || '', sichtbarkeit: n.visibility, tags: n.tags || [], aliase: n.aliases || [], typ: n.kind || null,
     text: n.body || '', verlinkt: n.links || [], rueckverweise: backlinks, ...(k.gm ? { slGeheimnis: secret?.body || '' } : {}),
     erstellt: date(n.createdAt), geaendert: date(n.updatedAt),
+    ...weitere(n, ['title', 'folder', 'visibility', 'tags', 'aliases', 'kind', 'body', 'links', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy']),
   };
 });
 
 tool('notiz_erstellen', 'Notiz erstellen', 'Legt eine neue Notiz im Codex an (nur Spielleitung). Text in Markdown; Frontmatter (---\\ntyp: npc\\ntags: [a, b]\\naliases: [x]\\n---) und [[Wikilinks]] werden wie in der App ausgewertet. Standard-Sichtbarkeit: nur SL.', S({
   kampagne: KAMPAGNE, titel: str('Titel (wird eindeutig gemacht)'), text: str('Inhalt in Markdown'), ordner: str('Ordnerpfad, z. B. „Orte/Städte“'),
-  sichtbarkeit: SICHT, geheimnis: str('Geheimer SL-Teil (für Spieler nie lesbar)'),
+  sichtbarkeit: SICHT, geheimnis: str('Geheimer SL-Teil (für Spieler nie lesbar)'), felder: FELDER,
 }, ['titel']), RW, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   needGM(k);
@@ -241,6 +212,7 @@ tool('notiz_erstellen', 'Notiz erstellen', 'Legt eine neue Notiz im Codex an (nu
   const body = a.text || '';
   const id = newId(20);
   const doc = {
+    ...mergeFelder({}, a.felder),
     title: uniqueTitle(notes, a.titel), folder: cleanFolder(a.ordner), body, visibility: vis(a.sichtbarkeit),
     ...deriveNoteFields(body), createdAt: now(), updatedAt: now(), createdBy: ctx.user.uid, updatedBy: ctx.user.uid,
   };
@@ -259,6 +231,7 @@ tool('notiz_bearbeiten', 'Notiz bearbeiten', 'Ändert eine Notiz (nur Spielleitu
   text: str('Neuer vollständiger Text (ersetzt alles)'), anhaengen: str('Text, der am Ende angehängt wird'),
   ersetzungen: { type: 'array', description: 'Gezielte Ersetzungen im Text', items: S({ suche: str('Exakter Text'), durch: str('Ersatz') }, ['suche', 'durch']) },
   neuer_titel: str('Neuer Titel'), ordner: str('Neuer Ordnerpfad ("" = oberste Ebene)'), sichtbarkeit: SICHT, geheimnis: str('Neuer SL-Geheimtext ("" = löschen)'),
+  felder: { ...FELDER, description: `${FELDER.description} Abgeleitete Felder (tags, links, aliases, kind) berechnet der Server aus dem Text.` },
 }), RW, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   needGM(k);
@@ -271,7 +244,8 @@ tool('notiz_bearbeiten', 'Notiz bearbeiten', 'Ändert eine Notiz (nur Spielleitu
   }
   if (missing.length) throw new Error(`Nicht im Text gefunden: ${missing.map((m) => `„${m.slice(0, 60)}“`).join(', ')} – nichts geändert.`);
   if (a.anhaengen) body = `${body.replace(/\s*$/, '')}\n\n${a.anhaengen}`;
-  const patch = { updatedAt: now(), updatedBy: ctx.user.uid };
+  const patch = mergeFelder({}, a.felder, ['title', 'body']);
+  Object.assign(patch, { updatedAt: now(), updatedBy: ctx.user.uid });
   if (body !== (n.body || '')) Object.assign(patch, { body }, deriveNoteFields(body));
   if (a.ordner != null) patch.folder = cleanFolder(a.ordner);
   if (a.sichtbarkeit) patch.visibility = vis(a.sichtbarkeit);
@@ -354,16 +328,16 @@ tool('sitzungen', 'Sitzungen', 'Listet die Sitzungen (Nummer, Titel, Datum, Stat
   const k = await ctx.campaign(a.kampagne);
   if (a.id) return ctx.fs.get(k.p(`sessions/${a.id}`));
   const list = await ctx.visibleList(k, 'sessions');
-  return list.sort((x, y) => (x.number || 0) - (y.number || 0)).map((s) => ({ id: s.id, nummer: s.number, titel: s.title, datum: s.date, status: s.status, sichtbarkeit: s.visibility, rueckblickLaenge: (s.recap || '').length }));
+  return list.sort((x, y) => (x.number || 0) - (y.number || 0)).map((s) => ({ id: s.id, nummer: s.number, titel: s.title, datum: s.date, status: s.status, sichtbarkeit: s.visibility, rueckblickLaenge: (s.recap || '').length, felder: Object.keys(s).filter((f) => f !== 'id') }));
 });
 
 tool('sitzung_speichern', 'Sitzung speichern', 'Legt eine Sitzung an oder ändert sie (nur SL). Ohne „id“ neu mit nächster Nummer.', S({
   kampagne: KAMPAGNE, id: str('ID einer bestehenden Sitzung'), nummer: num('Sitzungsnummer'), titel: str('Titel'), datum: str('Datum JJJJ-MM-TT'),
-  status: str('geplant oder gespielt', { enum: ['planned', 'done'] }), rueckblick: str('Rückblick / Notizen (Markdown)'), vorbereitung: str('Vorbereitung (Markdown, Feld „prep“)'), sichtbarkeit: SICHT,
+  status: str('Status, z. B. planned (geplant) oder done (gespielt)'), rueckblick: str('Rückblick / Notizen (Markdown)'), vorbereitung: str('Vorbereitung (Markdown, Feld „prep“)'), sichtbarkeit: SICHT, felder: FELDER,
 }), RW, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   needGM(k);
-  const patch = {};
+  const patch = mergeFelder({}, a.felder);
   if (a.nummer != null) patch.number = a.nummer;
   if (a.titel != null) patch.title = a.titel;
   if (a.datum != null) patch.date = a.datum;
@@ -390,12 +364,13 @@ tool('quests', 'Quests', 'Listet alle Quests (Status open/active/done/failed) mi
   return list.map((q) => ({
     id: q.id, titel: q.title, status: q.status || 'open', beschreibung: q.description || '', auftraggeber: q.giver || '', belohnung: q.reward || '', sichtbarkeit: q.visibility,
     ...(k.gm ? { slNotiz: secrets.find((s) => s.id === `quest-${q.id}`)?.body || '' } : {}),
+    ...weitere(q, ['title', 'status', 'description', 'giver', 'reward', 'visibility']),
   }));
 });
 
 tool('quest_speichern', 'Quest speichern', 'Legt eine Quest an oder ändert sie. Spieler dürfen nur den Status freigegebener Quests ändern.', S({
-  kampagne: KAMPAGNE, id: str('ID einer bestehenden Quest'), titel: str('Titel'), status: str('Spalte', { enum: ['open', 'active', 'done', 'failed'] }),
-  beschreibung: str('Beschreibung (Markdown)'), auftraggeber: str('Auftraggeber'), belohnung: str('Belohnung'), sichtbarkeit: SICHT, sl_notiz: str('Geheime SL-Notiz'),
+  kampagne: KAMPAGNE, id: str('ID einer bestehenden Quest'), titel: str('Titel'), status: str('Spalte, z. B. open, active, done, failed'),
+  beschreibung: str('Beschreibung (Markdown)'), auftraggeber: str('Auftraggeber'), belohnung: str('Belohnung'), sichtbarkeit: SICHT, sl_notiz: str('Geheime SL-Notiz'), felder: FELDER,
 }), RW, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   if (!k.gm) {
@@ -403,7 +378,8 @@ tool('quest_speichern', 'Quest speichern', 'Legt eine Quest an oder ändert sie.
     await ctx.fs.update(k.p(`quests/${a.id}`), { status: a.status, updatedAt: now(), movedBy: ctx.user.uid });
     return { ok: true };
   }
-  const patch = { updatedAt: now() };
+  const patch = mergeFelder({}, a.felder);
+  patch.updatedAt = now();
   if (a.titel != null) patch.title = a.titel;
   if (a.status) patch.status = a.status;
   if (a.beschreibung != null) patch.description = a.beschreibung;
@@ -424,11 +400,11 @@ tool('quest_speichern', 'Quest speichern', 'Legt eine Quest an oder ändert sie.
 tool('handouts', 'Handouts', 'Listet die an die Spieler verteilten Handouts (Titel, Text).', S({ kampagne: KAMPAGNE }), RO, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   const list = await ctx.visibleList(k, 'handouts');
-  return list.sort((x, y) => (y.ts || 0) - (x.ts || 0)).map((h) => ({ id: h.id, titel: h.title, text: h.body || '', notizId: h.noteId || null, zeit: date(h.ts) }));
+  return list.sort((x, y) => (y.ts || 0) - (x.ts || 0)).map((h) => ({ id: h.id, titel: h.title, text: h.body || '', notizId: h.noteId || null, zeit: date(h.ts), ...weitere(h, ['title', 'body', 'noteId', 'ts', 'visibility', 'by']) }));
 });
 
 tool('handout_teilen', 'Handout teilen', 'Verteilt ein Handout (Titel + Markdown-Text) sofort an alle Spieler (nur SL). Optional aus einer Notiz.', S({
-  kampagne: KAMPAGNE, titel: str('Titel'), text: str('Inhalt (Markdown)'), notiz: str('Stattdessen Titel/ID einer Codex-Notiz teilen'),
+  kampagne: KAMPAGNE, titel: str('Titel'), text: str('Inhalt (Markdown)'), notiz: str('Stattdessen Titel/ID einer Codex-Notiz teilen'), felder: FELDER,
 }), RW, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   needGM(k);
@@ -437,16 +413,16 @@ tool('handout_teilen', 'Handout teilen', 'Verteilt ein Handout (Titel + Markdown
     const n = await ctx.findNote(k, { titel: a.notiz, id: a.notiz });
     data = { title: a.titel || n.title, noteId: n.id, body: n.body || '' };
   }
-  const id = await ctx.fs.add(k.p('handouts'), { ...data, visibility: 'players', ts: now(), by: ctx.user.uid });
+  const id = await ctx.fs.add(k.p('handouts'), { ...mergeFelder({}, a.felder), ...data, visibility: 'players', ts: now(), by: ctx.user.uid });
   return { ok: true, id };
 });
 
 tool('szene_setzen', 'Szene setzen', 'Zeigt allen am Spieltisch eine Szene (Titel + Beschreibung) oder leert sie (nur SL).', S({
-  kampagne: KAMPAGNE, titel: str('Titel der Szene'), text: str('Beschreibung (Markdown)'), leeren: bool('true = Szene entfernen'),
+  kampagne: KAMPAGNE, titel: str('Titel der Szene'), text: str('Beschreibung (Markdown)'), leeren: bool('true = Szene entfernen'), felder: FELDER,
 }), RW, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   needGM(k);
-  const scene = a.leeren ? null : { title: a.titel || '', body: a.text || '', fileId: null, ts: now() };
+  const scene = a.leeren ? null : { fileId: null, ...mergeFelder({}, a.felder), title: a.titel || '', body: a.text || '', ts: now() };
   await ctx.fs.update(`campaigns/${k.cid}`, { scene, updatedAt: now() });
   return { ok: true };
 });
@@ -467,29 +443,29 @@ tool('chat_lesen', 'Chat lesen', 'Liest die letzten Nachrichten aus Chat (inkl. 
     zeit: date(m.ts), von: m.as || m.character || m.name, konto: m.name, art: m.kind, text: m.text || '',
     ...(m.roll ? { wurf: `${m.roll.input || ''} = ${m.roll.total} (${m.roll.text || ''})${m.roll.crit ? ' KRITISCH' : m.roll.fumble ? ' PATZER' : ''}` } : {}),
     ...(m.to ? { an: m.to === 'gm' ? 'Spielleitung' : ms.find((x) => x.id === m.to)?.name || m.to } : {}),
+    ...weitere(m, ['ts', 'as', 'character', 'name', 'uid', 'kind', 'text', 'roll', 'to', 'from', 'participants']),
   }));
 });
 
-tool('chat_senden', 'Nachricht senden', 'Schreibt in den Chat (Markdown), flüstert an ein Mitglied oder die SL, oder schreibt einen Play-by-Post-Beitrag. Optional mit Würfelwurf. Erscheint sofort bei allen.', S({
-  kampagne: KAMPAGNE, text: str('Nachricht'), kanal: str('chat (Standard) oder pbp', { enum: ['chat', 'pbp'] }),
+tool('chat_senden', 'Nachricht senden', 'Schreibt in den Chat (Markdown), flüstert an ein Mitglied oder die SL, oder schreibt einen Play-by-Post-Beitrag. Optional mit Würfelwurf (auch mit Effekten wie beim Würfeln). Erscheint sofort bei allen.', S({
+  kampagne: KAMPAGNE, text: str('Nachricht'), kanal: str('chat (Standard) oder pbp'),
   an: str('Flüstern: Name eines Mitglieds oder „gm“'), als: str('Sprechername (z. B. NSC oder Charakter)'),
-  art: str('pbp: narration (nur SL), action oder ooc', { enum: ['narration', 'action', 'ooc'] }), wurf: str('Würfelausdruck, z. B. 1d20+5'),
+  art: str('pbp-Beitragsart, z. B. narration (nur SL), action oder ooc'), wurf: str('Würfelausdruck, z. B. 1d20+5'),
+  wurf_effekte: { type: 'object', additionalProperties: true, description: 'Würfeleffekte wie bei „wuerfeln“ (effekte)' }, felder: FELDER,
 }, ['text']), RW, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   const me = ctx.user.uid;
   const ms = await members(ctx, k);
   const myName = ms.find((m) => m.id === me)?.name || ctx.user.name;
+  const extra = mergeFelder({}, a.felder, ['uid', 'from', 'participants']);
   let r = null;
-  if (a.wurf) {
-    const x = roll(a.wurf, a.text || '');
-    r = { input: x.input, expr: x.expr, total: x.total, text: x.text, crit: x.crit, fumble: x.fumble, label: a.text || '' };
-  }
+  if (a.wurf) r = { ...(await rollWith(ctx, k, a.wurf, a.text || '', { effekte: a.wurf_effekte })), label: a.text || '' };
   if (a.kanal === 'pbp') {
     const kind = a.art || (k.gm ? 'narration' : 'action');
-    const id = await ctx.fs.add(k.p('posts'), { uid: me, name: myName, as: a.als || '', kind, text: a.text, roll: r ? { input: r.input, total: r.total, text: r.text, crit: r.crit, fumble: r.fumble } : null, ts: now() });
+    const id = await ctx.fs.add(k.p('posts'), { ...extra, uid: me, name: myName, as: a.als || '', kind, text: a.text, roll: r ? { input: r.input, total: r.total, text: r.text, crit: r.crit, fumble: r.fumble } : null, ts: now() });
     return { ok: true, id, wurf: r?.total };
   }
-  const base = { uid: me, name: myName, character: a.als || '', kind: r ? 'roll' : 'text', text: a.text, roll: r, ts: now() };
+  const base = { ...extra, uid: me, name: myName, character: a.als || '', kind: r ? 'roll' : 'text', text: a.text, roll: r, ts: now() };
   if (a.an) {
     const target = low(a.an) === 'gm' || low(a.an) === 'sl' ? 'gm' : ms.find((m) => m.id === a.an || low(m.name) === low(a.an))?.id;
     if (!target) throw new Error(`Mitglied „${a.an}“ nicht gefunden: ${ms.map((m) => m.name).join(', ')}`);
@@ -499,17 +475,33 @@ tool('chat_senden', 'Nachricht senden', 'Schreibt in den Chat (Markdown), flüst
   return { ok: true, wurf: r ? { summe: r.total, details: r.text } : null };
 });
 
-tool('wuerfeln', 'Würfeln', 'Würfelt einen Ausdruck (z. B. 2d6+3, 1d20+5, 4d6kh3, 2d20kl1, 1d100, W20) mit echtem Zufall. Optional ins Chat-Protokoll oder geheim an die SL.', S({
+// Würfeln mit der Würfel-Logik der App: einfache Ausdrücke über roll(), mit Wurfart/Effekten über rollDetailed()
+// (Effekte werden unverändert durchgereicht – neue Effekte der App funktionieren automatisch).
+async function rollWith(ctx, k, expr, label, { art, effekte, regelwerk } = {}) {
+  if (!art && !(effekte && Object.keys(effekte).length)) {
+    const x = roll(expr, label);
+    return { input: x.input, expr: x.expr, total: x.total, text: x.text, crit: x.crit, fumble: x.fumble, notes: [] };
+  }
+  let edition = regelwerk;
+  if (!edition && k) edition = (await ctx.fs.get(`campaigns/${k.cid}`).catch(() => null))?.settings?.rulesVersion;
+  const x = rollDetailed(expr, { kind: art || 'auto', fx: effekte || {}, label, edition: edition || '2014' });
+  return { input: x.input, expr: x.expr, total: x.total, text: x.text, crit: x.crit, fumble: x.fumble, notes: (x.notes || []).slice(0, 8) };
+}
+
+tool('wuerfeln', 'Würfeln', 'Würfelt mit der Würfel-Logik der App (z. B. 2d6+3, 1d20+5, 4d6kh3, 2d20kl1, 1d100, W20, „1d20+5 vorteil“). Mit „art“/„effekte“ inkl. Vorteil, Nachteil, Halblingsglück, Verlässliches Talent, Segen, Großwaffenkampf, Erschöpfung … Optional ins Chat-Protokoll oder geheim an die SL.', S({
   ausdruck: str('Würfelausdruck'), bezeichnung: str('Wofür (z. B. „Wahrnehmung“)'), kampagne: KAMPAGNE,
+  art: str('Wurfart: auto, check, save, attack, init, damage, free'),
+  effekte: { type: 'object', additionalProperties: true, description: 'Effekte wie in der App, z. B. { "adv": true } Vorteil, { "dis": true } Nachteil, elven, lucky, halfling, reliable, bless, guidance, bardic: "d8", bane, exhaustion: 2, crit, gwf, elemental, savage – künftige Effekte werden durchgereicht' },
+  regelwerk: str('2014 oder 2024 (Standard: Regelwerk der Kampagne)'),
   teilen: bool('true = im Chat der Kampagne posten'), geheim: bool('true = nur an die Spielleitung'),
 }, ['ausdruck']), RW, async (ctx, a) => {
-  const x = roll(a.ausdruck, a.bezeichnung || '');
-  const res = { ausdruck: x.expr, summe: x.total, details: x.text, kritisch: x.crit, patzer: x.fumble };
+  const k = a.teilen || a.geheim || a.art || a.effekte ? await ctx.campaign(a.kampagne).catch((e) => (a.teilen || a.geheim ? Promise.reject(e) : null)) : null;
+  const x = await rollWith(ctx, k, a.ausdruck, a.bezeichnung || '', { art: a.art, effekte: a.effekte, regelwerk: a.regelwerk });
+  const res = { ausdruck: x.expr, summe: x.total, details: x.text, kritisch: x.crit, patzer: x.fumble, ...(x.notes.length ? { hinweise: x.notes } : {}) };
   if (a.teilen || a.geheim) {
-    const k = await ctx.campaign(a.kampagne);
     const ms = await members(ctx, k);
     const me = ctx.user.uid;
-    const data = { uid: me, name: ms.find((m) => m.id === me)?.name || ctx.user.name, kind: 'roll', text: a.bezeichnung || '', character: '', roll: { input: x.input, expr: x.expr, total: x.total, text: x.text, crit: x.crit, fumble: x.fumble, label: a.bezeichnung || '', notes: [] }, ts: now() };
+    const data = { uid: me, name: ms.find((m) => m.id === me)?.name || ctx.user.name, kind: 'roll', text: a.bezeichnung || '', character: '', roll: { input: x.input, expr: x.expr, total: x.total, text: x.text, crit: x.crit, fumble: x.fumble, label: a.bezeichnung || '', notes: x.notes.slice(0, 4) }, ts: now() };
     if (a.geheim) await ctx.fs.add(k.p('whispers'), { ...data, from: me, to: 'gm', participants: [...new Set([me, ...ms.filter((m) => m.role === 'gm').map((m) => m.id)])] });
     else await ctx.fs.add(k.p('chat'), data);
     res.gepostet = true;
@@ -628,13 +620,18 @@ tool('zauber_suchen', 'Zauber suchen', 'Sucht Zauber im SRD (deutsch, Regeln 201
 });
 
 // ───────────────────────── Kampf & Karten ─────────────────────────
-tool('kampf_status', 'Kampf ansehen', 'Zeigt den laufenden Kampf: Runde, wer am Zug ist, Initiative, TP/Zustände/Konzentration, letzte Protokollzeilen. Die SL sieht alle Werte, Spieler die öffentliche Ansicht.', S({
-  kampagne: KAMPAGNE, protokoll: num('Anzahl Protokollzeilen (Standard 20)'),
+tool('kampf_status', 'Kampf ansehen', 'Zeigt den laufenden Kampf: Runde, wer am Zug ist, Initiative, TP/Zustände/Konzentration, letzte Protokollzeilen. Die SL sieht alle Werte, Spieler die öffentliche Ansicht. Mit roh=true der vollständige Kampfzustand mit allen Feldern (auch künftigen).', S({
+  kampagne: KAMPAGNE, protokoll: num('Anzahl Protokollzeilen (Standard 20)'), roh: bool('true = kompletter gespeicherter Kampfzustand (combat/gm bzw. combat/public)'),
+  ergebnisse: num('Mit roh: Anzahl Ergebniskarten (Standard 3)'),
 }), RO, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
   const st = await ctx.fs.get(k.p(k.gm ? 'combat/gm' : 'combat/public'));
   if (!st) return { aktiv: false };
   const n = a.protokoll ?? 20;
+  if (a.roh) {
+    const r = a.ergebnisse ?? 3;
+    return { pfad: k.p(k.gm ? 'combat/gm' : 'combat/public'), ...st, log: n > 0 ? (st.log || []).slice(-n) : [], ...(st.results ? { results: r > 0 ? st.results.slice(-r) : [] } : {}) };
+  }
   if (!k.gm) return { aktiv: st.active, runde: st.round, amZug: st.list?.find((c) => c.id === st.currentId)?.name || null, kaempfer: st.list, protokoll: (n > 0 ? (st.log || []).slice(-n) : []) };
   const cur = st.combatants?.[st.turn];
   return {
@@ -643,6 +640,7 @@ tool('kampf_status', 'Kampf ansehen', 'Zeigt den laufenden Kampf: Runde, wer am 
       id: c.id, name: c.name, ini: c.init, sc: !!c.isPC, verbuendet: !!c.ally, tp: c.hp, maxTp: c.maxHp, tempTp: c.tempHp || 0, rk: c.ac,
       zustaende: (c.conditions || []).map((x) => x.name || x), konzentration: c.concentration?.name || null, tot: !!c.dead, versteckt: !!c.hidden,
     })),
+    felder: Object.keys(st).filter((f) => f !== 'id'),
     zonen: (st.zones || []).map((z) => z.name || z.label || z.id),
     protokoll: (n > 0 ? (st.log || []).slice(-n) : []).map((l) => l.text || l),
   };
@@ -694,12 +692,16 @@ tool('daten_loeschen', 'Dokument löschen (Experte)', 'Löscht ein einzelnes Dok
   return { ok: true };
 });
 
+// Für Werkzeuge, die außerhalb dieser Datei entstehen (z. B. mit gebündelten Textdateien in index.js)
+export const registerTool = tool;
+
 export const INSTRUCTIONS = `Weltenschmiede ist eine D&D-5e-Kampagnen-App (deutsch) unter https://claudidorer-420.github.io/weltenschmiede/.
 Alle Werkzeuge arbeiten mit dem verbundenen Konto; Änderungen erscheinen sofort live in der App bei allen Mitspielern.
 - Beginne mit „kampagnen“. Hat das Konto mehrere Kampagnen, gib „kampagne“ (Name oder ID) an.
 - Codex = Markdown-Notizen im Obsidian-Stil mit [[Wikilinks]], #Tags und Frontmatter (typ, tags, aliases). Vor dem Bearbeiten lesen; für kleine Änderungen „ersetzungen“ oder „anhaengen“ statt den ganzen Text neu zu schreiben.
 - Sichtbarkeit: „gm“ = nur Spielleitung, „players“ = Spieler sehen es. Neue Inhalte standardmäßig „gm“; nichts ohne Wunsch für Spieler freigeben.
 - Spieler-Konten dürfen nur lesen, was freigegeben ist, und nur eigene Dinge ändern.
+- Die App wächst: Fehlt einem Werkzeug ein Feld, „felder“ nutzen (wird unverändert gespeichert); beim Lesen stehen unbekannte Felder unter „weitere“. Für neue Sammlungen/Datenformate app_doku (Datenmodell) lesen und daten_lesen/daten_schreiben verwenden. Karten: karten_katalog.
 - Antworte dem Nutzer auf Deutsch.`;
 
 export async function callTool(fs, user, name, args) {

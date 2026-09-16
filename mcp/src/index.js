@@ -4,7 +4,35 @@
 // speichert nichts, und alle Zugriffe laufen mit dem Konto des Nutzers durch die Firestore-Regeln.
 import { seal, unseal, sha256b64url } from './seal.js';
 import { signInWithPassword, idTokenFor, Firestore } from './firestore.js';
-import { TOOLS, INSTRUCTIONS, callTool } from './tools.js';
+import { TOOLS, INSTRUCTIONS, callTool, registerTool } from './tools.js';
+import APP_DOC from '../../CLAUDE.md';
+
+// Entwicklerdoku der App (CLAUDE.md) – wird bei jedem Deploy neu gebündelt und ist dadurch immer aktuell
+const DOC_SECTIONS = (() => {
+  const out = [];
+  let cur = { titel: 'Einleitung', text: [] };
+  for (const line of String(APP_DOC).split(/\r?\n/)) {
+    const m = /^##\s+(.*)$/.exec(line);
+    if (m) { out.push(cur); cur = { titel: m[1].trim(), text: [] }; } else cur.text.push(line);
+  }
+  out.push(cur);
+  return out.map((s) => ({ titel: s.titel, text: s.text.join('\n').trim() })).filter((s) => s.text);
+})();
+registerTool('app_doku', 'App-Dokumentation', 'Aktuelle Entwicklerdokumentation der Weltenschmiede (CLAUDE.md): Datenmodell mit allen Firestore-Sammlungen und Feldern, Architektur, Karten, Kampf, Regeln. Nützlich vor daten_lesen/daten_schreiben oder wenn ein Werkzeug ein neues Feld nicht kennt. Ohne „abschnitt“: Liste der Abschnitte.', {
+  type: 'object', additionalProperties: false,
+  properties: { abschnitt: { type: 'string', description: 'Titel (oder Teil davon) eines Abschnitts, z. B. „Datenmodell“, „Architektur“' }, suche: { type: 'string', description: 'Nur Zeilen mit diesem Begriff (über alle Abschnitte)' } },
+}, { readOnlyHint: true, destructiveHint: false, openWorldHint: false }, async (_ctx, a) => {
+  if (a.suche) {
+    const q = String(a.suche).toLowerCase();
+    const hits = DOC_SECTIONS.flatMap((s) => s.text.split('\n').filter((l) => l.toLowerCase().includes(q)).map((l) => `[${s.titel}] ${l.trim()}`));
+    return hits.slice(0, 80).join('\n') || 'Nichts gefunden.';
+  }
+  if (!a.abschnitt) return { abschnitte: DOC_SECTIONS.map((s) => s.titel) };
+  const q = String(a.abschnitt).toLowerCase();
+  const s = DOC_SECTIONS.find((x) => x.titel.toLowerCase() === q) || DOC_SECTIONS.find((x) => x.titel.toLowerCase().includes(q));
+  if (!s) throw new Error(`Abschnitt „${a.abschnitt}“ nicht gefunden: ${DOC_SECTIONS.map((x) => x.titel).join(', ')}`);
+  return `## ${s.titel}\n\n${s.text}`;
+});
 
 const VERSION = '1.0.0';
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];

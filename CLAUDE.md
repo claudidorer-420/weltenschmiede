@@ -80,7 +80,7 @@ campaigns/{cid}/signals/{uid}  { type, ts, events:[{id,type,…}] } Spieler → 
 - Spieler dürfen an Tokens nur `x`/`y` ändern (Regeln) – Bewegungsverbrauch zählt deshalb lokal pro Zug.
 - Spieler‑Abfragen **müssen** `where visibility == 'players'` enthalten (Regeln sind keine Filter) → `useVisibleCol()`.
 - Bilder: `core/files.js` speichert Data‑URLs in ≤ 900‑KB‑Stücken (`files/{id}/chunks/{n}`) – kein Firebase Storage nötig.
-- **Neue Sammlung?** → `firebase/firestore.rules` ergänzen, ggf. `SUBCOLLECTIONS` in `app.js` (Löschen) und `COLLS` in `views/importexport.js` (Backup/Migration).
+- **Neue Sammlung?** → `firebase/firestore.rules` ergänzen, ggf. `SUBCOLLECTIONS` in `app.js` (Löschen) und `COLLS` in `views/importexport.js` (Backup/Migration), hier im Datenmodell eintragen (der MCP‑Server liefert diesen Text über `app_doku` aus).
 
 ## Neue Ansicht hinzufügen
 1. `js/views/xyz.js` mit `export function XyzView({ params, active, tabId })`, Rahmen über `ViewFrame`.
@@ -95,6 +95,7 @@ campaigns/{cid}/signals/{uid}  { type, ts, events:[{id,type,…}] } Spieler → 
 - Im Browser Ansichten per `(await import('/js/core/workspace.js')).openView('forge')` öffnen.
 
 ## MCP-Server (`mcp/`)
+**Neue App‑Funktion → Connector mitdenken.** Automatisch dabei (nach dem Push baut Cloudflare neu): Kartenkatalog/Generatoren/Stile (`mapassets.js`, `maprender.js`, `mapgen.js`), SRD‑Monster/Zauber, Würfel‑Syntax und ‑Effekte (`lib/dice.js`), Notizlogik (`lib/notes.js`), `normalizeMonster`, diese CLAUDE.md (`app_doku`). Neue Felder gehen über `felder` und erscheinen beim Lesen unter `weitere`; neue Sammlungen über `daten_*`. Eigene Werkzeuge nur ergänzen, wenn eine Funktion Logik braucht (z. B. Kampfaktionen) – Logik dafür als DOM‑freies Modul in `js/` anlegen und von App und `mcp/src` importieren, nie kopieren.
 Cloudflare Worker, damit Claude die App als Connector bedienen kann (`mcp/README.md`). OAuth‑Anmeldung mit Name + Geheimwort → Firebase‑Refresh‑Token versiegelt im Token (`SEAL_SECRET`, zustandslos), Zugriffe per Firestore‑REST mit dem Nutzerkonto (Regeln gelten). Werkzeuge in `mcp/src/tools.js`, Kartenwerkstatt in `mcp/src/maps.js` (`karten_katalog`, `karte_lesen`, `karte_erstellen`; Katalog/Generatoren kommen automatisch aus der App, neue Elementlisten der Karte ggf. in `LISTS` eintragen) – bei neuen Sammlungen/Feldern mitpflegen. Bündelt `js/lib/markdown.js`, `js/lib/dice.js`, `js/ui/statblock.js` und SRD‑Daten (diese Module dürfen beim Laden kein DOM anfassen). Veröffentlichen: `powershell -ExecutionPolicy Bypass -File mcp\deploy.ps1`.
 
 ## Veröffentlichen
