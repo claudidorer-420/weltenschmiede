@@ -2,8 +2,10 @@
 // - App-Dateien: "network first" (Updates greifen sofort), offline aus dem Cache
 // - CDN-Bibliotheken (versionierte URLs): "cache first"
 // tools/publish.ps1 erhöht bei jeder Veröffentlichung die VERSION und aktualisiert die Dateiliste.
-const VERSION = 'ws-2026-09-16-0021';
+const VERSION = 'ws-2026-09-16-0804';
 const CDN_CACHE = 'ws-cdn-v1';
+// Kartenbausteine (Texturen, Stempel) sind unveränderlich und überleben Updates
+const ASSET_CACHE = 'ws-assets-v1';
 // @@FILES-START@@
 const SHELL = [
   './',
@@ -32,6 +34,7 @@ const SHELL = [
   './js/core/settings.js',
   './js/core/store.js',
   './js/core/tactics.js',
+  './js/core/userassets.js',
   './js/core/workspace.js',
   './js/data/artmap.js',
   './js/data/blocks.js',
@@ -40,6 +43,7 @@ const SHELL = [
   './js/data/gameicons.js',
   './js/data/items.js',
   './js/data/magicitems-srd.js',
+  './js/data/mapassets.js',
   './js/data/mapgen.js',
   './js/data/monsternames.js',
   './js/data/monsters-srd.js',
@@ -90,6 +94,7 @@ const SHELL = [
   './js/views/importexport.js',
   './js/views/journal.js',
   './js/views/mapeditor.js',
+  './js/views/maprender.js',
   './js/views/maps.js',
   './js/views/npc.js',
   './js/views/oracle.js',
@@ -111,7 +116,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== CDN_CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== CDN_CACHE && k !== ASSET_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -120,6 +125,19 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+
+  if (url.origin === self.location.origin && url.pathname.includes('/assets/')) {
+    event.respondWith(
+      caches.open(ASSET_CACHE).then(async (cache) => {
+        const hit = await cache.match(req);
+        if (hit) return hit;
+        const res = await fetch(req);
+        if (res.ok) cache.put(req, res.clone());
+        return res;
+      })
+    );
+    return;
+  }
 
   if (url.origin === self.location.origin) {
     event.respondWith(

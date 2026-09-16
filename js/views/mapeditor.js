@@ -1,13 +1,14 @@
-// Dungeon-Editor (angelehnt an Dungeon Scrawl): Räume, Gänge und Höhlen einfach aufziehen – Wände, Schraffur und
-// Raster entstehen automatisch. Dazu Türen, Treppen, Objekte, Gelände, Raumnummern, Stile, Generatoren, PNG-Export
-// und ein Spielmodus mit Tokens, Nebel des Krieges und Maßband (live für alle Mitspieler).
+// Kartenwerkstatt: Räume, Gänge, Höhlen und Außenkarten aufziehen – Wände, Böden und Raster entstehen automatisch.
+// Der Stil „Realistisch“ malt mit echten Texturen und von oben gerenderten 3D-Objekten (Poly Haven, CC0, siehe
+// js/views/maprender.js); eigene Pakete (z. B. Forgotten Adventures) lassen sich lokal importieren. Dazu Türen,
+// Treppen, Licht, Gelände, Beschriftung, Generatoren, PNG-Export und ein Spielmodus mit Tokens, Nebel und Maßband.
 import { html, useState, useEffect, useRef, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import { app, vault, col, myUid, noteById } from '../core/app.js';
 import { db } from '../core/db.js';
 import { openNote } from '../core/workspace.js';
 import { settings } from '../core/settings.js';
-import { fileUrl } from '../core/files.js';
+import { fileUrl, saveFile, deleteFile } from '../core/files.js';
 import { loadParty } from '../core/party.js';
 import { loadCombat, mutateCombat } from '../core/combat.js';
 import { sizeCells } from '../core/tactics.js';
@@ -18,19 +19,29 @@ import {
 import { ViewFrame } from '../ui/frame.js';
 import { Icon, IconBtn, Btn, Field, Select, Segmented, Toggle, NotePicker, openModal, promptDialog, confirmDialog, toast, pickFiles } from '../ui/components.js';
 import { useCol } from '../core/hooks.js';
-import { now, debounce, uid, initials, colorFromString, download, randInt, clamp } from '../lib/util.js';
+import { now, debounce, uid, colorFromString, download, randInt, clamp } from '../lib/util.js';
 import { uploadImage } from './codex.js';
+import { STAMPS, TEXTURES } from '../data/mapassets.js';
+import {
+  PROC, FLUIDS, assetInfo, assetThumb, texUrl, preloadMap, onAssets, assetsVersion,
+  renderReal, renderObjects, drawObjects, renderLighting, drawStampPreview, texName, REAL_INK,
+} from './maprender.js';
+import { userAssets, userAssetInfo, userThumb, importAssetFiles, deleteUserAssets, updateUserAsset, ensureUserImages } from '../core/userassets.js';
 
 const PX = 40; // Bildschirm-Pixel pro Feld bei Zoom 1
 const MAX_CACHE_PX = 7e6;
+const REAL_CACHE_PX = 4.2e6;
 
 export const STYLES = {
+  real: { label: 'Realistisch', real: true, bg: '#0a0b0d', hatch: '#000000', floor: '#8d8172', grid: 'rgba(0,0,0,.28)', wall: '#1a1714', ink: REAL_INK.ink, halo: REAL_INK.halo, hatchKind: 'none' },
   klassisch: { label: 'Klassisch', bg: '#f3efe6', hatch: '#3b3b3b', floor: '#ffffff', grid: 'rgba(80,70,60,.3)', wall: '#1d1d1d', ink: '#222222', halo: '#ffffff', hatchKind: 'lines' },
   pergament: { label: 'Pergament', bg: '#e6d5b1', hatch: '#6a4e2b', floor: '#f7eed8', grid: 'rgba(110,80,40,.28)', wall: '#3a2915', ink: '#3a2915', halo: '#f7eed8', hatchKind: 'cross' },
   blaupause: { label: 'Oldschool blau', bg: '#ffffff', hatch: '#2f67b1', floor: '#ffffff', grid: 'rgba(47,103,177,.4)', wall: '#2f67b1', ink: '#1f4f95', halo: '#ffffff', hatchKind: 'grid' },
   dunkel: { label: 'Dunkel (Spieltisch)', bg: '#101014', hatch: '#2b2b36', floor: '#4a433b', grid: 'rgba(255,255,255,.1)', wall: '#050506', ink: '#f1e7d0', halo: '#15120f', hatchKind: 'lines' },
 };
+export const isReal = (m) => !!(STYLES[m?.style] || STYLES.klassisch).real;
 
+// Klassische Gelände-Materialien (Vektorstile). Im realistischen Stil kommen Texturen und Flüssigkeiten dazu.
 const MATS = {
   water: { label: 'Wasser', color: '#77b1dc', deep: '#3f7fb4' },
   lava: { label: 'Lava', color: '#e2622f', deep: '#a8321a' },
@@ -142,6 +153,7 @@ const OBJ_GROUPS = [['aufbau', 'Aufbau'], ['moebel', 'Einrichtung'], ['natur', '
 const DOORS = ['door', 'door2', 'secret', 'portcullis', 'arch'];
 
 function drawObject(c, o, st) {
+  if (o.t === 'stamp') { drawStampPreview(c, o, OBJ, 1); return; }
   const def = OBJ[o.t];
   if (!def) return;
   c.save();
@@ -160,7 +172,6 @@ function drawLabel(c, l, st) {
   } else utext(c, String(l.text), l.x, l.y, size, st.ink, st.halo, 700, 'Georgia, "Palatino Linotype", serif');
   if (l.noteId) circ(c, l.x + size * 0.55, l.y - size * 0.5, 0.09, '#4d8dff');
 }
-
 // ───────────────────────── Geometrie & Rendering ─────────────────────────
 function tracePath(c, s) {
   const p = s.pts || [];
@@ -298,9 +309,8 @@ function dilate(name, src, r) {
   }
   return d;
 }
-
 // Statische Karte (Hintergrund, Schraffur, Boden, Gelände, Raster, Wände) als Rasterbild in Feld-Auflösung cs
-function renderStatic(target, m, cs, st, img) {
+function renderVector(target, m, cs, st, img) {
   const W = m.w;
   const H = m.h;
   const pw = Math.max(1, Math.ceil(W * cs));
@@ -385,8 +395,38 @@ function renderStatic(target, m, cs, st, img) {
   ctx.drawImage(wc, 0, 0);
 }
 
+// Realistische Karte: Untergrund + Böden + Wände aus maprender.js
+function renderStatic(target, m, cs, st, img, bake, opts) {
+  if (st.real) renderReal(target, m, cs, { bg: img, bake, ...opts });
+  else renderVector(target, m, cs, st, img);
+}
+
 // ───────────────────────── Generatoren ─────────────────────────
 const r2 = (v) => Math.round(v * 100) / 100;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const stampAt = (a, x, y, o = {}) => ({ id: uid(6), t: 'stamp', a, x: r2(x), y: r2(y), r: Math.round(o.r || 0), s: r2(o.s ?? 1), ...(o.fx ? { fx: 1 } : {}), ...(o.layer ? { layer: o.layer } : {}) });
+const ids = (re) => STAMPS.filter((s) => re.test(s.id)).map((s) => `ph:${s.id}`);
+// Stempel-Sets für Generatoren und den Streu-Pinsel
+export const SETS = {
+  laubbaum: { label: 'Laubbäume', keys: ids(/^(island_tree|tree_small_02|searsia_)/), s: [0.7, 1.15] },
+  nadelbaum: { label: 'Nadelbäume', keys: ids(/^(fir_tree_01|pine_tree_01)/), s: [0.6, 1] },
+  jungbaum: { label: 'Junge Bäume', keys: ids(/^(fir_sapling_medium|pine_sapling_medium|quiver_tree)/), s: [0.7, 1.1] },
+  busch: { label: 'Büsche', keys: ids(/^(shrub_0[124]|wild_rooibos_bush|didelta_spinosa)/), s: [0.8, 1.6] },
+  farn: { label: 'Farne & Kraut', keys: ids(/^(fern_02|othonna_cerarioides|weed_plant)/), s: [1, 2.2] },
+  gras: { label: 'Grasbüschel', keys: ids(/^grass_medium/), s: [1.4, 3] },
+  blume: { label: 'Blumen', keys: ids(/^(flower_|dandelion_01|celandine_01|periwinkle_plant)/), s: [1.2, 2.4] },
+  fels: { label: 'Steine', keys: ids(/^(rock_moss_set_02|namaqualand_boulder|boulder_01)/), s: [0.7, 1.4] },
+  felsen: { label: 'Felsen', keys: ids(/^(rock_moss_set_01|coast_rocks_05|rock_face_0|sand_rocks_small)/), s: [0.6, 1.1] },
+  wurzel: { label: 'Stümpfe & Wurzeln', keys: ids(/^(tree_stump|dead_tree_trunk|root_cluster|pine_roots)/), s: [0.8, 1.3] },
+  reisig: { label: 'Äste & Rinde', keys: ids(/^(dry_branches|bark_debris)/), s: [1.2, 2.6] },
+  truemmer: { label: 'Trümmer & Knochen', keys: ['p:rubble', 'p:bones', 'p:skull', ...ids(/^namaqualand_boulders_01/)], s: [0.7, 1.3] },
+};
+const FASS = ids(/^(wine_barrel_01|wooden_barrels_01_[a-e])/);
+const KISTE = ids(/^(wooden_crate_0|wooden_military_crate|old_military_crate)/);
+const STUHL = ids(/^(woodenchair_01|painted_wooden_chair_02|gallinera_chair|wooden_stool_01|folding_wooden_stool)/);
+const TISCH = ids(/^(round_wooden_table_0|woodentable_0|wooden_table_02)/);
+const KRAM = ids(/^(wooden_bucket|wicker_basket|ceramic_pot|jug_01|brass_pot|wooden_bowl_01|tea_set_01|carved_wooden_plate)/);
 
 function doorOnEntry(room, from, to) {
   const inside = (x, y) => x > room.x && x < room.x + room.w && y > room.y && y < room.y + room.h;
@@ -404,11 +444,24 @@ function doorOnEntry(room, from, to) {
   }
   return null;
 }
+// Grundgerüst: jeder Generator setzt alle Karteneigenschaften, damit beim Wechsel nichts hängen bleibt
+const base = (o) => ({ shapes: [], terrain: [], objects: [], labels: [], lights: [], outdoor: false, ground: 'dark_rock', floorTex: 'stone_tiles', wallTex: 'castle_brick_01', dark: 0, ...o });
+// Zufällig streuen
+function scatter(out, set, n, fn) {
+  const S = SETS[set];
+  if (!S?.keys.length) return;
+  for (let i = 0; i < n; i++) {
+    const p = fn(i);
+    if (!p) continue;
+    out.push(stampAt(pick(S.keys), p.x, p.y, { r: randInt(0, 359), s: rnd(S.s[0], S.s[1]) * (p.s || 1), fx: Math.random() < 0.5 }));
+  }
+}
 
 function genDungeon(W, H) {
   const shapes = [];
   const objects = [];
   const labels = [];
+  const lights = [];
   const rooms = [];
   const target = Math.max(5, Math.round((W * H) / 110));
   for (let i = 0; i < 500 && rooms.length < target; i++) {
@@ -420,7 +473,7 @@ function genDungeon(W, H) {
     if (rooms.some((r) => x < r.x + r.w + 2 && x + w + 2 > r.x && y < r.y + r.h + 2 && y + h + 2 > r.y)) continue;
     rooms.push({ x, y, w, h });
   }
-  if (!rooms.length) return { shapes, terrain: [], objects, labels };
+  if (!rooms.length) return base({});
   const cx = (r) => Math.floor(r.x + r.w / 2) + 0.5;
   const cy = (r) => Math.floor(r.y + r.h / 2) + 0.5;
   const conns = [];
@@ -434,8 +487,9 @@ function genDungeon(W, H) {
     rest.splice(rest.indexOf(best.b), 1);
   }
   if (rooms.length > 5) conns.push({ a: rooms[1], b: rooms[rooms.length - 1] });
+  const floors = ['stone_tiles', 'slab_tiles', 'monastery_stone_floor', 'worn_brick_floor', 'rock_tile_floor'];
   rooms.forEach((r, i) => {
-    shapes.push({ id: uid(6), op: 'add', kind: r.w >= 5 && r.h >= 5 && Math.random() < 0.15 ? 'ellipse' : 'rect', pts: [r.x, r.y, r.x + r.w, r.y + r.h] });
+    shapes.push({ id: uid(6), op: 'add', kind: r.w >= 5 && r.h >= 5 && Math.random() < 0.15 ? 'ellipse' : 'rect', pts: [r.x, r.y, r.x + r.w, r.y + r.h], ...(Math.random() < 0.35 ? { tex: pick(floors) } : {}) });
     labels.push({ id: uid(6), kind: 'room', text: String(i + 1), x: r.x + 0.75, y: r.y + 0.75, size: 0.65 });
   });
   for (const { a, b } of conns) {
@@ -445,23 +499,25 @@ function genDungeon(W, H) {
     shapes.push({ id: uid(6), op: 'add', kind: 'path', w: 1, pts: [...p1, ...mid, ...p2] });
     for (const [room, from, to] of [[a, mid, p1], [b, mid, p2]]) {
       const d = doorOnEntry(room, from, to);
-      if (d && Math.random() < 0.75) objects.push({ id: uid(6), t: Math.random() < 0.08 ? 'secret' : 'door', x: d.x, y: d.y, r: d.r, s: 1 });
+      if (d && Math.random() < 0.75) objects.push(stampAt(Math.random() < 0.08 ? 'p:secret' : pick(['p:door', 'p:door', 'p:doorDark', 'p:doorIron']), d.x, d.y, { r: d.r }));
     }
   }
-  const deco = ['chest', 'barrel', 'crate', 'statue', 'rubble', 'bones', 'altar', 'table', 'brazier', 'trap'];
   rooms.forEach((r, i) => {
-    if (i === 0) objects.push({ id: uid(6), t: 'stairs', x: r.x + r.w - 0.5, y: r.y + 1, r: 0, s: 1 });
-    if (r.w >= 6 && r.h >= 5 && Math.random() < 0.5) [[r.x + 1.5, r.y + 1.5], [r.x + r.w - 1.5, r.y + 1.5], [r.x + 1.5, r.y + r.h - 1.5], [r.x + r.w - 1.5, r.y + r.h - 1.5]].forEach(([x, y]) => objects.push({ id: uid(6), t: 'pillar', x, y, r: 0, s: 1 }));
-    const n = randInt(0, 2);
-    for (let k = 0; k < n; k++) {
-      const t = deco[randInt(0, deco.length - 1)];
-      const def = OBJ[t];
-      const x = r.x + (def.w % 2 ? randInt(0, r.w - 1) + 0.5 : clamp(randInt(1, r.w - 1), 1, r.w - 1));
-      const y = r.y + (def.h % 2 ? randInt(0, r.h - 1) + 0.5 : clamp(randInt(1, r.h - 1), 1, r.h - 1));
-      objects.push({ id: uid(6), t, x, y, r: 0, s: 1 });
+    if (i === 0) objects.push(stampAt('p:stairs', r.x + r.w - 0.5, r.y + 1));
+    if (r.w >= 6 && r.h >= 5 && Math.random() < 0.5) {
+      for (const [x, y] of [[r.x + 1.5, r.y + 1.5], [r.x + r.w - 1.5, r.y + 1.5], [r.x + 1.5, r.y + r.h - 1.5], [r.x + r.w - 1.5, r.y + r.h - 1.5]]) objects.push(stampAt('p:pillar', x, y));
+    }
+    if (Math.random() < 0.55) {
+      const bx = r.x + 0.5 + randInt(0, r.w - 1);
+      const by = r.y + 0.5 + randInt(0, r.h - 1);
+      objects.push(stampAt('p:brazier', bx, by));
+    }
+    const deco = ['ph:treasure_chest', pick(FASS), pick(KISTE), 'ph:gothic_statue', 'p:rubble', 'p:bones', 'p:web', 'p:trap', 'p:coffin', 'p:altar', 'ph:wooden_bookshelf_worn'];
+    for (let k = 0, n = randInt(1, 3); k < n; k++) {
+      objects.push(stampAt(pick(deco), r.x + 0.5 + randInt(0, r.w - 1), r.y + 0.5 + randInt(0, r.h - 1), { r: randInt(0, 3) * 90, s: 1.2 }));
     }
   });
-  return { shapes, terrain: [], objects, labels };
+  return base({ shapes, objects, labels, lights, dark: 0.32, floorTex: 'stone_tiles', wallTex: 'castle_brick_01' });
 }
 
 function genCave(W, H) {
@@ -488,47 +544,80 @@ function genCave(W, H) {
     pts.push(b.x, b.y);
     shapes.push({ id: uid(6), op: 'add', kind: 'brush', w: r2(1.6 + Math.random() * 1.4), pts });
   }
-  const pool1 = chambers[randInt(0, chambers.length - 1)];
-  terrain.push({ id: uid(6), op: 'add', kind: 'ellipse', mat: 'water', pts: [pool1.x - 1.4, pool1.y - 0.4, pool1.x + 1.6, pool1.y + 1.6] });
+  const pool = chambers[randInt(0, chambers.length - 1)];
+  terrain.push({ id: uid(6), op: 'add', kind: 'ellipse', mat: 'water', pts: [pool.x - 1.4, pool.y - 0.4, pool.x + 1.6, pool.y + 1.6] });
   for (const c of chambers) {
-    for (let k = 0; k < randInt(1, 3); k++) objects.push({ id: uid(6), t: Math.random() < 0.6 ? 'rock' : Math.random() < 0.5 ? 'rubble' : 'bones', x: r2(c.x + (Math.random() - 0.5) * c.rx * 1.3), y: r2(c.y + (Math.random() - 0.5) * c.ry * 1.3), r: randInt(0, 3) * 90, s: 1 });
+    scatter(objects, Math.random() < 0.5 ? 'felsen' : 'fels', randInt(1, 3), () => ({ x: c.x + (Math.random() - 0.5) * c.rx * 1.5, y: c.y + (Math.random() - 0.5) * c.ry * 1.5 }));
+    scatter(objects, 'truemmer', randInt(0, 2), () => ({ x: c.x + (Math.random() - 0.5) * c.rx * 1.6, y: c.y + (Math.random() - 0.5) * c.ry * 1.6 }));
   }
-  if (chambers.length > 2) objects.push({ id: uid(6), t: 'web', x: chambers[chambers.length - 1].x, y: chambers[chambers.length - 1].y, r: 0, s: 1 });
-  return { shapes, terrain, objects, labels };
+  const last = chambers[chambers.length - 1];
+  objects.push(stampAt('p:web', last.x, last.y, { s: 1.2 }));
+  return base({ shapes, terrain, objects, labels, dark: 0.45, ground: 'dark_rock', floorTex: 'rock_ground', wallTex: 'rock_wall_08' });
 }
 
 function genTavern(W, H) {
   const w = Math.min(18, W - 4);
-  const h = Math.min(12, H - 4);
+  const h = Math.min(13, H - 4);
   const x0 = Math.floor((W - w) / 2);
   const y0 = Math.floor((H - h) / 2);
   const kx = x0 + w - 5;
   const shapes = [
-    { id: uid(6), op: 'add', kind: 'rect', pts: [x0, y0, x0 + w, y0 + h] },
-    { id: uid(6), op: 'sub', kind: 'rect', pts: [kx - 0.15, y0, kx + 0.15, y0 + 4] },
-    { id: uid(6), op: 'sub', kind: 'rect', pts: [kx - 0.15, y0 + 5, kx + 0.15, y0 + h] },
+    { id: uid(6), op: 'add', kind: 'rect', pts: [x0, y0, x0 + w, y0 + h], tex: 'old_wood_floor' },
+    { id: uid(6), op: 'add', kind: 'rect', pts: [kx, y0, x0 + w, y0 + h], tex: 'terracotta_floor_tiles' },
+    { id: uid(6), op: 'sub', kind: 'path', w: 0.3, wall: 1, pts: [kx, y0, kx, y0 + 4] },
+    { id: uid(6), op: 'sub', kind: 'path', w: 0.3, wall: 1, pts: [kx, y0 + 5, kx, y0 + h] },
   ];
   const objects = [
-    { id: uid(6), t: 'door2', x: x0 + Math.floor(w / 2) - 2, y: y0 + h, r: 0, s: 1 },
-    { id: uid(6), t: 'door', x: kx, y: y0 + 4.5, r: 90, s: 1 },
-    { id: uid(6), t: 'stairs', x: x0 + 0.5, y: y0 + 1, r: 0, s: 1 },
-    { id: uid(6), t: 'brazier', x: x0 + 3.5, y: y0 + 0.5, r: 0, s: 1 },
+    stampAt('p:door2', x0 + Math.floor(w / 2) - 2, y0 + h),
+    stampAt('p:door', kx, y0 + 4.5, { r: 90 }),
+    stampAt('p:stairsWood', x0 + 0.5, y0 + 1),
+    stampAt('p:fireplace', x0 + 3.5, y0 + 0.5),
+    stampAt('p:counter', kx - 2.5, y0 + 1.5, { r: 90 }),
+    stampAt('p:rug', x0 + 2.5, y0 + h - 3.5),
   ];
-  for (let i = 0; i < 3; i++) objects.push({ id: uid(6), t: 'bench', x: kx - 2, y: y0 + 1.5 + i * 0.01, r: 0, s: 1 });
-  objects.push({ id: uid(6), t: 'table', x: kx - 2, y: y0 + 1.5, r: 0, s: 1 });
+  const lights = [];
   for (let row = 0; row < 2; row++) {
     for (let t = 0; t < 3; t++) {
       const x = x0 + 3 + t * 3.5;
       const y = y0 + 5.5 + row * 3.5;
       if (x > kx - 1.5) continue;
-      objects.push({ id: uid(6), t: 'roundtable', x, y, r: 0, s: 1 });
-      for (const [dx, dy, r] of [[0, -1, 0], [0, 1, 180], [-1, 0, 270], [1, 0, 90]]) objects.push({ id: uid(6), t: 'chair', x: x + dx, y: y + dy, r, s: 1 });
+      objects.push(stampAt(pick(TISCH), x, y, { s: 1.5, r: randInt(0, 359) }));
+      objects.push(stampAt('p:candles', x, y, { s: 0.7 }));
+      for (const [dx, dy, r] of [[0, -1, 180], [0, 1, 0], [-1, 0, 90], [1, 0, 270]]) if (Math.random() < 0.8) objects.push(stampAt(pick(STUHL), x + dx, y + dy, { s: 1.5, r }));
     }
   }
-  for (let i = 0; i < 3; i++) objects.push({ id: uid(6), t: 'barrel', x: x0 + w - 0.5, y: y0 + 0.5 + i, r: 0, s: 1 });
-  objects.push({ id: uid(6), t: 'cauldron', x: kx + 2.5, y: y0 + 2.5, r: 0, s: 1 }, { id: uid(6), t: 'crate', x: kx + 0.5, y: y0 + h - 0.5, r: 0, s: 1 });
-  const labels = [{ id: uid(6), kind: 'text', text: 'Schankraum', x: x0 + (kx - x0) / 2, y: y0 + h - 1.2, size: 0.7 }, { id: uid(6), kind: 'text', text: 'Küche', x: kx + 2.5, y: y0 + h - 1.2, size: 0.6 }];
-  return { shapes, terrain: [], objects, labels };
+  for (let i = 0; i < 4; i++) objects.push(stampAt(pick(FASS), x0 + w - 0.5, y0 + 0.5 + i, { s: 1.4 }));
+  objects.push(stampAt('ph:wooden_bookshelf_worn', kx + 2.5, y0 + h - 0.5, { s: 1.6, r: 180 }));
+  objects.push(stampAt('p:cauldron', kx + 2.5, y0 + 2.5), stampAt(pick(KISTE), kx + 0.5, y0 + h - 0.5, { s: 1.4 }));
+  for (let i = 0; i < 6; i++) objects.push(stampAt(pick(KRAM), rnd(kx + 0.4, x0 + w - 0.4), rnd(y0 + 0.4, y0 + h - 0.4), { s: rnd(1.2, 1.8), r: randInt(0, 359) }));
+  const labels = [{ id: uid(6), kind: 'text', text: 'Schankraum', x: x0 + (kx - x0) / 2, y: y0 + h - 1.2, size: 0.7 }, { id: uid(6), kind: 'text', text: 'Küche', x: kx + 2.5, y: y0 + h - 1.8, size: 0.6 }];
+  return base({ shapes, objects, labels, lights, dark: 0.22, floorTex: 'old_wood_floor', wallTex: 'wood_plank_wall', ground: 'dirt' });
+}
+
+function genTemple(W, H) {
+  const w = Math.min(20, W - 4);
+  const h = Math.min(16, H - 4);
+  const x0 = Math.floor((W - w) / 2);
+  const y0 = Math.floor((H - h) / 2);
+  const shapes = [
+    { id: uid(6), op: 'add', kind: 'rect', pts: [x0, y0, x0 + w, y0 + h], tex: 'marble_01' },
+    { id: uid(6), op: 'add', kind: 'rect', pts: [x0 + Math.floor(w / 2) - 2, y0 + h, x0 + Math.floor(w / 2) + 2, y0 + h + 2], tex: 'large_sandstone_blocks_01' },
+  ];
+  const objects = [stampAt('p:door2', x0 + Math.floor(w / 2), y0 + h + 2), stampAt('p:altar', x0 + w / 2, y0 + 1.5), stampAt('p:magic', x0 + w / 2, y0 + h / 2, { s: 0.9 })];
+  const lights = [];
+  for (let i = 0; i < Math.floor((h - 4) / 3); i++) {
+    const y = y0 + 3.5 + i * 3;
+    for (const x of [x0 + 2.5, x0 + w - 2.5]) {
+      objects.push(stampAt('p:pillar', x, y));
+      if (i % 2 === 0) {
+        objects.push(stampAt('p:brazier', x + (x < x0 + w / 2 ? 1.5 : -1.5), y));
+      }
+    }
+  }
+  for (let i = 0; i < 4; i++) objects.push(stampAt(Math.random() < 0.6 ? 'p:sarcophagus' : 'p:coffin', x0 + (i % 2 ? w - 4.5 : 4.5), y0 + 4.5 + Math.floor(i / 2) * 5));
+  objects.push(stampAt('p:rugGreen', x0 + w / 2, y0 + h / 2 + 1, { s: 1.1 }), stampAt('p:web', x0 + 1.5, y0 + 1.5), stampAt('p:bones', x0 + w - 2.5, y0 + h - 2.5));
+  const labels = [{ id: uid(6), kind: 'text', text: 'Krypta', x: x0 + w / 2, y: y0 + h - 1, size: 0.8 }];
+  return base({ shapes, objects, labels, lights, dark: 0.4, floorTex: 'marble_01', wallTex: 'large_sandstone_blocks', ground: 'dark_rock' });
 }
 
 function genClearing(W, H) {
@@ -536,51 +625,131 @@ function genClearing(W, H) {
   const cy = H / 2;
   const rx = Math.max(5, W / 2 - 4);
   const ry = Math.max(4, H / 2 - 3);
-  const shapes = [{ id: uid(6), op: 'add', kind: 'ellipse', pts: [r2(cx - rx), r2(cy - ry), r2(cx + rx), r2(cy + ry)] }];
   const terrain = [
-    { id: uid(6), op: 'add', kind: 'rect', mat: 'grass', pts: [0, 0, W, H] },
-    { id: uid(6), op: 'add', kind: 'ellipse', mat: 'water', pts: [r2(cx + rx * 0.2), r2(cy - ry * 0.55), r2(cx + rx * 0.6), r2(cy - ry * 0.15)] },
+    { id: uid(6), op: 'add', kind: 'ellipse', mat: 'tex:leafy_grass', pts: [r2(cx - rx), r2(cy - ry), r2(cx + rx), r2(cy + ry)] },
+    { id: uid(6), op: 'add', kind: 'ellipse', mat: 'tex:sparse_grass', pts: [r2(cx - rx * 0.5), r2(cy - ry * 0.45), r2(cx + rx * 0.35), r2(cy + ry * 0.55)] },
+    { id: uid(6), op: 'add', kind: 'ellipse', mat: 'water', pts: [r2(cx + rx * 0.2), r2(cy - ry * 0.6), r2(cx + rx * 0.65), r2(cy - ry * 0.1)] },
   ];
-  const objects = [{ id: uid(6), t: 'campfire', x: Math.floor(cx) + 0.5, y: Math.floor(cy) + 0.5, r: 0, s: 1 }];
-  for (let i = 0; i < 34; i++) {
+  const objects = [stampAt('p:campfire', Math.floor(cx) + 0.5, Math.floor(cy) + 0.5)];
+  const lights = [];
+  const ring = (f) => () => {
     const a = Math.random() * Math.PI * 2;
-    const f = 1.02 + Math.random() * 0.25;
-    objects.push({ id: uid(6), t: Math.random() < 0.75 ? 'tree' : 'bush', x: r2(cx + Math.cos(a) * rx * f), y: r2(cy + Math.sin(a) * ry * f), r: randInt(0, 3) * 90, s: r2(0.8 + Math.random() * 0.5) });
-  }
-  for (let i = 0; i < 5; i++) objects.push({ id: uid(6), t: 'rock', x: r2(cx + (Math.random() - 0.5) * rx * 1.4), y: r2(cy + (Math.random() - 0.5) * ry * 1.4), r: 0, s: 1 });
-  return { shapes, terrain, objects, labels: [] };
+    const k = f + Math.random() * 0.25;
+    return { x: clamp(cx + Math.cos(a) * rx * k, 0.6, W - 0.6), y: clamp(cy + Math.sin(a) * ry * k, 0.6, H - 0.6) };
+  };
+  const any = () => ({ x: rnd(0.5, W - 0.5), y: rnd(0.5, H - 0.5) });
+  scatter(objects, 'laubbaum', 22, ring(1.02));
+  scatter(objects, 'nadelbaum', 16, ring(1.12));
+  scatter(objects, 'jungbaum', 10, ring(0.96));
+  scatter(objects, 'busch', 18, ring(0.86));
+  scatter(objects, 'fels', 8, any);
+  scatter(objects, 'gras', 60, any);
+  scatter(objects, 'blume', 25, any);
+  scatter(objects, 'wurzel', 5, any);
+  return base({ terrain, objects, lights, outdoor: true, ground: 'forest_floor', dark: 0.14, floorTex: 'forest_floor' });
+}
+
+function genForest(W, H) {
+  const objects = [];
+  const pts = [];
+  for (let i = 0; i <= 8; i++) pts.push(r2((W * i) / 8), r2(H / 2 + Math.sin(i * 0.9) * H * 0.18));
+  const terrain = [{ id: uid(6), op: 'add', kind: 'brush', w: 2.4, mat: 'tex:muddy_tracks', pts }];
+  const onPath = (x, y) => { for (let i = 0; i < pts.length; i += 2) if (Math.hypot(pts[i] - x, pts[i + 1] - y) < 2.4) return true; return false; };
+  const free = () => { for (let k = 0; k < 12; k++) { const x = rnd(0.5, W - 0.5); const y = rnd(0.5, H - 0.5); if (!onPath(x, y)) return { x, y }; } return null; };
+  scatter(objects, 'nadelbaum', Math.round((W * H) / 26), free);
+  scatter(objects, 'laubbaum', Math.round((W * H) / 40), free);
+  scatter(objects, 'jungbaum', Math.round((W * H) / 45), free);
+  scatter(objects, 'busch', Math.round((W * H) / 22), free);
+  scatter(objects, 'farn', Math.round((W * H) / 14), free);
+  scatter(objects, 'wurzel', 10, free);
+  scatter(objects, 'reisig', 20, () => ({ x: rnd(0.5, W - 0.5), y: rnd(0.5, H - 0.5) }));
+  scatter(objects, 'fels', 8, free);
+  return base({ terrain, objects, outdoor: true, ground: 'forest_floor', dark: 0.26, floorTex: 'forest_floor' });
+}
+
+function genVillage(W, H) {
+  const shapes = [];
+  const objects = [];
+  const labels = [];
+  const lights = [];
+  const terrain = [
+    { id: uid(6), op: 'add', kind: 'ellipse', mat: 'tex:sparse_grass', pts: [r2(W * 0.1), r2(H * 0.12), r2(W * 0.9), r2(H * 0.88)] },
+    { id: uid(6), op: 'add', kind: 'ellipse', mat: 'tex:mossy_cobblestone', pts: [r2(W / 2 - W * 0.28), r2(H / 2 - H * 0.3), r2(W / 2 + W * 0.28), r2(H / 2 + H * 0.3)] },
+  ];
+  const roofs = ['thatch_roof_angled', 'clay_roof_tiles', 'roof_slates_02', 'reed_roof_03'];
+  const spots = [[2, 2, 6, 5], [W - 9, 2, 7, 5], [2, H - 8, 6, 6], [W - 8, H - 7, 6, 5]];
+  spots.forEach(([x, y, w, h], i) => {
+    if (x < 1 || y < 1 || x + w > W - 1 || y + h > H - 1) return;
+    shapes.push({ id: uid(6), op: 'add', kind: 'rect', pts: [x, y, x + w, y + h], tex: 'old_wood_floor', roof: roofs[i % roofs.length] });
+    const dx = x + Math.floor(w / 2) + 0.5;
+    const dy = y + h;
+    objects.push(stampAt('p:door', dx, dy));
+    objects.push(stampAt('p:torch', dx + 1.4, dy - 0.1, { s: 1.6 }));
+    labels.push({ id: uid(6), kind: 'room', text: String(i + 1), x: x + 0.8, y: y + 0.8, size: 0.6 });
+    // Trampelpfad von der Tür zum Platz
+    terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: 1.4, mat: 'tex:stone_pathway', pts: [r2(dx), r2(dy + 0.4), r2((dx + W / 2) / 2), r2((dy + H / 2) / 2), r2(W / 2), r2(H / 2)] });
+    for (let k = 0; k < 3; k++) objects.push(stampAt(pick([...FASS, ...KISTE]), rnd(x, x + w), dy + rnd(0.5, 1.6), { s: 1.4, r: randInt(0, 359) }));
+  });
+  objects.push(stampAt('p:well', Math.floor(W / 2) + 0.5, Math.floor(H / 2) + 0.5, { s: 1.4 }));
+  for (let i = 0; i < 6; i++) objects.push(stampAt(pick(FASS), rnd(2, W - 2), rnd(2, H - 2), { s: 1.4, r: randInt(0, 359) }));
+  for (let i = 0; i < 7; i++) objects.push(stampAt('p:fence', 2.5 + i * 2, H - 1.2, { s: 1.3 }));
+  objects.push(stampAt('p:well', W / 2 - 3.5, H / 2 + 2.5, { s: 1 }), stampAt(pick(TISCH), W / 2 + 3, H / 2 - 1.5, { s: 1.6, r: randInt(0, 359) }));
+  for (let i = 0; i < 4; i++) objects.push(stampAt(pick(STUHL), W / 2 + 3 + Math.cos(i * 1.6) * 1.1, H / 2 - 1.5 + Math.sin(i * 1.6) * 1.1, { s: 1.5, r: randInt(0, 359) }));
+  for (let i = 0; i < 8; i++) objects.push(stampAt(pick(KRAM), rnd(2, W - 2), rnd(2, H - 2), { s: rnd(1.2, 1.8), r: randInt(0, 359) }));
+  const any = () => ({ x: rnd(0.5, W - 0.5), y: rnd(0.5, H - 0.5) });
+  scatter(objects, 'laubbaum', 8, () => ({ x: rnd(1, W - 1), y: rnd(1, H - 1) }));
+  scatter(objects, 'busch', 10, any);
+  scatter(objects, 'gras', 80, any);
+  scatter(objects, 'blume', 30, any);
+  scatter(objects, 'fels', 6, any);
+  return base({ shapes, terrain, objects, labels, lights, outdoor: true, ground: 'sparse_grass', floorTex: 'old_wood_floor', wallTex: 'wood_plank_wall', dark: 0.12 });
 }
 
 export const SCRAWL_GENERATORS = {
-  leer: { label: 'Leer', fn: () => ({ shapes: [], terrain: [], objects: [], labels: [] }) },
+  leer: { label: 'Leer', fn: () => base({}) },
   dungeon: { label: 'Dungeon (Räume & Gänge)', fn: genDungeon },
   hoehle: { label: 'Höhle', fn: genCave },
   taverne: { label: 'Taverne', fn: genTavern },
+  tempel: { label: 'Tempel & Krypta', fn: genTemple },
   lichtung: { label: 'Waldlichtung', fn: genClearing },
+  wald: { label: 'Dichter Wald', fn: genForest },
+  dorf: { label: 'Dorfplatz', fn: genVillage },
 };
 
-export function newScrawlMap({ name, w = 36, h = 26, style = 'klassisch', gen = 'dungeon' }) {
+export function newScrawlMap({ name, w = 36, h = 26, style = 'real', gen = 'dungeon' }) {
   const g = (SCRAWL_GENERATORS[gen] || SCRAWL_GENERATORS.leer).fn(w, h);
   const doc = { name, type: 'scrawl', w, h, style, gridOn: true, hatch: 1, ...g, fog: { enabled: false, revealed: '0'.repeat(w * h) }, visibility: 'gm', createdAt: now() };
   doc.thumb = thumbOf(doc);
   return doc;
 }
 
-// Vorschaubild für die Kartenliste und PNG-Export
-export function renderMapImage(m, cs, img) {
+// Vorschaubild für die Kartenliste, den PNG-Export und das Spielerbild
+export function renderMapImage(m, cs, img, { lighting = true, bake = null } = {}) {
   const st = STYLES[m.style] || STYLES.klassisch;
   const cv = document.createElement('canvas');
-  renderStatic(cv, m, cs, st, img);
+  renderStatic(cv, m, cs, st, img, bake);
+  if (bake) return cv;
   const c = cv.getContext('2d');
   c.setTransform(cs, 0, 0, cs, 0, 0);
-  for (const o of m.objects || []) drawObject(c, o, st);
+  if (st.real) drawObjects(c, m, { legacyDefs: OBJ });
+  else for (const o of m.objects || []) drawObject(c, o, st);
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  if (st.real && lighting) {
+    const dk = document.createElement('canvas');
+    const gl = document.createElement('canvas');
+    const on = renderLighting(dk, gl, m, Math.max(6, Math.min(24, cs)), { legacyDefs: OBJ });
+    if (on.dark) c.drawImage(dk, 0, 0, cv.width, cv.height);
+    if (on.glow) { c.globalCompositeOperation = 'lighter'; c.drawImage(gl, 0, 0, cv.width, cv.height); c.globalCompositeOperation = 'source-over'; }
+  }
+  c.setTransform(cs, 0, 0, cs, 0, 0);
   for (const l of m.labels || []) drawLabel(c, l, st);
+  c.setTransform(1, 0, 0, 1, 0, 0);
   return cv;
 }
 
 function thumbOf(m) {
   try {
-    const cs = clamp(Math.floor(360 / Math.max(m.w, m.h)), 4, 12);
+    const cs = clamp(Math.floor(420 / Math.max(m.w, m.h)), 4, 14);
     const cv = renderMapImage(m, cs);
     const url = cv.toDataURL('image/webp', 0.72);
     return url.startsWith('data:image/webp') ? url : cv.toDataURL('image/jpeg', 0.75);
@@ -597,24 +766,30 @@ const BUILD_TOOLS = [
   ['poly', 'pencil', 'Polygon – Punkte setzen (P)', 'p'],
   ['path', 'footprints', 'Gang – Punkte setzen (C)', 'c'],
   ['brush', 'brush', 'Pinsel für Höhlen (B)', 'b'],
-  ['terrain', 'trees', 'Gelände malen (T)', 't'],
+  ['wall', 'minus', 'Wand ziehen (W)', 'w'],
+  ['terrain', 'trees', 'Gelände & Wasser malen (T)', 't'],
   ['door', 'door', 'Tür an eine Wand setzen (D)', 'd'],
   ['object', 'gem', 'Objekte platzieren (O)', 'o'],
+  ['scatter', 'sparkles', 'Streuen: Bäume, Gras, Steine (S)', 's'],
+  ['light', 'sun', 'Licht setzen (L)', 'l'],
   ['text', 'hash', 'Raumnummern & Text (X)', 'x'],
   ['pan', 'hand', 'Ansicht verschieben (H)', 'h'],
 ];
 const PLAY_TOOLS_GM = [['pan', 'hand', 'Bewegen & Tokens ziehen'], ['measure', 'ruler', 'Messen'], ['reveal', 'eye', 'Nebel aufdecken'], ['hide', 'eye-off', 'Nebel verdecken'], ['token', 'user-plus', 'Token setzen']];
 const PLAY_TOOLS = [['pan', 'hand', 'Bewegen & eigene Tokens ziehen'], ['measure', 'ruler', 'Messen']];
 const HINTS = {
-  select: 'Antippen = auswählen · ziehen = verschieben · Entf = löschen · R = drehen',
+  select: 'Antippen = auswählen · ziehen = verschieben · Entf = löschen · R = drehen · F = spiegeln',
   room: 'Ziehen = Raum aufziehen · Alt/Rechtsklick oder „Entfernen“ = ausschneiden · Umschalt = frei',
   ellipse: 'Ziehen = runder Raum · „Entfernen“ schneidet aus',
   poly: 'Punkte setzen · Doppelklick, Enter oder ersten Punkt antippen = schließen · Esc = abbrechen',
   path: 'Punkte setzen (Feldmitten) · Doppelklick/Enter = fertig · Breite rechts einstellen',
   brush: 'Frei malen für Höhlen und Ruinen · „Entfernen“ radiert',
-  terrain: 'Wasser, Lava, Gras … über den Boden malen · „Entfernen“ radiert Gelände',
+  wall: 'Punkte auf den Rasterlinien setzen = Zwischenwand · Doppelklick/Enter = fertig · Türen setzt du danach darauf',
+  terrain: 'Wasser, Lava, Gras, Wege … über den Boden malen · „Entfernen“ radiert · Strg+Ziehen = Rechteck',
   door: 'Nahe einer Wand antippen – die Tür rastet an der Kante ein',
-  object: 'Objekt rechts wählen, dann auf die Karte tippen',
+  object: 'Objekt rechts wählen, dann auf die Karte tippen · Umschalt+Mausrad dreht das Objekt',
+  scatter: 'Über die Karte ziehen – Pflanzen, Steine und Trümmer werden zufällig verteilt',
+  light: 'Antippen = Lichtquelle setzen · danach rechts Farbe und Radius einstellen',
   text: 'Antippen = nächste Raumnummer bzw. Text setzen',
   pan: 'Ziehen = verschieben · Mausrad/zwei Finger = zoomen · im Spiel: Token antippen = Aktionen, lange drücken = Ping',
   place: 'Antippen = Monster setzen · Esc = fertig',
@@ -623,7 +798,6 @@ const HINTS = {
   hide: 'Über die Karte wischen = Nebel verdecken',
   token: 'Antippen = Token setzen',
 };
-
 function simplify(pts, eps) {
   if (pts.length <= 4) return pts;
   const P = [];
@@ -658,38 +832,74 @@ function shapeHit(s, x, y) {
   }
   return hitCtx.isPointInPath(x, y);
 }
-function objHit(o, x, y) {
+
+// ───────────────────────── Objekte messen & Raster bauen ─────────────────────────
+const BLOCK_OBJ = new Set(['pillar', 'statue', 'altar', 'fountain', 'well', 'bookshelf', 'tree', 'rock', 'throne']);
+const ROUGH_OBJ = new Set(['rubble', 'web', 'bush', 'bones', 'table', 'roundtable', 'bed', 'barrel', 'crate', 'coffin', 'cauldron', 'brazier', 'bench']);
+const ROUGH_MAT = new Set(['difficult', 'rubble', 'water', 'deepwater', 'swamp', 'ice', 'blood', 'lava', 'mud']);
+const ROUGH_TEX = new Set(['brown_mud', 'mud_forest', 'muddy_tracks', 'snow_02', 'snow_03', 'rocks_ground_02', 'river_small_rocks', 'gravel_ground_01', 'rubble', 'forest_leaves_02', 'burned_ground_01', 'mud_cracked_dry_03', 'farm_soil']);
+const roughMat = (mat) => (String(mat).startsWith('tex:') ? ROUGH_TEX.has(String(mat).slice(4)) : ROUGH_MAT.has(mat));
+
+// Maße und Regelwirkung eines Kartenobjekts (Stempel oder klassisches Symbol)
+export function objMeta(o) {
+  if (o.t === 'stamp') {
+    const i = assetInfo(o.a);
+    const s = o.s || 1;
+    if (!i) return { w: s, h: s, block: false, rough: false, door: false, layer: 'obj', name: 'Objekt' };
+    return { w: i.w * s, h: i.h * s, block: !!i.block, rough: !!i.rough, door: !!i.door, layer: o.layer || i.layer || 'obj', name: i.name, glow: !!i.glow };
+  }
   const def = OBJ[o.t];
-  if (!def) return false;
+  if (!def) return null;
+  const s = o.s || 1;
+  return { w: def.w * s, h: def.h * s, block: BLOCK_OBJ.has(o.t), rough: ROUGH_OBJ.has(o.t), door: DOORS.includes(o.t), layer: 'obj', name: def.label };
+}
+function objHit(o, x, y) {
+  const m = objMeta(o);
+  if (!m) return false;
   const a = (-(o.r || 0) * Math.PI) / 180;
   const dx = x - o.x;
   const dy = y - o.y;
   const lx = dx * Math.cos(a) - dy * Math.sin(a);
   const ly = dx * Math.sin(a) + dy * Math.cos(a);
-  const s = o.s || 1;
-  return Math.abs(lx) <= (def.w * s) / 2 + 0.08 && Math.abs(ly) <= (def.h * s) / 2 + 0.08;
+  return Math.abs(lx) <= m.w / 2 + 0.08 && Math.abs(ly) <= m.h / 2 + 0.08;
 }
+const inObj = (o, m, x, y, pad = 0) => {
+  const a = (-(o.r || 0) * Math.PI) / 180;
+  const dx = x - o.x;
+  const dy = y - o.y;
+  return Math.abs(dx * Math.cos(a) - dy * Math.sin(a)) <= m.w / 2 + pad && Math.abs(dx * Math.sin(a) + dy * Math.cos(a)) <= m.h / 2 + pad;
+};
 
-// Begehbare Felder für die Kampfbewegung: Boden aus den Formen, Gelände (schwierig bzw. Grube), Objekte
-const BLOCK_OBJ = new Set(['pillar', 'statue', 'altar', 'fountain', 'well', 'bookshelf', 'tree', 'rock', 'throne']);
-const ROUGH_OBJ = new Set(['rubble', 'web', 'bush', 'bones', 'table', 'roundtable', 'bed', 'barrel', 'crate', 'coffin', 'cauldron', 'brazier', 'bench']);
-const ROUGH_MAT = new Set(['difficult', 'rubble', 'water', 'ice', 'blood', 'lava']);
+// Begehbare Felder für die Kampfbewegung: Boden aus den Formen, dünne Zwischenwände als Kanten,
+// Gelände (schwierig bzw. Grube), Objekte (Säulen blockieren, Möbel kosten extra).
 export function buildGrid(d) {
   const W = d.w || 36;
   const H = d.h || 26;
-  const R = 4;
+  const R = 6;
+  const half = R / 2;
   const walk = new Uint8Array(W * H).fill(1);
   const cost = new Uint8Array(W * H).fill(1);
   const opaque = new Uint8Array(W * H); // Wand/Fels: blockiert Sicht und Flächen
   const cover = new Uint8Array(W * H); // Säulen, Statuen …: halbe Deckung
+  const wallE = new Uint8Array(W * H); // dünne Wand zwischen (x,y) und (x+1,y)
+  const wallS = new Uint8Array(W * H); // dünne Wand zwischen (x,y) und (x,y+1)
   if ((d.shapes || []).some((s) => s.op !== 'sub')) {
     const cv = canvasOf('gridmask', W * R, H * R);
     const g = cv.getContext('2d');
     g.setTransform(R, 0, 0, R, 0, 0);
     for (const s of d.shapes) paintShape(g, s, '#fff');
     const data = g.getImageData(0, 0, W * R, H * R).data;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) walk[y * W + x] = data[((y * R + R / 2) * W * R + x * R + R / 2) * 4 + 3] > 127 ? 1 : 0;
+    const at = (px, py) => data[(py * W * R + px) * 4 + 3] > 127;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) walk[y * W + x] = at(x * R + half, y * R + half) ? 1 : 0;
     for (let i = 0; i < walk.length; i++) opaque[i] = walk[i] ? 0 : 1;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (!walk[i]) continue;
+        if (x < W - 1 && walk[i + 1]) { for (let k = 1; k < R; k++) if (!at(x * R + half + k, y * R + half)) { wallE[i] = 1; break; } }
+        if (y < H - 1 && walk[i + W]) { for (let k = 1; k < R; k++) if (!at(x * R + half, y * R + half + k)) { wallS[i] = 1; break; } }
+      }
+    }
   }
   const cells = (x0, y0, x1, y1, fn) => {
     for (let y = Math.max(0, Math.floor(y0)); y <= Math.min(H - 1, Math.ceil(y1)); y++) for (let x = Math.max(0, Math.floor(x0)); x <= Math.min(W - 1, Math.ceil(x1)); x++) fn(x, y);
@@ -702,43 +912,161 @@ export function buildGrid(d) {
     const m = (s.w || 0) / 2 + 1;
     cells(x0 - m, y0 - m, x1 + m, y1 + m, (x, y) => { if (shapeHit(s, x + 0.5, y + 0.5)) mat[y * W + x] = s.op === 'sub' ? null : s.mat; });
   }
-  for (let i = 0; i < mat.length; i++) { if (mat[i] === 'pit') walk[i] = 0; else if (ROUGH_MAT.has(mat[i])) cost[i] = 2; }
+  for (let i = 0; i < mat.length; i++) { if (mat[i] === 'pit') walk[i] = 0; else if (roughMat(mat[i])) cost[i] = 2; }
   for (const o of d.objects || []) {
-    const block = BLOCK_OBJ.has(o.t);
-    if (!block && !ROUGH_OBJ.has(o.t)) continue;
-    const def = OBJ[o.t];
-    const ext = (Math.max(def.w, def.h) * (o.s || 1)) / 2 + 1;
-    cells(o.x - ext, o.y - ext, o.x + ext, o.y + ext, (x, y) => { if (objHit(o, x + 0.5, y + 0.5)) { if (block) { walk[y * W + x] = 0; cover[y * W + x] = 1; } else cost[y * W + x] = 2; } });
+    const m = objMeta(o);
+    if (!m) continue;
+    if (m.door) {
+      // Türen öffnen dünne Wände
+      cells(o.x - 1.5, o.y - 1.5, o.x + 1.5, o.y + 1.5, (x, y) => {
+        if (x < W - 1 && inObj(o, m, x + 1, y + 0.5, 0.25)) wallE[y * W + x] = 0;
+        if (y < H - 1 && inObj(o, m, x + 0.5, y + 1, 0.25)) wallS[y * W + x] = 0;
+      });
+      continue;
+    }
+    if (!m.block && !m.rough) continue;
+    if (m.block && m.layer === 'top') { // Baumkronen: nur der Stamm blockiert
+      const x = Math.floor(o.x);
+      const y = Math.floor(o.y);
+      if (x >= 0 && y >= 0 && x < W && y < H) { walk[y * W + x] = 0; cover[y * W + x] = 1; }
+      continue;
+    }
+    const ext = Math.max(m.w, m.h) / 2 + 1;
+    cells(o.x - ext, o.y - ext, o.x + ext, o.y + ext, (x, y) => {
+      if (!objHit(o, x + 0.5, y + 0.5)) return;
+      const i = y * W + x;
+      if (m.block) { walk[i] = 0; cover[i] = 1; } else cost[i] = Math.max(cost[i], 2);
+    });
   }
-  return { w: W, h: H, walk, cost, opaque, cover };
+  return { w: W, h: H, walk, cost, opaque, cover, wallE, wallS };
 }
 
-// ───────────────────────── Ansicht ─────────────────────────
-function ObjThumb({ t, st }) {
-  const ref = useRef();
-  useEffect(() => {
-    const cv = ref.current;
-    if (!cv) return;
-    const d = window.devicePixelRatio || 1;
-    cv.width = 40 * d;
-    cv.height = 40 * d;
-    const c = cv.getContext('2d');
-    const def = OBJ[t];
-    const k = (32 / Math.max(def.w, def.h, 1)) * d;
-    c.fillStyle = st.floor;
-    c.fillRect(0, 0, cv.width, cv.height);
-    c.setTransform(k, 0, 0, k, cv.width / 2, cv.height / 2);
-    def.draw(c, st);
-  }, [t, st]);
-  return html`<canvas ref=${ref} style="width:40px;height:40px;border-radius:6px" />`;
+// ───────────────────────── Objektbibliothek (Seitenleiste) ─────────────────────────
+const CAT_LABELS = { alle: 'Alle', tueren: 'Türen', bau: 'Bauwerk', dungeon: 'Dungeon', moebel: 'Möbel', behaelter: 'Behälter', licht: 'Licht & Feuer', kueche: 'Küche', deko: 'Deko', werkzeug: 'Werkzeug', natur: 'Pflanzen', fels: 'Felsen', eigene: 'Eigene' };
+const CAT_ORDER = ['alle', 'tueren', 'bau', 'dungeon', 'moebel', 'behaelter', 'licht', 'natur', 'fels', 'kueche', 'deko', 'werkzeug', 'eigene'];
+const CATALOG = [
+  ...Object.entries(PROC).map(([id, p]) => ({ key: `p:${id}`, name: p.name, cat: p.cat, w: p.w, h: p.h, q: `${p.name} ${id}`.toLowerCase() })),
+  ...STAMPS.map((s) => ({ key: `ph:${s.id}`, name: s.name, cat: s.cat, w: s.w, h: s.h, q: `${s.name} ${s.id} ${s.tags || ''}`.toLowerCase() })),
+];
+export const DOOR_KEYS = Object.entries(PROC).filter(([, p]) => p.door).map(([id]) => `p:${id}`);
+const thumbCache = new Map();
+let thumbVer = -1;
+function thumbFor(key) {
+  if (thumbVer !== assetsVersion()) { thumbCache.clear(); thumbVer = assetsVersion(); }
+  if (key.startsWith('u:')) return userThumb(key.slice(2));
+  if (!thumbCache.has(key)) thumbCache.set(key, assetThumb(key));
+  return thumbCache.get(key);
 }
-
+function useAssetVersion() {
+  const [v, setV] = useState(assetsVersion());
+  useEffect(() => onAssets(setV), []);
+  return v;
+}
+function AssetGrid({ value, onPick, items }) {
+  return html`<div class="asset-grid">${items.map((it) => html`<button key=${it.key} type="button" class=${value === it.key ? 'active' : ''} title=${`${it.name} · ${Math.round(it.w * 10) / 10} × ${Math.round(it.h * 10) / 10} Felder`} onClick=${() => onPick(it.key)}>
+    <img src=${thumbFor(it.key)} alt="" loading="lazy" /><span>${it.name}</span>
+  </button>`)}</div>`;
+}
+function AssetPicker({ value, onPick }) {
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState('alle');
+  const ver = useAssetVersion();
+  const items = useMemo(() => {
+    const mine = userAssets().map((m) => ({ key: `u:${m.id}`, name: m.name, cat: 'eigene', w: m.w, h: m.h, q: `${m.name} ${m.cat} ${m.pack}`.toLowerCase() }));
+    const all = cat === 'eigene' ? mine : cat === 'alle' ? [...CATALOG, ...mine] : CATALOG.filter((x) => x.cat === cat);
+    const s = q.trim().toLowerCase();
+    return (s ? all.filter((x) => x.q.includes(s)) : all).slice(0, 700);
+  }, [q, cat, ver]);
+  return html`<div class="stack sm">
+    <div class="row nowrap">
+      <input class="input" placeholder="Objekt suchen …" value=${q} onInput=${(e) => setQ(e.target.value)} />
+      <${IconBtn} icon="upload" title="Eigene Objekte importieren (z. B. Forgotten Adventures)" onClick=${() => openModal(({ close }) => html`<${ImportAssets} close=${close} />`, { title: 'Eigene Objekte', icon: 'upload', size: 'lg' })} />
+    </div>
+    <div class="chips asset-cats">${CAT_ORDER.map((c) => html`<button key=${c} type="button" class=${`chip${cat === c ? ' selected' : ''}`} onClick=${() => setCat(c)}>${CAT_LABELS[c]}</button>`)}</div>
+    <${AssetGrid} value=${value} onPick=${onPick} items=${items} />
+    <div class="tiny faint">${items.length} Objekte · Bibliothek: Poly Haven (CC0) · eigene Pakete bleiben auf diesem Gerät</div>
+  </div>`;
+}
+// Eigene Assets importieren (Dateien oder ganzer Ordner)
+function ImportAssets({ close }) {
+  const ver = useAssetVersion();
+  const [ppc, setPpc] = useState(() => Number(localStorage.getItem('ws.assetPpc')) || 256);
+  const [pack, setPack] = useState('');
+  const [prog, setProg] = useState(null);
+  const packs = useMemo(() => {
+    const m = new Map();
+    for (const a of userAssets()) m.set(a.pack || 'Ohne Paket', (m.get(a.pack || 'Ohne Paket') || 0) + 1);
+    return [...m.entries()];
+  }, [ver]);
+  const run = async (directory) => {
+    const files = await pickFiles({ accept: 'image/*', multiple: true, directory });
+    if (!files.length) return;
+    try { localStorage.setItem('ws.assetPpc', String(ppc)); } catch { /* egal */ }
+    setProg({ n: 0, t: files.length });
+    const n = await importAssetFiles(files, { ppc, pack: pack.trim(), onProgress: (a, b) => setProg({ n: a, t: b }) });
+    setProg(null);
+    toast(n ? `${n} Objekte importiert` : 'Keine Bilder gefunden', n ? 'success' : 'error');
+  };
+  const drop = async (p) => {
+    const list = userAssets().filter((a) => (a.pack || 'Ohne Paket') === p);
+    if (!(await confirmDialog(`„${p}“ mit ${list.length} Objekten von diesem Gerät entfernen?`, { ok: 'Entfernen', danger: true }))) return;
+    await deleteUserAssets(list.map((a) => a.id));
+  };
+  return html`<div class="modal-body stack">
+    <div class="small">Lade Objekte aus Paketen, die du selbst besitzt – etwa von <b>Forgotten Adventures</b> oder <b>Crosshead Studios</b>. Die Bilder bleiben <b>nur auf diesem Gerät</b> (nichts wird hochgeladen). Für Mitspieler backst du die fertige Karte zu einem Bild („Für Spieler backen“).</div>
+    <div class="grid two" style="gap:8px">
+      <${Field} label="Pixel pro Feld" hint="Dungeondraft-/FA-Pakete: meist 256"><input class="input" type="number" min="16" max="1024" value=${ppc} onInput=${(e) => setPpc(Math.max(16, Math.min(1024, Number(e.target.value) || 256)))} /><//>
+      <${Field} label="Paketname (optional)" hint="Sonst der Ordnername"><input class="input" value=${pack} onInput=${(e) => setPack(e.target.value)} placeholder="z. B. FA Dungeon" /><//>
+    </div>
+    <div class="btn-row"><${Btn} icon="image" onClick=${() => run(false)} disabled=${!!prog}>Dateien wählen<//><${Btn} icon="folder" onClick=${() => run(true)} disabled=${!!prog}>Ordner wählen<//></div>
+    ${prog ? html`<div class="small">Importiere … ${prog.n} / ${prog.t}<div class="ws-bar"><span style=${{ width: `${Math.round((prog.n / Math.max(1, prog.t)) * 100)}%` }}></span></div></div>` : null}
+    ${packs.length ? html`<b class="small">Auf diesem Gerät</b><div class="stack sm">${packs.map(([p, n]) => html`<div class="row nowrap" key=${p}><span class="grow ellipsis">${p}</span><span class="badge">${n}</span><${IconBtn} icon="trash" title="Entfernen" onClick=${() => drop(p)} /></div>`)}</div>` : html`<div class="tiny faint">Noch keine eigenen Objekte.</div>`}
+    <div class="tiny faint">Dateinamen mit Größenangabe (z. B. „Table_2x3“) werden erkannt, sonst zählt die Bildgröße. Größe und Verhalten (blockiert / schwieriges Gelände) lassen sich später je Objekt anpassen.</div>
+  </div><div class="modal-foot"><${Btn} kind="primary" onClick=${() => close(null)}>Fertig<//></div>`;
+}
+// Texturwahl
+function TexPick({ close, value, cats }) {
+  const [cat, setCat] = useState('alle');
+  const list = TEXTURES.filter((t) => cats.includes(t.cat) && (cat === 'alle' || t.cat === cat));
+  const labels = { boden: 'Böden', pflaster: 'Pflaster & Wege', gelaende: 'Gelände', wand: 'Wände', dach: 'Dächer' };
+  return html`<div class="modal-body stack">
+    <div class="chips">${['alle', ...cats].map((c) => html`<button key=${c} type="button" class=${`chip${cat === c ? ' selected' : ''}`} onClick=${() => setCat(c)}>${c === 'alle' ? 'Alle' : labels[c] || c}</button>`)}</div>
+    <div class="tex-grid">${list.map((t) => html`<button key=${t.id} type="button" class=${value === t.id ? 'active' : ''} onClick=${() => close(t.id)} title=${t.name}>
+      <img src=${texUrl(t.id, true)} alt="" loading="lazy" /><span>${t.name}</span>
+    </button>`)}</div>
+    <div class="tiny faint">Texturen von Poly Haven (CC0)</div>
+  </div>`;
+}
+const pickTexture = (cats, value) => openModal(({ close }) => html`<${TexPick} close=${close} value=${value} cats=${cats} />`, { title: 'Textur wählen', icon: 'image', size: 'lg' });
+function TexBtn({ label, value, cats, onPick }) {
+  return html`<button type="button" class="tex-btn" onClick=${async () => { const v = await pickTexture(cats, value); if (v) onPick(v); }}>
+    <span class="tex-sw" style=${value ? { backgroundImage: `url(${texUrl(value, true)})` } : {}}></span>
+    <span class="grow"><b>${label}</b><span class="tiny faint">${value ? texName(value) : 'wählen'}</span></span>
+  </button>`;
+}
 function snapTo(v, mode, center) {
   if (mode === 'free') return r2(v);
   if (mode === 'half') return Math.round(v * 2) / 2;
   return center ? Math.floor(v) + 0.5 : Math.round(v);
 }
 
+// ───────────────────────── Gelände-Auswahl ─────────────────────────
+const LIGHT_COLORS = [
+  ['warm', 'Fackel', 'rgba(255,170,80,.5)'],
+  ['kerze', 'Kerze', 'rgba(255,200,120,.38)'],
+  ['kalt', 'Mondlicht', 'rgba(150,190,255,.38)'],
+  ['magie', 'Magie', 'rgba(170,120,255,.45)'],
+  ['gift', 'Grünes Leuchten', 'rgba(120,255,140,.4)'],
+  ['glut', 'Lava', 'rgba(255,110,40,.5)'],
+];
+const terrainGroups = () => [
+  { label: 'Wasser, Lava & Gruben', items: Object.entries(FLUIDS).map(([k, f]) => ({ key: k, label: f.label, color: f.shallow })).concat([{ key: 'difficult', label: 'Schwieriges Gelände', color: 'repeating-linear-gradient(135deg,#7a5a2a 0 3px,transparent 3px 7px)' }]) },
+  { label: 'Untergrund', items: TEXTURES.filter((t) => t.cat === 'gelaende').map((t) => ({ key: `tex:${t.id}`, label: t.name, tex: t.id })) },
+  { label: 'Wege & Pflaster', items: TEXTURES.filter((t) => t.cat === 'pflaster' || t.cat === 'boden').map((t) => ({ key: `tex:${t.id}`, label: t.name, tex: t.id })) },
+];
+const matLabel = (m) => (String(m).startsWith('tex:') ? texName(String(m).slice(4)) : FLUIDS[m]?.label || MATS[m]?.label || m);
+
+// ───────────────────────── Ansicht ─────────────────────────
 export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
   const cid = useStore(app, (s) => s.cid);
@@ -753,14 +1081,26 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const [snap, setSnap] = useState('grid');
   const [width, setWidth] = useState(1);
   const [brushW, setBrushW] = useState(2);
+  const [wallThick, setWallThick] = useState(0.3);
   const [mat, setMat] = useState('water');
-  const [doorType, setDoorType] = useState('door');
-  const [objType, setObjType] = useState('chest');
+  const [shapeTex, setShapeTex] = useState('');
+  const [doorKey, setDoorKey] = useState('p:door');
+  const [objKey, setObjKey] = useState('ph:treasure_chest');
+  const [objScale, setObjScale] = useState(1);
+  const [objRandom, setObjRandom] = useState(false);
+  const [scatterSet, setScatterSet] = useState('gras');
+  const [scatterR, setScatterR] = useState(1.5);
+  const [scatterN, setScatterN] = useState(3);
+  const [lightKind, setLightKind] = useState('warm');
+  const [lightR, setLightR] = useState(5);
   const [textKind, setTextKind] = useState('room');
+  const [matCat, setMatCat] = useState(0);
   const [fogBrush, setFogBrush] = useState(2);
   const [sel, setSel] = useState(null);
   const [side, setSide] = useState(() => !matchMedia('(max-width: 899px)').matches);
   const [measureText, setMeasureText] = useState('');
+  const [busy, setBusy] = useState('');
+  const [showLight, setShowLight] = useState(true);
   const [, setTick] = useState(0);
   const rerender = () => setTick((x) => x + 1);
   const wrapRef = useRef();
@@ -769,7 +1109,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   if (!S.current) {
     S.current = {
       t: { x: 0, y: 0, k: 1 }, w: 0, h: 0, dpr: 1, pointers: new Map(), fitted: false, userMoved: false, dirty: true,
-      cache: document.createElement('canvas'), cacheKey: '', geom: 0, img: null, undo: [], redo: [], localDirty: false,
+      cache: document.createElement('canvas'), cacheKey: '', objCache: document.createElement('canvas'), objKeyC: '',
+      darkCv: document.createElement('canvas'), glowCv: document.createElement('canvas'), lightKey: '', lightOn: null,
+      geom: 0, ver: 0, img: null, bakeImg: null, undo: [], redo: [], localDirty: false, placeRot: 0,
       doc: null, draft: null, fog: null,
     };
   }
@@ -782,17 +1124,33 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   s.snap = snap;
   s.width = width;
   s.brushW = brushW;
+  s.wallThick = wallThick;
   s.mat = mat;
-  s.doorType = doorType;
-  s.objType = objType;
+  s.shapeTex = shapeTex;
+  s.doorKey = doorKey;
+  s.objKey = objKey;
+  s.objScale = objScale;
+  s.objRandom = objRandom;
+  s.scatterSet = scatterSet;
+  s.scatterR = scatterR;
+  s.scatterN = scatterN;
+  s.lightKind = lightKind;
+  s.lightR = lightR;
   s.textKind = textKind;
   s.fogBrush = fogBrush;
+  s.showLight = showLight;
   s.sel = sel;
   s.tokens = tokens;
 
-  const pickDoc = (m) => ({ w: m.w || 36, h: m.h || 26, style: m.style || 'klassisch', gridOn: m.gridOn !== false, hatch: m.hatch ?? 1, bgAlpha: m.bgAlpha ?? 0.5, shapes: m.shapes || [], terrain: m.terrain || [], objects: m.objects || [], labels: m.labels || [] });
+  const pickDoc = (m) => ({
+    w: m.w || 36, h: m.h || 26, style: m.style || 'klassisch', gridOn: m.gridOn !== false, hatch: m.hatch ?? 1, bgAlpha: m.bgAlpha ?? 0.5,
+    outdoor: !!m.outdoor, ground: m.ground || (m.outdoor ? 'leafy_grass' : 'dark_rock'), floorTex: m.floorTex || 'stone_tiles', wallTex: m.wallTex || 'castle_brick_01',
+    wallW: m.wallW || 0, dark: m.dark || 0, soft: m.soft ?? 0.3, roofs: m.roofs !== false,
+    shapes: m.shapes || [], terrain: m.terrain || [], objects: m.objects || [], labels: m.labels || [], lights: m.lights || [],
+  });
   if (!s.doc) s.doc = pickDoc(map);
   s.fogOn = !!map.fog?.enabled;
+  const real = isReal(s.doc);
   const grid = useMemo(() => buildGrid(s.doc), [s.geom, s.doc.w, s.doc.h]);
   const B = useBattle({ cid, mapId: params.id, gm, me, tokens, grid, gridKey: s.geom, redraw: () => { s.dirty = true; }, rerender });
   s.B = B;
@@ -801,6 +1159,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     if (!s.localDirty) {
       s.doc = pickDoc(map);
       s.geom++;
+      s.ver++;
       s.dirty = true;
       rerender();
     }
@@ -808,6 +1167,23 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.dirty = true;
   }, [map]);
   useEffect(() => { s.dirty = true; }, [tokensRaw, gm, mode, sel]);
+  // Spieleransicht: nie im Baumodus bleiben
+  useEffect(() => {
+    if (gm || mode === 'play') return;
+    setMode('play');
+    setTool('pan');
+    setSel(null);
+    s.draft = null;
+    s.dirty = true;
+  }, [gm]);
+  // Texturen und Stempel dieser Karte laden, dann neu zeichnen
+  useEffect(() => {
+    if (!real) return undefined;
+    let stop = false;
+    preloadMap(s.doc, OBJ).then(() => { if (!stop) s.dirty = true; });
+    return () => { stop = true; };
+  }, [s.geom, s.ver, real]);
+  useEffect(() => onAssets(() => { s.dirty = true; }), []);
 
   useEffect(() => {
     s.img = null;
@@ -821,6 +1197,19 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       im.src = u;
     });
   }, [map.fileId]);
+  // Spielerbild (gebackene Karte mit eigenen Objekten)
+  useEffect(() => {
+    s.bakeImg = null;
+    s.geom++;
+    s.dirty = true;
+    if (gm || !map.bake?.fileId) return;
+    fileUrl(cid, map.bake.fileId).then((u) => {
+      if (!u) return;
+      const im = new Image();
+      im.onload = () => { s.bakeImg = im; s.geom++; s.dirty = true; };
+      im.src = u;
+    });
+  }, [map.bake?.fileId, gm]);
 
   const save = useRef(debounce(async () => {
     const d = s.doc;
@@ -848,6 +1237,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     }
     s.doc = { ...s.doc, ...patch };
     if (geom) s.geom++;
+    s.ver++;
     s.localDirty = true;
     s.dirty = true;
     save();
@@ -858,6 +1248,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.redo.push(JSON.stringify(s.doc));
     s.doc = JSON.parse(s.undo.pop());
     s.geom++;
+    s.ver++;
     s.localDirty = true;
     s.dirty = true;
     setSel(null);
@@ -869,6 +1260,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.undo.push(JSON.stringify(s.doc));
     s.doc = JSON.parse(s.redo.pop());
     s.geom++;
+    s.ver++;
     s.localDirty = true;
     s.dirty = true;
     save();
@@ -887,7 +1279,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.dirty = true;
   };
 
-  // Die Karte bleibt immer teilweise im Bild (wie beim Graphen): nur so weit verschieben, dass noch Karte zu sehen ist
+  // Die Karte bleibt immer teilweise im Bild: nur so weit verschieben, dass noch Karte zu sehen ist
   s.clampView = () => {
     const d = s.doc;
     if (!d || s.w < 10) return;
@@ -942,14 +1334,66 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     let settleT = 0;
     const loop = (t) => {
       const d = s.doc;
-      const want = clamp(2 ** Math.ceil(Math.log2(Math.max(8, s.t.k * PX * s.dpr))), 12, 64);
-      const maxCs = Math.sqrt(MAX_CACHE_PX / Math.max(1, d.w * d.h));
+      const st = STYLES[d.style] || STYLES.klassisch;
+      s.real = !!st.real;
+      s.useBake = !s.gm && !!s.bakeImg && usesOwnAssets(d);
+      const aver = assetsVersion();
+      const want = clamp(2 ** Math.ceil(Math.log2(Math.max(8, s.t.k * PX * s.dpr))), 12, s.real ? 96 : 64);
+      const maxCs = Math.sqrt((s.real ? REAL_CACHE_PX : MAX_CACHE_PX) / Math.max(1, d.w * d.h));
       const cs = Math.max(6, Math.min(want, maxCs));
-      const key = `${s.geom}|${cs}|${d.style}`;
-      if (key !== s.cacheKey && (t - settleT > 120 || !s.cacheKey.startsWith(`${s.geom}|`))) {
-        renderStatic(s.cache, d, cs, STYLES[d.style] || STYLES.klassisch, s.img);
+      const busyDraw = s.act && (s.act.kind === 'move' || s.act.kind === 'brush' || s.act.kind === 'drag' || s.act.kind === 'scatter');
+      // Beim Ziehen grob rendern (flüssig), nach dem Loslassen wieder scharf
+      const csStatic = busyDraw ? Math.min(cs, 26) : cs;
+      const key = `${s.geom}|${csStatic}|${d.style}|${aver}|${s.useBake ? 'b' : ''}`;
+      if (key !== s.cacheKey && (t - settleT > 120 || !s.cacheKey.startsWith(`${s.geom}|`)) && (!busyDraw || t - (s.lastStatic || 0) > 140)) {
+        s.maskCv = s.maskCv || document.createElement('canvas');
+        renderStatic(s.cache, d, csStatic, st, s.img, s.useBake ? s.bakeImg : null, { grid: false, maskCv: s.maskCv });
         s.cacheKey = key;
+        s.lastStatic = t;
         s.dirty = true;
+      }
+      if (s.real && !s.useBake) {
+        s.live = s.t.k * PX * s.dpr > cs * 1.45;
+        // Beim Hineinzoomen den sichtbaren Ausschnitt scharf nachzeichnen
+        if (s.live && !busyDraw && t - (s.lastDetail || 0) > 120) {
+          const kpx = s.t.k * PX;
+          const vw = Math.min(d.w, s.w / kpx);
+          const vh = Math.min(d.h, s.h / kpx);
+          const vx = clamp(-s.t.x / kpx, 0, Math.max(0, d.w - vw));
+          const vy = clamp(-s.t.y / kpx, 0, Math.max(0, d.h - vh));
+          const rx = clamp(vx - vw * 0.2, 0, d.w);
+          const ry = clamp(vy - vh * 0.2, 0, d.h);
+          const rw = Math.min(d.w - rx, vw * 1.4);
+          const rh = Math.min(d.h - ry, vh * 1.4);
+          const dcs = Math.min(Math.ceil(kpx * s.dpr), Math.sqrt(6e6 / Math.max(1, rw * rh)));
+          const dd = s.detail;
+          const stale = !dd || dd.geom !== s.geom || dd.aver !== aver || dd.cs < dcs * 0.8
+            || vx < dd.x - 1e-6 || vy < dd.y - 1e-6 || vx + vw > dd.x + dd.w + 1e-6 || vy + vh > dd.y + dd.h + 1e-6;
+          if (stale && dcs > cs * 1.1) {
+            s.detailCv = s.detailCv || document.createElement('canvas');
+            renderReal(s.detailCv, d, dcs, { bg: s.img, rect: { x: rx, y: ry, w: rw, h: rh }, grid: false });
+            s.detail = { cv: s.detailCv, x: rx, y: ry, w: rw, h: rh, cs: dcs, geom: s.geom, aver };
+            s.lastDetail = t;
+            s.dirty = true;
+          }
+        } else if (!s.live && s.detail) {
+          s.detail = null;
+          if (s.detailCv) { s.detailCv.width = 1; s.detailCv.height = 1; }
+          s.dirty = true;
+        }
+        const ok = `${s.ver}|${cs}|${aver}|${s.skipObj || ''}`;
+        if (!s.live && ok !== s.objKeyC && (t - settleT > 120 || !s.objKeyC.startsWith(`${s.ver}|`)) && (!busyDraw || t - (s.lastObj || 0) > 150)) {
+          renderObjects(s.objCache, d, cs, { legacyDefs: OBJ, skip: s.skipObj });
+          s.objKeyC = ok;
+          s.lastObj = t;
+          s.dirty = true;
+        }
+        const lk = `${s.ver}|${aver}|${d.dark}`;
+        if (lk !== s.lightKey) {
+          s.lightOn = renderLighting(s.darkCv, s.glowCv, d, 14, { legacyDefs: OBJ });
+          s.lightKey = lk;
+          s.dirty = true;
+        }
       }
       if (s.zooming) settleT = t;
       s.zooming = false;
@@ -978,7 +1422,10 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     ctx.translate(s.t.x, s.t.y);
     ctx.scale(k, k);
     ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(s.cache, 0, 0, d.w, d.h);
+    if (s.real && s.live && s.detail) ctx.drawImage(s.detail.cv, s.detail.x, s.detail.y, s.detail.w, s.detail.h);
+    if (s.real && !s.useBake && d.gridOn !== false) drawGrid(ctx, s, d, k);
     if (s.mode === 'build') {
       ctx.strokeStyle = 'rgba(120,120,120,.5)';
       ctx.lineWidth = 1 / k;
@@ -986,12 +1433,40 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       ctx.strokeRect(0, 0, d.w, d.h);
       ctx.setLineDash([]);
     }
-    for (const o of d.objects) drawObject(ctx, o, st);
+    if (s.real && !s.useBake) {
+      if (s.live) {
+        const view = { x0: -s.t.x / k, y0: -s.t.y / k, x1: (s.w - s.t.x) / k, y1: (s.h - s.t.y) / k };
+        drawObjects(ctx, d, { legacyDefs: OBJ, skip: s.skipObj, view });
+      } else ctx.drawImage(s.objCache, 0, 0, d.w, d.h);
+      if (s.skipObj) {
+        const o = d.objects.find((x) => x.id === s.skipObj);
+        if (o) drawStampPreview(ctx, o, OBJ, 1);
+      }
+      const lightOn = s.mode === 'play' || s.showLight;
+      if (s.lightOn?.dark && lightOn) ctx.drawImage(s.darkCv, 0, 0, d.w, d.h);
+      if (s.lightOn?.glow && lightOn) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(s.glowCv, 0, 0, d.w, d.h);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    } else if (!s.useBake) {
+      for (const o of d.objects) drawObject(ctx, o, st);
+    }
     for (const l of d.labels) drawLabel(ctx, l, st);
+    // Lichter im Baumodus als kleine Marken
+    if (s.mode === 'build' && s.real) {
+      for (const l of d.lights || []) {
+        circ(ctx, l.x, l.y, 0.16, 'rgba(255,225,170,.95)', 'rgba(0,0,0,.65)', 0.04);
+        if (s.sel?.kind === 'light' && s.sel.id === l.id) {
+          ctx.setLineDash([0.2, 0.15]);
+          circ(ctx, l.x, l.y, l.r || 4, null, '#f5c542', 0.05);
+          ctx.setLineDash([]);
+        }
+      }
+    }
     // Kampf-Ebene: Schablonen, Bewegung, Reichweiten, Tokens, Pings
     if (s.mode === 'play') {
       drawBattle(ctx, s, k);
-      // Nebel
       if (map.fog?.enabled && s.fog) {
         ctx.fillStyle = s.gm ? 'rgba(0,0,0,.5)' : '#000';
         for (let i = 0; i < s.fog.length; i++) {
@@ -1008,23 +1483,25 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       ctx.setLineDash([5 / k, 4 / k]);
       if (sl.kind === 'obj') {
         const o = d.objects.find((x) => x.id === sl.id);
-        if (o) {
-          const def = OBJ[o.t];
+        const m = o && objMeta(o);
+        if (m) {
           ctx.save();
           ctx.translate(o.x, o.y);
           ctx.rotate(((o.r || 0) * Math.PI) / 180);
-          const sc = o.s || 1;
-          ctx.strokeRect((-def.w * sc) / 2 - 0.08, (-def.h * sc) / 2 - 0.08, def.w * sc + 0.16, def.h * sc + 0.16);
+          ctx.strokeRect(-m.w / 2 - 0.08, -m.h / 2 - 0.08, m.w + 0.16, m.h + 0.16);
           ctx.restore();
         }
       } else if (sl.kind === 'label') {
         const l = d.labels.find((x) => x.id === sl.id);
         if (l) ctx.strokeRect(l.x - (l.size || 0.7), l.y - (l.size || 0.7) * 0.7, (l.size || 0.7) * 2, (l.size || 0.7) * 1.4);
+      } else if (sl.kind === 'light') {
+        const l = (d.lights || []).find((x) => x.id === sl.id);
+        if (l) ctx.strokeRect(l.x - 0.3, l.y - 0.3, 0.6, 0.6);
       } else if (sl.kind === 'shape' || sl.kind === 'terrain') {
         const sh = (sl.kind === 'shape' ? d.shapes : d.terrain).find((x) => x.id === sl.id);
         if (sh) {
           tracePath(ctx, sh);
-          if (sh.kind === 'path' || sh.kind === 'brush') { ctx.lineWidth = 2.5 / k; }
+          if (sh.kind === 'path' || sh.kind === 'brush') ctx.lineWidth = 2.5 / k;
           ctx.stroke();
         }
       }
@@ -1051,16 +1528,24 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           ctx.lineWidth = dr.w;
           ctx.lineCap = dr.kind === 'path' ? 'square' : 'round';
           ctx.lineJoin = dr.kind === 'path' ? 'miter' : 'round';
-          ctx.strokeStyle = sub ? 'rgba(229,72,77,.35)' : 'rgba(138,92,245,.35)';
+          ctx.strokeStyle = sub ? 'rgba(229,72,77,.45)' : 'rgba(138,92,245,.35)';
           ctx.stroke();
         }
         for (let i = 0; i < dr.pts.length; i += 2) circ(ctx, dr.pts[i], dr.pts[i + 1], 0.09, '#8a5cf5');
       }
     }
     if (s.hover && s.mode === 'build' && (s.tool === 'door' || s.tool === 'object')) {
-      ctx.globalAlpha = 0.55;
-      drawObject(ctx, s.hover, st);
-      ctx.globalAlpha = 1;
+      if (s.real || s.hover.t === 'stamp') drawStampPreview(ctx, s.hover, OBJ, 0.6);
+      else {
+        ctx.globalAlpha = 0.55;
+        drawObject(ctx, s.hover, st);
+        ctx.globalAlpha = 1;
+      }
+    }
+    if (s.mode === 'build' && s.tool === 'scatter' && s.hoverPt) {
+      ctx.setLineDash([0.2, 0.15]);
+      circ(ctx, s.hoverPt.x, s.hoverPt.y, s.scatterR, 'rgba(138,92,245,.1)', '#8a5cf5', 0.04);
+      ctx.setLineDash([]);
     }
     if (s.measure) {
       const { a, b } = s.measure;
@@ -1076,6 +1561,44 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     ctx.restore();
   }
 
+  // Raster in Bildschirmauflösung, innerhalb der Räume (außen nur bei Außenkarten)
+  function drawGrid(ctx, st2, d, k) {
+    const gw = Math.max(1, Math.round(st2.w * st2.dpr));
+    const gh = Math.max(1, Math.round(st2.h * st2.dpr));
+    const cv = st2.gridCv || (st2.gridCv = document.createElement('canvas'));
+    if (cv.width !== gw || cv.height !== gh) { cv.width = gw; cv.height = gh; }
+    const g = cv.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, gw, gh);
+    g.setTransform(st2.dpr, 0, 0, st2.dpr, 0, 0);
+    g.translate(st2.t.x, st2.t.y);
+    g.scale(k, k);
+    const x0 = Math.max(0, Math.floor(-st2.t.x / k));
+    const x1 = Math.min(d.w, Math.ceil((st2.w - st2.t.x) / k));
+    const y0 = Math.max(0, Math.floor(-st2.t.y / k));
+    const y1 = Math.min(d.h, Math.ceil((st2.h - st2.t.y) / k));
+    if (x1 <= x0 || y1 <= y0) return;
+    const lw = Math.max(0.9, k / 36) / k;
+    for (const [off, col] of [[lw, 'rgba(255,255,255,.16)'], [0, d.outdoor ? 'rgba(0,0,0,.32)' : 'rgba(0,0,0,.45)']]) {
+      g.strokeStyle = col;
+      g.lineWidth = lw;
+      g.beginPath();
+      for (let x = x0; x <= x1; x++) { g.moveTo(x + off, y0); g.lineTo(x + off, y1); }
+      for (let y = y0; y <= y1; y++) { g.moveTo(x0, y + off); g.lineTo(x1, y + off); }
+      g.stroke();
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (st2.maskCv && st2.maskCv.width > 1) {
+      g.globalCompositeOperation = 'destination-in';
+      g.drawImage(st2.maskCv, st2.t.x * st2.dpr, st2.t.y * st2.dpr, d.w * k * st2.dpr, d.h * k * st2.dpr);
+      g.globalCompositeOperation = 'source-over';
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(cv, 0, 0);
+    ctx.restore();
+  }
+
   // ── Eingabe ──
   useEffect(() => {
     const cv = cvRef.current;
@@ -1087,9 +1610,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     const toW = (p) => ({ x: (p.x - s.t.x) / (s.t.k * PX), y: (p.y - s.t.y) / (s.t.k * PX) });
     const zoomAt = (p, f) => {
       const k = clamp(s.t.k * f, 0.05, 8);
-      const real = k / s.t.k;
-      s.t.x = p.x - (p.x - s.t.x) * real;
-      s.t.y = p.y - (p.y - s.t.y) * real;
+      const real2 = k / s.t.k;
+      s.t.x = p.x - (p.x - s.t.x) * real2;
+      s.t.y = p.y - (p.y - s.t.y) * real2;
       s.t.k = k;
       s.clampView();
       s.userMoved = true;
@@ -1097,24 +1620,33 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       s.dirty = true;
     };
     const snapMode = (e) => (e.shiftKey ? 'free' : s.snap);
-    const placeDoor = (w, type) => {
-      const def = OBJ[type];
+    const sizeOf = (key, sc = 1) => {
+      const i = assetInfo(key);
+      return { w: (i?.w || 1) * sc, h: (i?.h || 1) * sc };
+    };
+    const placeDoor = (w, key) => {
+      const { w: dw } = sizeOf(key);
       const fx = w.x - Math.floor(w.x);
       const fy = w.y - Math.floor(w.y);
       const dV = Math.min(fx, 1 - fx);
       const dH = Math.min(fy, 1 - fy);
-      if (dV < dH) return { t: type, x: Math.round(w.x), y: def.w % 2 ? Math.floor(w.y) + 0.5 : Math.round(w.y), r: 90, s: 1 };
-      return { t: type, x: def.w % 2 ? Math.floor(w.x) + 0.5 : Math.round(w.x), y: Math.round(w.y), r: 0, s: 1 };
+      const odd = Math.round(dw) % 2;
+      if (dV < dH) return { id: 'hover', t: 'stamp', a: key, x: Math.round(w.x), y: odd ? Math.floor(w.y) + 0.5 : Math.round(w.y), r: 90, s: 1 };
+      return { id: 'hover', t: 'stamp', a: key, x: odd ? Math.floor(w.x) + 0.5 : Math.round(w.x), y: Math.round(w.y), r: 0, s: 1 };
     };
-    const placeObj = (w, type, e) => {
-      const def = OBJ[type];
+    const placeObj = (w, key, e) => {
+      const sc = s.objScale;
+      const { w: ow, h: oh } = sizeOf(key, sc);
+      const r = s.objRandom ? randInt(0, 359) : s.placeRot;
       const m = snapMode(e);
-      if (m === 'free') return { t: type, x: r2(w.x), y: r2(w.y), r: 0, s: 1 };
-      return { t: type, x: def.w % 2 ? Math.floor(w.x) + 0.5 : Math.round(w.x), y: def.h % 2 ? Math.floor(w.y) + 0.5 : Math.round(w.y), r: 0, s: 1 };
+      if (m === 'free' || ow < 0.9 || oh < 0.9 || s.objRandom) return { id: 'hover', t: 'stamp', a: key, x: r2(w.x), y: r2(w.y), r, s: sc };
+      const near = (v, size) => (Math.round(size) % 2 ? Math.floor(v) + 0.5 : Math.round(v));
+      return { id: 'hover', t: 'stamp', a: key, x: near(w.x, ow), y: near(w.y, oh), r, s: sc };
     };
     const hitAny = (w) => {
       const d = s.doc;
       for (let i = d.labels.length - 1; i >= 0; i--) if (Math.hypot(d.labels[i].x - w.x, d.labels[i].y - w.y) < (d.labels[i].size || 0.7)) return { kind: 'label', id: d.labels[i].id };
+      for (let i = (d.lights || []).length - 1; i >= 0; i--) if (Math.hypot(d.lights[i].x - w.x, d.lights[i].y - w.y) < 0.35) return { kind: 'light', id: d.lights[i].id };
       for (let i = d.objects.length - 1; i >= 0; i--) if (objHit(d.objects[i], w.x, w.y)) return { kind: 'obj', id: d.objects[i].id };
       for (let i = d.terrain.length - 1; i >= 0; i--) if (d.terrain[i].op !== 'sub' && shapeHit(d.terrain[i], w.x, w.y)) return { kind: 'terrain', id: d.terrain[i].id };
       for (let i = d.shapes.length - 1; i >= 0; i--) if (d.shapes[i].op !== 'sub' && shapeHit(d.shapes[i], w.x, w.y)) return { kind: 'shape', id: d.shapes[i].id };
@@ -1137,6 +1669,30 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       s.dirty = true;
       saveFog();
     };
+    // Streu-Pinsel: zufällige Stempel im Kreis
+    const scatterPaint = (w, first) => {
+      const set = SETS[s.scatterSet];
+      if (!set?.keys.length) return;
+      const now2 = performance.now();
+      if (!first && now2 - (s.lastScatter || 0) < 90) return;
+      if (!first && Math.hypot(w.x - (s.lastScatterAt?.x ?? -99), w.y - (s.lastScatterAt?.y ?? -99)) < s.scatterR * 0.6) return;
+      s.lastScatter = now2;
+      s.lastScatterAt = { x: w.x, y: w.y };
+      const add = [];
+      for (let i = 0; i < s.scatterN; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const rr = Math.sqrt(Math.random()) * s.scatterR;
+        const x = w.x + Math.cos(a) * rr;
+        const y = w.y + Math.sin(a) * rr;
+        if (x < 0 || y < 0 || x > s.doc.w || y > s.doc.h) continue;
+        add.push(stampAt(pick(set.keys), x, y, { r: randInt(0, 359), s: rnd(set.s[0], set.s[1]) * s.objScale, fx: Math.random() < 0.5 }));
+      }
+      if (!add.length) return;
+      s.doc = { ...s.doc, objects: [...s.doc.objects, ...add] };
+      s.ver++;
+      s.localDirty = true;
+      s.dirty = true;
+    };
     const finishDraft = () => {
       const dr = s.draft;
       s.draft = null;
@@ -1144,8 +1700,12 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       if ((dr.kind === 'poly' && dr.pts.length < 6) || ((dr.kind === 'path' || dr.kind === 'brush') && dr.pts.length < 2)) { s.dirty = true; return; }
       const item = { id: uid(6), op: dr.op, kind: dr.kind, pts: dr.kind === 'brush' ? simplify(dr.pts, 0.06) : dr.pts.map(r2) };
       if (dr.kind === 'path' || dr.kind === 'brush') item.w = dr.w;
+      if (dr.wall) item.wall = 1;
       if (dr.terrain) commit({ terrain: [...s.doc.terrain, { ...item, mat: dr.mat }] });
-      else commit({ shapes: [...s.doc.shapes, item] });
+      else {
+        if (dr.tex && dr.op !== 'sub') item.tex = dr.tex;
+        commit({ shapes: [...s.doc.shapes, item] });
+      }
     };
     s.finishDraft = finishDraft;
 
@@ -1163,7 +1723,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       const w = toW(p);
       const tl = s.tool;
       const sub = s.op === 'sub' || e.altKey || e.button === 2;
-      if (e.button === 1 || (e.button === 2 && !['room', 'ellipse', 'brush', 'terrain'].includes(tl)) || tl === 'pan' && s.mode === 'build') {
+      if (e.button === 1 || (e.button === 2 && !['room', 'ellipse', 'brush', 'terrain'].includes(tl)) || (tl === 'pan' && s.mode === 'build')) {
         s.act = { kind: 'pan', sx: p.x, sy: p.y, tx: s.t.x, ty: s.t.y };
         return;
       }
@@ -1187,7 +1747,6 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         const lab = s.doc.labels.find((l) => l.noteId && Math.hypot(l.x - w.x, l.y - w.y) < (l.size || 0.7));
         if (lab) { const n = noteById(lab.noteId); if (n) openNote(n.id, { newTab: true }); return; }
         s.act = { kind: 'pan', sx: p.x, sy: p.y, tx: s.t.x, ty: s.t.y, play: true };
-        // Lange drücken = Ping für alle
         clearTimeout(s.lp);
         s.lp = setTimeout(() => { if (s.act?.kind === 'pan' && s.act.play && !s.act.far && s.pointers.size === 1) { ping(s.B, w); s.act = null; } }, 650);
         return;
@@ -1199,6 +1758,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         s.sel = h;
         if (h) {
           s.undo.push(JSON.stringify(s.doc));
+          if (h.kind === 'obj') s.skipObj = h.id;
           s.act = { kind: 'move', h, start: w, orig: JSON.parse(JSON.stringify(s.doc)), moved: false };
         } else s.act = { kind: 'pan', sx: p.x, sy: p.y, tx: s.t.x, ty: s.t.y };
         s.dirty = true;
@@ -1208,42 +1768,54 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         const m = snapMode(e);
         const x = snapTo(w.x, m);
         const y = snapTo(w.y, m);
-        s.draft = { kind: tl === 'ellipse' ? 'ellipse' : 'rect', op: sub ? 'sub' : 'add', pts: [x, y, x, y], terrain: tl === 'terrain', mat: s.mat };
+        s.draft = { kind: tl === 'ellipse' ? 'ellipse' : 'rect', op: sub ? 'sub' : 'add', pts: [x, y, x, y], terrain: tl === 'terrain', mat: s.mat, tex: s.shapeTex };
         s.act = { kind: 'drag' };
         s.dirty = true;
         return;
       }
       if (tl === 'brush' || tl === 'terrain') {
-        s.draft = { kind: 'brush', op: sub ? 'sub' : 'add', pts: [r2(w.x), r2(w.y)], w: s.brushW, terrain: tl === 'terrain', mat: s.mat };
+        s.draft = { kind: 'brush', op: sub ? 'sub' : 'add', pts: [r2(w.x), r2(w.y)], w: s.brushW, terrain: tl === 'terrain', mat: s.mat, tex: s.shapeTex };
         s.act = { kind: 'brush' };
         s.dirty = true;
         return;
       }
-      if (tl === 'poly' || tl === 'path') {
+      if (tl === 'scatter') {
+        s.act = { kind: 'scatter' };
+        s.undo.push(JSON.stringify(s.doc));
+        s.redo = [];
+        scatterPaint(w, true);
+        return;
+      }
+      if (tl === 'poly' || tl === 'path' || tl === 'wall') {
         const m = snapMode(e);
-        const x = snapTo(w.x, m, tl === 'path');
-        const y = snapTo(w.y, m, tl === 'path');
+        const center = tl === 'path';
+        const x = snapTo(w.x, m, center);
+        const y = snapTo(w.y, m, center);
         const dr = s.draft;
-        if (dr && dr.kind === tl) {
+        if (dr && dr.kind === (tl === 'poly' ? 'poly' : 'path') && !!dr.wall === (tl === 'wall')) {
           const n = dr.pts.length;
           if (tl === 'poly' && n >= 6 && Math.hypot(dr.pts[0] - x, dr.pts[1] - y) < 0.3) { finishDraft(); return; }
           if (Math.hypot(dr.pts[n - 2] - x, dr.pts[n - 1] - y) < 0.05) { finishDraft(); return; }
           dr.pts.push(x, y);
-        } else s.draft = { kind: tl, op: sub ? 'sub' : 'add', pts: [x, y], w: s.width };
+        } else if (tl === 'wall') s.draft = { kind: 'path', op: 'sub', pts: [x, y], w: s.wallThick, wall: 1 };
+        else s.draft = { kind: tl, op: sub ? 'sub' : 'add', pts: [x, y], w: s.width, tex: s.shapeTex };
         s.dirty = true;
         rerender();
         return;
       }
       if (tl === 'door') {
-        const o = { id: uid(6), ...placeDoor(w, s.doorType) };
-        commit({ objects: [...s.doc.objects, o] }, { geom: false });
+        commit({ objects: [...s.doc.objects, { ...placeDoor(w, s.doorKey), id: uid(6) }] }, { geom: false });
         return;
       }
       if (tl === 'object') {
         const h = hitAny(w);
         if (h?.kind === 'obj' && e.detail > 1) return;
-        const o = { id: uid(6), ...placeObj(w, s.objType, e) };
-        commit({ objects: [...s.doc.objects, o] }, { geom: false });
+        commit({ objects: [...s.doc.objects, { ...placeObj(w, s.objKey, e), id: uid(6) }] }, { geom: false });
+        return;
+      }
+      if (tl === 'light') {
+        const color = (LIGHT_COLORS.find((c) => c[0] === s.lightKind) || LIGHT_COLORS[0])[2];
+        commit({ lights: [...(s.doc.lights || []), { id: uid(6), x: r2(w.x), y: r2(w.y), r: s.lightR, color }] }, { geom: false });
         return;
       }
       if (tl === 'text') {
@@ -1270,12 +1842,13 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       if (!a) {
         if (s.mode === 'play' && s.B) { s.B.hover = w; if (s.B.pending) s.dirty = true; }
         if (s.mode === 'build' && (s.tool === 'door' || s.tool === 'object') && e.pointerType !== 'touch') {
-          s.hover = s.tool === 'door' ? placeDoor(w, s.doorType) : placeObj(w, s.objType, e);
+          s.hover = s.tool === 'door' ? placeDoor(w, s.doorKey) : placeObj(w, s.objKey, e);
           s.dirty = true;
         } else if (s.hover) { s.hover = null; s.dirty = true; }
+        if (s.mode === 'build' && s.tool === 'scatter') { s.hoverPt = w; s.dirty = true; } else if (s.hoverPt) { s.hoverPt = null; s.dirty = true; }
         if (s.draft && (s.draft.kind === 'poly' || s.draft.kind === 'path')) {
           const m = snapMode(e);
-          s.draft.hover = { x: snapTo(w.x, m, s.draft.kind === 'path'), y: snapTo(w.y, m, s.draft.kind === 'path') };
+          s.draft.hover = { x: snapTo(w.x, m, s.tool === 'path'), y: snapTo(w.y, m, s.tool === 'path') };
           s.dirty = true;
         }
         return;
@@ -1297,6 +1870,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         return;
       }
       if (a.kind === 'fog') { fogPaint(w); return; }
+      if (a.kind === 'scatter') { s.hoverPt = w; scatterPaint(w, false); return; }
       if (a.kind === 'token') {
         if (Math.hypot(p.x - a.sx, p.y - a.sy) > 4) a.moved = true;
         a.t.dragX = w.x - a.off.x;
@@ -1323,18 +1897,21 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         const m = snapMode(e);
         let dx = w.x - a.start.x;
         let dy = w.y - a.start.y;
-        if (m === 'grid') { dx = Math.round(dx); dy = Math.round(dy); } else if (m === 'half') { dx = Math.round(dx * 2) / 2; dy = Math.round(dy * 2) / 2; }
+        const fine = a.h.kind === 'obj' && (objMeta(s.doc.objects.find((x) => x.id === a.h.id) || {})?.w || 1) < 0.9;
+        if (m === 'grid' && !fine) { dx = Math.round(dx); dy = Math.round(dy); } else if (m === 'half' && !fine) { dx = Math.round(dx * 2) / 2; dy = Math.round(dy * 2) / 2; }
         if (dx || dy) a.moved = true;
         const o = a.orig;
         const d = { ...s.doc };
         if (a.h.kind === 'obj') d.objects = o.objects.map((x) => (x.id === a.h.id ? { ...x, x: r2(x.x + dx), y: r2(x.y + dy) } : x));
         if (a.h.kind === 'label') d.labels = o.labels.map((x) => (x.id === a.h.id ? { ...x, x: r2(x.x + dx), y: r2(x.y + dy) } : x));
+        if (a.h.kind === 'light') d.lights = (o.lights || []).map((x) => (x.id === a.h.id ? { ...x, x: r2(x.x + dx), y: r2(x.y + dy) } : x));
         if (a.h.kind === 'shape' || a.h.kind === 'terrain') {
           const key = a.h.kind === 'shape' ? 'shapes' : 'terrain';
           d[key] = o[key].map((x) => (x.id === a.h.id ? { ...x, pts: x.pts.map((v, i) => r2(v + (i % 2 ? dy : dx))) } : x));
           s.geom++;
         }
         s.doc = d;
+        if (a.h.kind === 'light') s.ver++;
         s.dirty = true;
       }
     };
@@ -1354,11 +1931,22 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         return;
       }
       if (a.kind === 'brush') { finishDraft(); return; }
+      if (a.kind === 'scatter') {
+        s.editSeq = (s.editSeq || 0) + 1;
+        s.ver++;
+        s.dirty = true;
+        save();
+        rerender();
+        return;
+      }
       if (a.kind === 'move') {
+        s.skipObj = null;
+        s.objKeyC = '';
         if (a.moved) {
           s.redo = [];
           s.editSeq = (s.editSeq || 0) + 1;
           s.localDirty = true;
+          s.ver++;
           if (a.h.kind === 'shape' || a.h.kind === 'terrain') s.geom++;
           save();
         } else s.undo.pop();
@@ -1389,10 +1977,16 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     };
     const wheel = (e) => {
       e.preventDefault();
+      // Umschalt + Mausrad dreht das Objekt unter dem Zeiger
+      if (e.shiftKey && s.mode === 'build' && (s.tool === 'object' || s.tool === 'door')) {
+        s.placeRot = (((s.placeRot + (e.deltaY < 0 ? 15 : -15)) % 360) + 360) % 360;
+        if (s.hover) { s.hover = { ...s.hover, r: s.placeRot }; s.dirty = true; }
+        return;
+      }
       zoomAt(pos(e), Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
     };
     const ctxmenu = (e) => e.preventDefault();
-    const leave = () => { if (s.hover) { s.hover = null; s.dirty = true; } };
+    const leave = () => { if (s.hover || s.hoverPt) { s.hover = null; s.hoverPt = null; s.dirty = true; } };
     cv.addEventListener('pointerdown', down);
     cv.addEventListener('pointermove', move);
     cv.addEventListener('pointerup', up);
@@ -1431,7 +2025,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       if (e.key === 'Escape') { s.draft = null; setSel(null); s.dirty = true; return; }
       if (e.key === 'Enter' && s.draft) { s.finishDraft?.(); return; }
       if ((e.key === 'Delete' || e.key === 'Backspace') && s.sel) { e.preventDefault(); deleteSel(); return; }
-      if (e.key.toLowerCase() === 'r' && s.sel?.kind === 'obj' && !mod) { rotateSel(e.shiftKey ? -90 : 90); return; }
+      if (e.key.toLowerCase() === 'r' && s.sel?.kind === 'obj' && !mod) { rotateSel(e.shiftKey ? 15 : 90); return; }
+      if (e.key.toLowerCase() === 'f' && s.sel?.kind === 'obj' && !mod) { flipSel(); return; }
+      if ((e.key === '+' || e.key === '-') && s.sel?.kind === 'obj' && !mod) { scaleSel(e.key === '+' ? 1.1 : 1 / 1.1); return; }
       if (mod && e.key.toLowerCase() === 'd' && s.sel) { e.preventDefault(); duplicateSel(); return; }
       if (mod || e.altKey) return;
       const t = BUILD_TOOLS.find((x) => x[3] === e.key.toLowerCase());
@@ -1446,25 +2042,34 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     const d = s.doc;
     if (sel.kind === 'obj') return d.objects.find((x) => x.id === sel.id);
     if (sel.kind === 'label') return d.labels.find((x) => x.id === sel.id);
+    if (sel.kind === 'light') return (d.lights || []).find((x) => x.id === sel.id);
     if (sel.kind === 'shape') return d.shapes.find((x) => x.id === sel.id);
     if (sel.kind === 'terrain') return d.terrain.find((x) => x.id === sel.id);
     return null;
   };
-  const listKey = (k) => ({ obj: 'objects', label: 'labels', shape: 'shapes', terrain: 'terrain' }[k]);
+  const listKey = (k) => ({ obj: 'objects', label: 'labels', shape: 'shapes', terrain: 'terrain', light: 'lights' }[k]);
   const updSel = (patch, geom = false) => {
     if (!sel) return;
     const key = listKey(sel.kind);
-    commit({ [key]: s.doc[key].map((x) => (x.id === sel.id ? { ...x, ...patch } : x)) }, { geom: geom || sel.kind === 'shape' || sel.kind === 'terrain' });
+    commit({ [key]: (s.doc[key] || []).map((x) => (x.id === sel.id ? { ...x, ...patch } : x)) }, { geom: geom || sel.kind === 'shape' || sel.kind === 'terrain' });
   };
   function deleteSel() {
     if (!s.sel) return;
     const key = listKey(s.sel.kind);
-    commit({ [key]: s.doc[key].filter((x) => x.id !== s.sel.id) }, { geom: s.sel.kind === 'shape' || s.sel.kind === 'terrain' });
+    commit({ [key]: (s.doc[key] || []).filter((x) => x.id !== s.sel.id) }, { geom: s.sel.kind === 'shape' || s.sel.kind === 'terrain' });
     setSel(null);
   }
   function rotateSel(deg) {
     const o = s.doc.objects.find((x) => x.id === s.sel?.id);
-    if (o) commit({ objects: s.doc.objects.map((x) => (x.id === o.id ? { ...x, r: (((x.r || 0) + deg) % 360 + 360) % 360 } : x)) }, { geom: false });
+    if (o) commit({ objects: s.doc.objects.map((x) => (x.id === o.id ? { ...x, r: ((((x.r || 0) + deg) % 360) + 360) % 360 } : x)) }, { geom: false });
+  }
+  function flipSel() {
+    const o = s.doc.objects.find((x) => x.id === s.sel?.id);
+    if (o) commit({ objects: s.doc.objects.map((x) => (x.id === o.id ? { ...x, fx: x.fx ? 0 : 1 } : x)) }, { geom: false });
+  }
+  function scaleSel(f) {
+    const o = s.doc.objects.find((x) => x.id === s.sel?.id);
+    if (o) commit({ objects: s.doc.objects.map((x) => (x.id === o.id ? { ...x, s: r2(clamp((x.s || 1) * f, 0.1, 8)) } : x)) }, { geom: false });
   }
   function duplicateSel() {
     const it = selItem();
@@ -1495,11 +2100,38 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     await db.update(col('maps'), params.id, { fog: { ...(map.fog || {}), revealed: s.fog.join('') } }).catch(() => {});
     fit();
   };
-  const exportPng = () => {
+  const exportPng = async () => {
     const d = s.doc;
+    setBusy('png');
+    await preloadMap(d, OBJ).catch(() => {});
     const cs = Math.max(16, Math.min(80, Math.floor(8000 / Math.max(d.w, d.h))));
     const cv = renderMapImage(d, cs, s.img);
-    cv.toBlob((b) => { if (b) download(`${map.name || 'Karte'}.png`, b, 'image/png'); }, 'image/png');
+    cv.toBlob((b) => { if (b) download(`${map.name || 'Karte'}.png`, b, 'image/png'); setBusy(''); }, 'image/png');
+  };
+  // Karte mit eigenen Objekten als Bild für die Mitspieler ablegen
+  const bakeForPlayers = async (quiet) => {
+    const d = s.doc;
+    const own = [...new Set(d.objects.filter((o) => o.t === 'stamp' && String(o.a).startsWith('u:')).map((o) => String(o.a).slice(2)))];
+    if (!own.length) {
+      if (!quiet) toast('Diese Karte nutzt nur die eingebaute Bibliothek – Spieler sehen sie direkt.', 'success');
+      return;
+    }
+    setBusy('bake');
+    try {
+      await ensureUserImages(own);
+      await preloadMap(d, OBJ);
+      const cs = clamp(Math.floor(3600 / Math.max(d.w, d.h)), 14, 64);
+      const cv = renderMapImage(d, cs, s.img);
+      const blob = await new Promise((ok) => cv.toBlob(ok, 'image/webp', 0.86)) || await new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.85));
+      const meta = await saveFile(cid, blob, { name: `${map.name || 'Karte'} (Spielerbild)`, folder: 'Karten', visibility: 'players', maxDim: 4200, kind: 'map', createdBy: me });
+      const old = map.bake?.fileId;
+      await db.update(col('maps'), params.id, { bake: { fileId: meta.id, at: now() } });
+      if (old && old !== meta.id) deleteFile(cid, old).catch(() => {});
+      if (!quiet) toast('Spielerbild gespeichert', 'success');
+    } catch (e) {
+      toast(`Spielerbild fehlgeschlagen: ${e.message}`, 'error');
+    }
+    setBusy('');
   };
   const traceImage = async () => {
     const [f] = await pickFiles({ accept: 'image/*' });
@@ -1541,14 +2173,24 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     const r = await openModal(({ close }) => html`<${TokenForm} close=${close} token=${t} members=${Object.values(vault.get().members)} />`, { title: t.label, icon: 'user' });
     if (r?._delete) { await db.remove(col('tokens'), t.id); selectToken(B, null); } else if (r) await db.update(col('tokens'), t.id, { label: r.label, color: r.color, size: r.size, ownerUid: r.ownerUid || null, visibility: r.visibility });
   };
+  const switchMode = (v) => {
+    setMode(v);
+    setTool(v === 'build' ? 'room' : 'pan');
+    s.draft = null;
+    s.measure = null;
+    setMeasureText('');
+    setSel(null);
+    if (v === 'play' && gm && real && usesOwnAssets(s.doc) && (map.updatedAt || 0) > (map.bake?.at || 0)) bakeForPlayers(true);
+  };
 
   const d = s.doc;
   const st = STYLES[d.style] || STYLES.klassisch;
   const tools = mode === 'build' ? BUILD_TOOLS : gm ? PLAY_TOOLS_GM : PLAY_TOOLS;
   const it = selItem();
+  const itMeta = it && sel?.kind === 'obj' ? objMeta(it) : null;
   const drawTool = ['room', 'ellipse', 'poly', 'path', 'brush', 'terrain'].includes(tool);
   const actions = html`<div class="row nowrap" style="gap:2px">
-    ${gm ? html`<${Segmented} value=${mode} onChange=${(v) => { setMode(v); setTool(v === 'build' ? 'room' : 'pan'); s.draft = null; s.measure = null; setMeasureText(''); setSel(null); }} options=${[{ value: 'build', label: 'Bauen', icon: 'hammer' }, { value: 'play', label: 'Spielen', icon: 'play' }]} />` : null}
+    ${gm ? html`<${Segmented} value=${mode} onChange=${switchMode} options=${[{ value: 'build', label: 'Bauen', icon: 'hammer' }, { value: 'play', label: 'Spielen', icon: 'play' }]} />` : null}
     ${mode === 'build' ? html`<${IconBtn} icon="undo" title="Rückgängig (Strg+Z)" disabled=${!s.undo.length} onClick=${undo} />` : null}
     <${IconBtn} icon="maximize" title="Einpassen" onClick=${fit} />
     ${gm ? html`<${IconBtn} icon="panel-right" title="Seitenleiste" active=${side} onClick=${() => setSide(!side)} /><${IconBtn} icon="settings" title="Karteneinstellungen" onClick=${settingsDialog} />` : null}
@@ -1574,32 +2216,82 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
             ${tool !== 'brush' && tool !== 'terrain' ? html`<div class="row small"><span class="muted">Einrasten</span><${Segmented} value=${snap} onChange=${setSnap} options=${[{ value: 'grid', label: 'Raster' }, { value: 'half', label: '½' }, { value: 'free', label: 'Frei' }]} /></div>` : null}
             ${tool === 'path' ? html`<div class="row small"><span class="muted">Gangbreite</span><${Segmented} value=${width} onChange=${setWidth} options=${[1, 2, 3].map((n) => ({ value: n, label: `${n}` }))} /></div>` : null}
             ${tool === 'brush' || tool === 'terrain' ? html`<div class="row small"><span class="muted" style="width:80px">Pinsel ${brushW}</span><input type="range" min="0.5" max="6" step="0.5" value=${brushW} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setBrushW(Number(e.target.value))} /></div>` : null}
-            ${tool === 'terrain' ? html`<div class="mat-pick">${Object.entries(MATS).map(([k, m2]) => html`<button type="button" class=${mat === k ? 'active' : ''} onClick=${() => setMat(k)} title=${m2.label}><span style=${{ background: k === 'difficult' ? 'repeating-linear-gradient(135deg,#7a5a2a 0 3px,transparent 3px 7px)' : m2.color }}></span>${m2.label}</button>`)}</div>
+            ${real && tool !== 'terrain' ? html`<${TexBtn} label="Bodenbelag" value=${shapeTex || d.floorTex} cats=${['boden', 'pflaster']} onPick=${(v) => setShapeTex(v)} />
+              ${shapeTex ? html`<button type="button" class="ws-link tiny" onClick=${() => setShapeTex('')}>→ Standard der Karte benutzen</button>` : null}` : null}
+            ${tool === 'terrain' ? (real ? html`<div class="stack sm">
+              <div class="chips">${terrainGroups().map((g, gi) => html`<button key=${g.label} type="button" class=${`chip${matCat === gi ? ' selected' : ''}`} onClick=${() => setMatCat(gi)}>${g.label}</button>`)}</div>
+              <div class="tex-grid mini">${(terrainGroups()[matCat] || terrainGroups()[0]).items.map((i2) => html`<button key=${i2.key} type="button" class=${mat === i2.key ? 'active' : ''} title=${i2.label} onClick=${() => setMat(i2.key)}>
+                ${i2.tex ? html`<img src=${texUrl(i2.tex, true)} alt="" loading="lazy" />` : html`<span class="sw" style=${{ background: i2.color }}></span>`}<span>${i2.label}</span></button>`)}</div></div>`
+              : html`<div class="mat-pick">${Object.entries(MATS).map(([k, m2]) => html`<button type="button" class=${mat === k ? 'active' : ''} onClick=${() => setMat(k)} title=${m2.label}><span style=${{ background: k === 'difficult' ? 'repeating-linear-gradient(135deg,#7a5a2a 0 3px,transparent 3px 7px)' : m2.color }}></span>${m2.label}</button>`)}</div>`) : null}
+            ${tool === 'terrain' ? html`<div class="row small"><span class="muted" style="width:80px">Übergang</span><input type="range" min="0" max="1" step="0.05" value=${d.soft ?? 0.3} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ soft: Number(e.target.value) }, { undo: false })} /></div>
               <div class="tiny faint">Tipp: Mit Strg ziehen = rechteckige Fläche.</div>` : null}
           </div>` : null}
-          ${tool === 'door' ? html`<div class="stack sm"><b>Türen</b><div class="obj-pick">${DOORS.map((k) => html`<button type="button" class=${doorType === k ? 'active' : ''} onClick=${() => setDoorType(k)} title=${OBJ[k].label}><${ObjThumb} t=${k} st=${st} /><span>${OBJ[k].label}</span></button>`)}</div></div>` : null}
-          ${tool === 'object' ? html`<div class="stack sm">${OBJ_GROUPS.map(([g, label]) => html`<b>${label}</b><div class="obj-pick">${Object.entries(OBJ).filter(([, o]) => o.group === g).map(([k, o]) => html`<button type="button" class=${objType === k ? 'active' : ''} onClick=${() => setObjType(k)} title=${o.label}><${ObjThumb} t=${k} st=${st} /><span>${o.label}</span></button>`)}</div>`)}</div>` : null}
+          ${tool === 'wall' ? html`<div class="stack sm"><b>Zwischenwand</b>
+            <div class="row small"><span class="muted" style="width:80px">Stärke</span><input type="range" min="0.15" max="0.8" step="0.05" value=${wallThick} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setWallThick(Number(e.target.value))} /></div>
+            <div class="tiny faint">Wände laufen auf den Rasterlinien und halten Bewegung, Sicht und Zauberflächen auf. Türen darauf setzen macht sie passierbar.</div>
+          </div>` : null}
+          ${tool === 'door' ? html`<div class="stack sm"><b>Türen</b><${AssetGrid} value=${doorKey} onPick=${setDoorKey} items=${DOOR_KEYS.map((k) => { const i2 = assetInfo(k); return { key: k, name: i2?.name || k, w: i2?.w || 1, h: i2?.h || 1 }; })} /></div>` : null}
+          ${tool === 'object' ? html`<div class="stack sm">
+            <${AssetPicker} value=${objKey} onPick=${setObjKey} />
+            <div class="row small"><span class="muted" style="width:80px">Größe ${Math.round(objScale * 100) / 100}×</span><input type="range" min="0.2" max="4" step="0.05" value=${objScale} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setObjScale(Number(e.target.value))} /></div>
+            <${Toggle} checked=${objRandom} onChange=${setObjRandom} label="Zufällig drehen" />
+          </div>` : null}
+          ${tool === 'scatter' ? html`<div class="stack sm"><b>Streuen</b>
+            <div class="chips">${Object.entries(SETS).map(([k, v]) => html`<button key=${k} type="button" class=${`chip${scatterSet === k ? ' selected' : ' suggest'}`} onClick=${() => setScatterSet(k)}>${v.label}</button>`)}</div>
+            <div class="row small"><span class="muted" style="width:80px">Radius ${scatterR}</span><input type="range" min="0.5" max="6" step="0.5" value=${scatterR} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setScatterR(Number(e.target.value))} /></div>
+            <div class="row small"><span class="muted" style="width:80px">Dichte ${scatterN}</span><input type="range" min="1" max="12" step="1" value=${scatterN} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setScatterN(Number(e.target.value))} /></div>
+            <div class="row small"><span class="muted" style="width:80px">Größe ${Math.round(objScale * 100) / 100}×</span><input type="range" min="0.3" max="3" step="0.05" value=${objScale} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setObjScale(Number(e.target.value))} /></div>
+          </div>` : null}
+          ${tool === 'light' ? html`<div class="stack sm"><b>Licht</b>
+            <div class="mat-pick">${LIGHT_COLORS.map(([k, label, c]) => html`<button key=${k} type="button" class=${lightKind === k ? 'active' : ''} onClick=${() => setLightKind(k)}><span style=${{ background: c.replace(/[\d.]+\)$/, '1)') }}></span>${label}</button>`)}</div>
+            <div class="row small"><span class="muted" style="width:80px">Radius ${lightR}</span><input type="range" min="1" max="20" step="0.5" value=${lightR} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setLightR(Number(e.target.value))} /></div>
+            <div class="row small"><span class="muted" style="width:80px">Dunkelheit</span><input type="range" min="0" max="0.9" step="0.05" value=${d.dark || 0} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ dark: Number(e.target.value) }, { undo: false, geom: false })} /></div>
+            <${Toggle} checked=${showLight} onChange=${setShowLight} label="Licht beim Bauen zeigen" />
+            <div class="tiny faint">Fackeln, Feuer und Zauberkreise leuchten von selbst. Im Spielmodus wird das Licht immer gezeigt.</div>
+          </div>` : null}
           ${tool === 'text' ? html`<div class="stack sm"><b>Beschriftung</b><${Segmented} value=${textKind} onChange=${setTextKind} options=${[{ value: 'room', label: 'Raumnummer', icon: 'hash' }, { value: 'text', label: 'Text', icon: 'quote' }]} /></div>` : null}
           ${tool === 'select' ? html`<div class="stack sm">
             <b>Auswahl</b>
-            ${!it ? html`<div class="small faint">Tippe ein Objekt, einen Text oder einen Raum an.</div>` : null}
-            ${it && sel.kind === 'obj' ? html`<div class="small"><b>${OBJ[it.t]?.label}</b></div>
-              <div class="btn-row"><${Btn} size="sm" icon="refresh" onClick=${() => rotateSel(90)}>Drehen 90°<//><${Btn} size="sm" kind="ghost" onClick=${() => rotateSel(45)}>45°<//></div>
-              <div class="row small"><span class="muted" style="width:70px">Größe ${it.s || 1}×</span><input type="range" min="0.5" max="3" step="0.25" value=${it.s || 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ s: Number(e.target.value) })} /></div>` : null}
+            ${!it ? html`<div class="small faint">Tippe ein Objekt, ein Licht, einen Text oder einen Raum an.</div>` : null}
+            ${it && sel.kind === 'obj' ? html`<div class="small"><b>${itMeta?.name || 'Objekt'}</b> <span class="faint">${Math.round((itMeta?.w || 1) * 10) / 10} × ${Math.round((itMeta?.h || 1) * 10) / 10} Felder</span></div>
+              <div class="btn-row"><${Btn} size="sm" icon="refresh" onClick=${() => rotateSel(90)}>90°<//><${Btn} size="sm" kind="ghost" onClick=${() => rotateSel(15)}>15°<//><${Btn} size="sm" kind="ghost" onClick=${flipSel}>Spiegeln<//></div>
+              <div class="row small"><span class="muted" style="width:70px">Größe ${Math.round((it.s || 1) * 100) / 100}×</span><input type="range" min="0.1" max="4" step="0.05" value=${it.s || 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ s: Number(e.target.value) })} /></div>
+              <div class="row small"><span class="muted">Ebene</span><${Segmented} value=${it.layer || itMeta?.layer || 'obj'} onChange=${(v) => updSel({ layer: v })} options=${[{ value: 'floor', label: 'Boden' }, { value: 'obj', label: 'Normal' }, { value: 'top', label: 'Oben' }]} /></div>
+              <${Toggle} checked=${it.sh !== false} onChange=${(v) => updSel({ sh: v })} label="Schlagschatten" />
+              ${String(it.a || '').startsWith('u:') ? html`<div class="tiny faint">Eigenes Objekt – gilt für alle Vorkommen:</div>
+                <${Toggle} checked=${!!userAssetInfo(String(it.a).slice(2))?.block} onChange=${(v) => { updateUserAsset(String(it.a).slice(2), { block: v, ...(v ? { rough: false } : {}) }); s.geom++; }} label="Blockiert (undurchdringlich)" />
+                <${Toggle} checked=${!!userAssetInfo(String(it.a).slice(2))?.rough} onChange=${(v) => { updateUserAsset(String(it.a).slice(2), { rough: v }); s.geom++; }} label="Schwieriges Gelände" />` : null}` : null}
+            ${it && sel.kind === 'light' ? html`<div class="small"><b>Lichtquelle</b></div>
+              <div class="mat-pick">${LIGHT_COLORS.map(([k, label, c]) => html`<button key=${k} type="button" class=${it.color === c ? 'active' : ''} onClick=${() => updSel({ color: c })}><span style=${{ background: c.replace(/[\d.]+\)$/, '1)') }}></span>${label}</button>`)}</div>
+              <div class="row small"><span class="muted" style="width:70px">Radius ${it.r || 4}</span><input type="range" min="1" max="20" step="0.5" value=${it.r || 4} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ r: Number(e.target.value) })} /></div>
+              <div class="row small"><span class="muted" style="width:70px">Stärke</span><input type="range" min="0.2" max="1.6" step="0.05" value=${it.i ?? 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ i: Number(e.target.value) })} /></div>` : null}
             ${it && sel.kind === 'label' ? html`<${Field} label="Text"><input class="input" value=${it.text} onInput=${(e) => updSel({ text: e.target.value })} /><//>
               <div class="row small"><span class="muted" style="width:70px">Größe</span><input type="range" min="0.3" max="3" step="0.1" value=${it.size || 0.7} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ size: Number(e.target.value) })} /></div>
               <${Field} label="Notiz verknüpfen (im Spielmodus antippbar)">${it.noteId && noteById(it.noteId) ? html`<span class="chip accent">${noteById(it.noteId).title}<span class="x" onClick=${() => updSel({ noteId: null })}><${Icon} name="x" size=${12} /></span></span>` : html`<${NotePicker} onPick=${(n) => updSel({ noteId: n.id })} />`}<//>` : null}
-            ${it && (sel.kind === 'shape' || sel.kind === 'terrain') ? html`<div class="small"><b>${sel.kind === 'terrain' ? `Gelände: ${MATS[it.mat]?.label}` : { rect: 'Raum', ellipse: 'Runder Raum', poly: 'Polygon', path: 'Gang', brush: 'Pinselstrich' }[it.kind]}</b></div>
-              ${it.kind === 'path' || it.kind === 'brush' ? html`<div class="row small"><span class="muted" style="width:70px">Breite ${it.w}</span><input type="range" min="0.5" max="6" step="0.5" value=${it.w || 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ w: Number(e.target.value) }, true)} /></div>` : null}
-              ${sel.kind === 'terrain' ? html`<${Select} value=${it.mat} onChange=${(v) => updSel({ mat: v }, true)} options=${Object.entries(MATS).map(([k, m2]) => ({ value: k, label: m2.label }))} />` : null}` : null}
+            ${it && (sel.kind === 'shape' || sel.kind === 'terrain') ? html`<div class="small"><b>${sel.kind === 'terrain' ? `Gelände: ${matLabel(it.mat)}` : it.wall ? 'Zwischenwand' : { rect: 'Raum', ellipse: 'Runder Raum', poly: 'Polygon', path: 'Gang', brush: 'Pinselstrich' }[it.kind]}</b></div>
+              ${it.kind === 'path' || it.kind === 'brush' ? html`<div class="row small"><span class="muted" style="width:70px">Breite ${it.w}</span><input type="range" min="0.15" max="6" step="0.05" value=${it.w || 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ w: Number(e.target.value) }, true)} /></div>` : null}
+              ${sel.kind === 'shape' && real && !it.wall ? html`<${TexBtn} label="Bodenbelag" value=${it.tex || d.floorTex} cats=${['boden', 'pflaster']} onPick=${(v) => updSel({ tex: v }, true)} />
+                <${Toggle} checked=${!it.nowall} onChange=${(v) => updSel({ nowall: v ? 0 : 1 }, true)} label="Mit Wand umranden" />
+                <${TexBtn} label=${it.roof ? 'Dach' : 'Dach hinzufügen'} value=${it.roof || 'clay_roof_tiles'} cats=${['dach']} onPick=${(v) => updSel({ roof: v }, true)} />
+                ${it.roof ? html`<button type="button" class="ws-link tiny" onClick=${() => updSel({ roof: '' }, true)}>→ Dach entfernen</button>` : null}` : null}
+              ${sel.kind === 'terrain' ? (real ? html`<div class="tex-grid mini">${terrainGroups().flatMap((g) => g.items).map((i2) => html`<button key=${i2.key} type="button" class=${it.mat === i2.key ? 'active' : ''} title=${i2.label} onClick=${() => updSel({ mat: i2.key }, true)}>
+                  ${i2.tex ? html`<img src=${texUrl(i2.tex, true)} alt="" loading="lazy" />` : html`<span class="sw" style=${{ background: i2.color }}></span>`}<span>${i2.label}</span></button>`)}</div>`
+                : html`<${Select} value=${it.mat} onChange=${(v) => updSel({ mat: v }, true)} options=${Object.entries(MATS).map(([k, m2]) => ({ value: k, label: m2.label }))} />`) : null}` : null}
             ${it ? html`<div class="btn-row"><${Btn} size="sm" icon="copy" onClick=${duplicateSel}>Duplizieren<//><${Btn} size="sm" kind="danger" icon="trash" onClick=${deleteSel}>Löschen<//></div>` : null}
           </div>` : null}
           <details class="scrawl-sec" open=${tool === 'pan' || tool === 'select'}>
             <summary>Karte & Stil</summary>
             <div class="style-pick">${Object.entries(STYLES).map(([k, sv]) => html`<button type="button" class=${d.style === k ? 'active' : ''} onClick=${() => commit({ style: k })}>
-              <span class="sw" style=${{ background: `linear-gradient(135deg, ${sv.bg} 0 45%, ${sv.floor} 45% 70%, ${sv.wall} 70%)` }}></span>${sv.label}</button>`)}</div>
-            <${Toggle} checked=${d.gridOn !== false} onChange=${(v) => commit({ gridOn: v })} label="Raster im Raum" />
-            <div class="row small"><span class="muted" style="width:90px">Schraffur</span><input type="range" min="0" max="2.5" step="0.25" value=${d.hatch ?? 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ hatch: Number(e.target.value) }, { undo: false })} /></div>
+              <span class="sw" style=${{ background: sv.real ? 'linear-gradient(135deg,#3f5a2c 0 45%,#9b8d79 45% 70%,#3a332c 70%)' : `linear-gradient(135deg, ${sv.bg} 0 45%, ${sv.floor} 45% 70%, ${sv.wall} 70%)` }}></span>${sv.label}</button>`)}</div>
+            ${real ? html`
+              <${Toggle} checked=${!!d.outdoor} onChange=${(v) => commit({ outdoor: v, ground: v ? 'leafy_grass' : 'dark_rock' })} label="Außenkarte (Untergrund sichtbar)" />
+              <${TexBtn} label="Untergrund" value=${d.ground} cats=${['gelaende', 'pflaster', 'boden']} onPick=${(v) => commit({ ground: v })} />
+              <${TexBtn} label="Standard-Boden" value=${d.floorTex} cats=${['boden', 'pflaster']} onPick=${(v) => commit({ floorTex: v })} />
+              <${TexBtn} label="Wände" value=${d.wallTex} cats=${['wand']} onPick=${(v) => commit({ wallTex: v })} />
+              <div class="row small"><span class="muted" style="width:90px">Wandstärke</span><input type="range" min="0.15" max="0.8" step="0.05" value=${d.wallW || (d.outdoor ? 0.32 : 0.42)} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ wallW: Number(e.target.value) }, { undo: false })} /></div>
+              <div class="row small"><span class="muted" style="width:90px">Dunkelheit</span><input type="range" min="0" max="0.9" step="0.05" value=${d.dark || 0} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ dark: Number(e.target.value) }, { undo: false, geom: false })} /></div>
+            ` : html`<div class="row small"><span class="muted" style="width:90px">Schraffur</span><input type="range" min="0" max="2.5" step="0.25" value=${d.hatch ?? 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ hatch: Number(e.target.value) }, { undo: false })} /></div>`}
+            <${Toggle} checked=${d.gridOn !== false} onChange=${(v) => commit({ gridOn: v })} label="Raster zeigen" />
             <div class="row small"><span class="muted grow">Größe: ${d.w} × ${d.h} Felder</span><${Btn} size="sm" kind="ghost" onClick=${resize}>Ändern<//></div>
             <div class="row small"><${Btn} size="sm" icon="image" onClick=${traceImage}>${map.fileId ? 'Andere Vorlage' : 'Bild als Vorlage'}<//>
               ${map.fileId ? html`<input type="range" min="0" max="1" step="0.05" value=${d.bgAlpha ?? 0.5} title="Deckkraft der Vorlage" style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ bgAlpha: Number(e.target.value) }, { undo: false })} />` : null}</div>
@@ -1609,7 +2301,10 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
             <div class="chips">${Object.entries(SCRAWL_GENERATORS).map(([k, g]) => html`<button type="button" class="chip suggest" onClick=${() => regenerate(k)}>${g.label}</button>`)}</div>
             <div class="tiny faint">Ersetzt die Karte – mit Strg+Z zurückholbar. Danach frei weiterbauen.</div>
           </details>
-          <div class="btn-row"><${Btn} size="sm" icon="download" onClick=${exportPng}>Als PNG exportieren<//><${Btn} size="sm" kind="ghost" icon="undo" disabled=${!s.redo.length} onClick=${redo}>Wiederholen<//></div>
+          <div class="btn-row"><${Btn} size="sm" icon="download" loading=${busy === 'png'} onClick=${exportPng}>PNG<//>
+            ${real && usesOwnAssets(d) ? html`<${Btn} size="sm" icon="users" loading=${busy === 'bake'} onClick=${() => bakeForPlayers(false)}>Für Spieler backen<//>` : null}
+            <${Btn} size="sm" kind="ghost" icon="undo" disabled=${!s.redo.length} onClick=${redo}>Wiederholen<//></div>
+          ${real && usesOwnAssets(d) ? html`<div class="tiny faint">Diese Karte nutzt eigene Objekte. Sie liegen nur auf diesem Gerät – für die Mitspieler wird ein Kartenbild gespeichert (beim Wechsel in den Spielmodus automatisch).</div>` : null}
         ` : html`
           <b>Nebel des Krieges</b>
           <${Toggle} checked=${!!map.fog?.enabled} onChange=${(v) => db.update(col('maps'), params.id, { fog: { ...(map.fog || {}), revealed: s.fog.join(''), enabled: v } })} label="Nebel aktiv" />
@@ -1627,6 +2322,8 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     </div>
   <//>`;
 }
+const usesOwnAssets = (d) => (d.objects || []).some((o) => o.t === 'stamp' && String(o.a).startsWith('u:'));
+
 
 // Token-Formular (auch von maps.js genutzt)
 export function TokenForm({ close, token, members }) {

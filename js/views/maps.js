@@ -58,7 +58,7 @@ function NewBattleForm({ close }) {
 }
 
 function NewScrawlForm({ close }) {
-  const [f, setF] = useState({ name: 'Neuer Dungeon', w: 36, h: 26, style: 'klassisch', gen: 'dungeon' });
+  const [f, setF] = useState({ name: 'Neue Karte', w: 36, h: 26, style: 'real', gen: 'dungeon' });
   return html`<form onSubmit=${(e) => { e.preventDefault(); close(f); }}><div class="modal-body stack">
     <${Field} label="Name"><input class="input" value=${f.name} onInput=${(e) => setF({ ...f, name: e.target.value })} autoFocus /><//>
     <div class="grid two" style="gap:8px">

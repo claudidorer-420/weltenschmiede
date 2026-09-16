@@ -58,6 +58,19 @@ export function reachable(grid, start, maxCost, { size = 1, blocked = null, W, H
     for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) c = Math.max(c, grid.cost[(y + dy) * w + x + dx] || 1);
     return c;
   };
+  // Dünne Wände zwischen Feldern (wallE: zwischen x und x+1, wallS: zwischen y und y+1)
+  const wE = grid?.wallE;
+  const wS = grid?.wallS;
+  const stepOk = (x, y, dx, dy) => {
+    if (dx) { const ex = dx > 0 ? x + size - 1 : x - 1; for (let k = 0; k < size; k++) if (wE[(y + k) * w + ex]) return false; }
+    if (dy) { const ey = dy > 0 ? y + size - 1 : y - 1; for (let k = 0; k < size; k++) if (wS[ey * w + x + k]) return false; }
+    return true;
+  };
+  const edgeOk = (x, y, dx, dy) => {
+    if (!wE || !wS) return true;
+    if (!dx || !dy) return stepOk(x, y, dx, dy);
+    return stepOk(x, y, dx, 0) && stepOk(x + dx, y, 0, dy) && stepOk(x, y, 0, dy) && stepOk(x, y + dy, dx, 0);
+  };
   const s = start.y * w + start.x;
   if (s < 0 || s >= w * h) return { dist, prev, w, h };
   dist[s] = 0;
@@ -75,6 +88,7 @@ export function reachable(grid, start, maxCost, { size = 1, blocked = null, W, H
         const ny = y + dy;
         if (!fits(nx, ny)) continue;
         if (dx && dy && (!fits(x + dx, y) || !fits(x, y + dy))) continue;
+        if (!edgeOk(x, y, dx, dy)) continue;
         const nd = d + cost(nx, ny);
         if (nd > maxCost) continue;
         const ni = ny * w + nx;
@@ -260,7 +274,19 @@ function lineFree(grid, ax, ay, bx, by, opaque) {
     if (x < 0 || y < 0 || x >= grid.w || y >= grid.h) return false;
     if (opaque(y * grid.w + x)) return false;
   }
+  if (grid.wallE || grid.wallS) for (let i = 1; i < cells.length; i++) if (!edgePass(grid, cells[i - 1], cells[i])) return false;
   return true;
+}
+// Schritt zwischen zwei benachbarten Feldern über eine dünne Wand? (diagonal: frei, wenn ein Winkelweg frei ist)
+function edgePass(g, [x0, y0], [x1, y1]) {
+  const vx = (x, y) => x >= 0 && y >= 0 && x < g.w - 1 && y < g.h && !!g.wallE?.[y * g.w + x];
+  const hy = (x, y) => x >= 0 && y >= 0 && x < g.w && y < g.h - 1 && !!g.wallS?.[y * g.w + x];
+  const mx = Math.min(x0, x1);
+  const my = Math.min(y0, y1);
+  if (x0 !== x1 && y0 === y1) return !vx(mx, y0);
+  if (y0 !== y1 && x0 === x1) return !hy(x0, my);
+  if (x0 === x1) return true;
+  return (!vx(mx, y0) && !hy(x1, my)) || (!hy(x0, my) && !vx(mx, y1));
 }
 const samplePts = (t) => {
   const n = t.size || 1;

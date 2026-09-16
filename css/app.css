@@ -1781,3 +1781,28 @@ button.radio-card b { font-size: 15px; }
 .name-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 10px; border: 1px dashed var(--border-2); background: transparent; color: var(--text-2); font-size: 13px; }
 .name-chip:hover { border-style: solid; border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
 .bc-origin { display: inline-flex; align-items: center; gap: 5px; }
+
+/* Kartenwerkstatt: Objektbibliothek, Texturwahl, kleine Helfer */
+.asset-cats { gap: 4px; }
+.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; max-height: 44vh; overflow-y: auto; padding-right: 2px; }
+.asset-grid button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 3px; border-radius: 10px; border: 1px solid var(--border); font-size: 10.5px; color: var(--text-2); line-height: 1.15; text-align: center; }
+.asset-grid button img { width: 46px; height: 46px; object-fit: contain; border-radius: 7px; background: color-mix(in srgb, var(--text) 7%, transparent); }
+.asset-grid button span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.asset-grid button:hover { border-color: var(--border-2); }
+.asset-grid button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.tex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 8px; }
+.tex-grid.mini { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 5px; max-height: 24vh; overflow-y: auto; }
+.tex-grid button { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); border-radius: 10px; padding: 4px; font-size: 11px; color: var(--text-2); line-height: 1.15; }
+.tex-grid.mini button { font-size: 10px; }
+.tex-grid button img, .tex-grid button .sw { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 7px; display: block; }
+.tex-grid.mini button img, .tex-grid.mini button .sw { aspect-ratio: 1.4; }
+.tex-grid button:hover { border-color: var(--border-2); }
+.tex-grid button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.tex-btn { display: flex; align-items: center; gap: 8px; width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 5px 8px; text-align: left; font-size: 12px; color: var(--text-2); }
+.tex-btn:hover { border-color: var(--border-2); }
+.tex-btn .tex-sw { width: 34px; height: 26px; border-radius: 6px; flex: none; background-size: cover; background-position: center; background-color: var(--bg-2); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
+.tex-btn .grow { display: flex; flex-direction: column; min-width: 0; }
+.tex-btn b { color: var(--text); }
+.ws-bar { height: 6px; border-radius: 4px; background: var(--bg-2); overflow: hidden; margin-top: 4px; }
+.ws-bar span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
+.ws-link { background: none; border: 0; color: var(--accent-2); text-align: left; padding: 0; cursor: pointer; }

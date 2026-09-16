@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Stempel-Studio</title>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+<style>
+  body { font: 13px system-ui, sans-serif; background: #1d1b19; color: #ddd; margin: 12px; }
+  #prev { display: flex; flex-wrap: wrap; gap: 6px; }
+  #prev figure { margin: 0; width: 110px; text-align: center; font-size: 10px; }
+  #prev img { max-width: 100px; max-height: 100px; background: repeating-conic-gradient(#555 0 25%, #444 0 50%) 0 0 / 12px 12px; }
+  #log { white-space: pre-wrap; font: 11px monospace; max-height: 300px; overflow: auto; }
+</style>
+</head>
+<body>
+<h3>Stempel-Studio – Poly Haven (CC0) → Kartenstempel & Texturen</h3>
+<div id="status">bereit</div>
+<div id="prev"></div>
+<pre id="log"></pre>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const $ = (id) => document.getElementById(id);
+const log = (t) => { $('log').textContent += `${t}\n`; };
+const status = (t) => { $('status').textContent = t; };
+const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+let SRC = null;
+let renderer = null;
+let envTex = null;
+const out = { stamps: {}, textures: {} };
+
+async function init() {
+  SRC = await (await fetch('/tools/mapassets.src.json', { cache: 'no-store' })).json();
+  try { Object.assign(out, await (await fetch('/tools/mapassets.gen.json', { cache: 'no-store' })).json()); } catch { /* neu */ }
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  status(`bereit: ${SRC.models.length} Modelle, ${SRC.textures.length} Texturen`);
+}
+
+async function save(path, blob) {
+  const r = await fetch(`/save?path=${encodeURIComponent(path)}`, { method: 'POST', body: blob });
+  if (!r.ok) throw new Error(`Speichern fehlgeschlagen: ${path}`);
+}
+const toBlob = (cv, type = 'image/webp', q = 0.86) => new Promise((ok) => cv.toBlob(ok, type, q));
+
+// Transparente Ränder abschneiden
+function trim(cv, pad = 2) {
+  const g = cv.getContext('2d');
+  const { width: w, height: h } = cv;
+  const d = g.getImageData(0, 0, w, h).data;
+  let x0 = w; let y0 = h; let x1 = -1; let y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return null;
+  x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+  const t = document.createElement('canvas');
+  t.width = x1 - x0 + 1;
+  t.height = y1 - y0 + 1;
+  t.getContext('2d').drawImage(cv, x0, y0, t.width, t.height, 0, 0, t.width, t.height);
+  return { cv: t, x0, y0 };
+}
+function thumb(cv, max = 96) {
+  const k = Math.min(1, max / Math.max(cv.width, cv.height));
+  const t = document.createElement('canvas');
+  t.width = Math.max(1, Math.round(cv.width * k));
+  t.height = Math.max(1, Math.round(cv.height * k));
+  const g = t.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(cv, 0, 0, t.width, t.height);
+  return t;
+}
+// Ränder innen leicht abdunkeln (wirkt wie Umgebungsverdeckung – Kronen und Möbel bekommen Tiefe)
+function innerShade(cv, r, a) {
+  const { width: w, height: h } = cv;
+  const inv = document.createElement('canvas');
+  inv.width = w;
+  inv.height = h;
+  const ig = inv.getContext('2d');
+  ig.fillStyle = '#000';
+  ig.fillRect(0, 0, w, h);
+  ig.globalCompositeOperation = 'destination-out';
+  ig.drawImage(cv, 0, 0);
+  const bl = document.createElement('canvas');
+  bl.width = w;
+  bl.height = h;
+  const bg = bl.getContext('2d');
+  bg.filter = `blur(${r}px)`;
+  bg.drawImage(inv, 0, 0);
+  const g = cv.getContext('2d');
+  g.save();
+  g.globalCompositeOperation = 'source-atop';
+  g.globalAlpha = a;
+  g.drawImage(bl, 0, 0);
+  g.restore();
+}
+// Tiefenpass: tiefer liegende Teile (untere Äste, Sitzflächen) dunkler
+function depthShade(scene, part, cam, cv, k) {
+  const swaps = [];
+  part.traverse((o) => {
+    if (!o.isMesh) return;
+    const m0 = o.material;
+    const dm = [].concat(m0).map((m) => new THREE.MeshDepthMaterial({ map: m.map || null, alphaMap: m.alphaMap || null, alphaTest: m.alphaTest || (m.transparent ? 0.35 : 0), side: THREE.DoubleSide }));
+    swaps.push([o, m0]);
+    o.material = Array.isArray(m0) ? dm : dm[0];
+  });
+  const tm = renderer.toneMapping;
+  const cs = renderer.outputColorSpace;
+  renderer.toneMapping = THREE.NoToneMapping;
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  renderer.render(scene, cam);
+  const d = document.createElement('canvas');
+  d.width = cv.width;
+  d.height = cv.height;
+  d.getContext('2d').drawImage(renderer.domElement, 0, 0, d.width, d.height);
+  renderer.toneMapping = tm;
+  renderer.outputColorSpace = cs;
+  for (const [o, m0] of swaps) { for (const m of [].concat(o.material)) m.dispose(); o.material = m0; }
+  const g = cv.getContext('2d');
+  const img = g.getImageData(0, 0, cv.width, cv.height);
+  const dd = d.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+  const px = img.data;
+  for (let p = 0; p < px.length; p += 4) {
+    if (px[p + 3] < 8 || dd[p + 3] < 8) continue;
+    const f = 1 - k * (1 - dd[p] / 255);
+    px[p] *= f;
+    px[p + 1] *= f;
+    px[p + 2] *= f;
+  }
+  g.putImageData(img, 0, 0);
+}
+function dispose(obj) {
+  obj.traverse((o) => {
+    o.geometry?.dispose?.();
+    for (const m of [].concat(o.material || [])) {
+      for (const v of Object.values(m)) if (v && v.isTexture) v.dispose();
+      m.dispose?.();
+    }
+  });
+}
+
+// Einzelne Varianten erkennen: mehrere nebeneinanderliegende Teile in einer Datei
+function partsOf(scene, force) {
+  let root = scene;
+  while (root.children.length === 1 && root.children[0].children.length > 1) root = root.children[0];
+  if (force === false || root.children.length < 2) return [scene];
+  const boxes = root.children.map((c) => new THREE.Box3().setFromObject(c));
+  const sep2 = boxes.every((a, i) => boxes.every((b, j) => i === j || a.max.x < b.min.x + 0.02 || b.max.x < a.min.x + 0.02 || a.max.z < b.min.z + 0.02 || b.max.z < a.min.z + 0.02));
+  if (!sep2 && force !== true) return [scene];
+  return root.children.filter((c) => !boxes[root.children.indexOf(c)].isEmpty());
+}
+
+async function renderModel(entry) {
+  const files = await (await fetch(`/ph-api/files/${entry.id}`)).json();
+  const g = files.gltf?.['1k']?.gltf || files.gltf?.['2k']?.gltf;
+  if (!g) throw new Error(`kein glTF für ${entry.id}`);
+  const include = g.include || {};
+  const manager = new THREE.LoadingManager();
+  manager.setURLModifier((u) => {
+    for (const [k, v] of Object.entries(include)) if (u.endsWith(k) || u.endsWith(encodeURI(k))) return v.url;
+    return u;
+  });
+  const gltf = await new GLTFLoader(manager).loadAsync(g.url);
+  const scene = new THREE.Scene();
+  scene.environment = envTex;
+  scene.environmentIntensity = 0.75;
+  scene.add(gltf.scene);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
+  sun.position.set(-4, 10, -3);
+  scene.add(sun, new THREE.AmbientLight(0xffffff, 0.2));
+  gltf.scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) { if (m.transparent && m.alphaMap == null) m.alphaTest = m.alphaTest || 0.35; m.side = THREE.DoubleSide; } });
+  gltf.scene.updateMatrixWorld(true);
+  const parts = partsOf(gltf.scene, entry.split);
+  const res = [];
+  for (let i = 0; i < parts.length; i++) {
+    for (const p of parts) p.visible = p === parts[i] || parts.length === 1;
+    const box = new THREE.Box3().setFromObject(parts[i]);
+    const size = box.getSize(new THREE.Vector3());
+    const foot = Math.max(size.x, size.z);
+    if (foot < (SRC.minFoot || 0.18)) continue;
+    const ppm = Math.min(SRC.ppm || 170, (SRC.maxPx || 1024) / foot);
+    const W = Math.max(8, Math.ceil(size.x * ppm)) + 8;
+    const H = Math.max(8, Math.ceil(size.z * ppm)) + 8;
+    const c = box.getCenter(new THREE.Vector3());
+    const hw = W / ppm / 2;
+    const hh = H / ppm / 2;
+    const cam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 19.5, 20.5 + size.y);
+    cam.position.set(c.x, box.max.y + 20, c.z);
+    cam.up.set(0, 0, -1);
+    cam.lookAt(c.x, box.min.y - 1, c.z);
+    const ss = 2;
+    renderer.setSize(W * ss, H * ss, false);
+    renderer.render(scene, cam);
+    const big = renderer.domElement;
+    const cv = document.createElement('canvas');
+    cv.width = W;
+    cv.height = H;
+    const g2 = cv.getContext('2d');
+    g2.imageSmoothingQuality = 'high';
+    g2.filter = 'saturate(1.12) contrast(1.06)';
+    g2.drawImage(big, 0, 0, W, H);
+    g2.filter = 'none';
+    const plant = entry.cat === 'natur';
+    depthShade(scene, parts[i], cam, cv, plant ? 0.55 : entry.cat === 'fels' ? 0.3 : 0.25);
+    innerShade(cv, Math.max(2, Math.round(Math.min(W, H) * 0.025)), plant ? 0.5 : 0.3);
+    const t = trim(cv);
+    if (!t) continue;
+    const id = parts.length > 1 ? `${slug(entry.id)}_${String.fromCharCode(97 + i)}` : slug(entry.id);
+    await save(`assets/stamps/${id}.webp`, await toBlob(t.cv));
+    const th = thumb(t.cv);
+    await save(`assets/stamps/t/${id}.webp`, await toBlob(th, 'image/webp', 0.8));
+    const rec = {
+      id, src: entry.id, name: parts.length > 1 ? `${entry.name} ${i + 1}` : entry.name, cat: entry.cat, tags: entry.tags || '',
+      w: +(t.cv.width / ppm / 1.5).toFixed(3), h: +(t.cv.height / ppm / 1.5).toFixed(3), hM: +size.y.toFixed(2),
+      ...(entry.block ? { block: 1 } : {}), ...(entry.rough ? { rough: 1 } : {}), ...(entry.layer ? { layer: entry.layer } : {}),
+    };
+    out.stamps[id] = rec;
+    res.push(rec);
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<img src="${th.toDataURL()}"><figcaption>${rec.name}<br>${rec.w}×${rec.h}</figcaption>`;
+    $('prev').prepend(fig);
+  }
+  dispose(gltf.scene);
+  return res;
+}
+
+let TEXDIMS = null;
+async function renderTexture(entry) {
+  if (!TEXDIMS) TEXDIMS = await (await fetch('/ph-api/assets?t=textures')).json();
+  const files = await (await fetch(`/ph-api/files/${entry.id}`)).json();
+  const url = files.Diffuse?.['1k']?.jpg?.url || files.Diffuse?.['1k']?.png?.url;
+  if (!url) throw new Error(`keine Diffuse-Textur für ${entry.id}`);
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = url;
+  await img.decode();
+  const n = entry.px || 512;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = n;
+  const g = cv.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, 0, 0, n, n);
+  await save(`assets/tex/${entry.id}.webp`, await toBlob(cv, 'image/webp', 0.82));
+  await save(`assets/tex/t/${entry.id}.webp`, await toBlob(thumb(cv, 96), 'image/webp', 0.8));
+  const dims = TEXDIMS[entry.id]?.dimensions || [2000, 2000];
+  const rec = { id: entry.id, name: entry.name, cat: entry.cat, m: +(dims[0] / 1000).toFixed(2) };
+  out.textures[entry.id] = rec;
+  return rec;
+}
+
+async function saveGen() {
+  await save('tools/mapassets.gen.json', new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
+}
+
+async function runModels(from = 0, to = 9999, { skipDone = true } = {}) {
+  const list = SRC.models.slice(from, to);
+  let n = 0;
+  for (const e of list) {
+    if (skipDone && Object.values(out.stamps).some((s) => s.src === e.id)) continue;
+    status(`Modell ${e.id} (${from + list.indexOf(e) + 1}/${SRC.models.length})`);
+    try { const r = await renderModel(e); log(`✓ ${e.id}: ${r.map((x) => `${x.id} ${x.w}×${x.h}`).join(', ')}`); n++; } catch (err) { log(`✗ ${e.id}: ${err.message}`); }
+    if (n % 5 === 0) await saveGen();
+  }
+  await saveGen();
+  status(`fertig: ${Object.keys(out.stamps).length} Stempel`);
+  return Object.keys(out.stamps).length;
+}
+async function runTextures(from = 0, to = 9999, { skipDone = true } = {}) {
+  for (const e of SRC.textures.slice(from, to)) {
+    if (skipDone && out.textures[e.id]) continue;
+    status(`Textur ${e.id}`);
+    try { const r = await renderTexture(e); log(`✓ Textur ${e.id} (${r.m} m)`); } catch (err) { log(`✗ Textur ${e.id}: ${err.message}`); }
+  }
+  await saveGen();
+  status(`fertig: ${Object.keys(out.textures).length} Texturen`);
+  return Object.keys(out.textures).length;
+}
+
+window.studio = { init, renderModel, renderTexture, runModels, runTextures, saveGen, out, get src() { return SRC; } };
+await init();
+</script>
+</body>
+</html>

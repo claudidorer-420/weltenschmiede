@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["tools/serve.mjs", "5173"],
       "port": 5173
+    },
+    {
+      "name": "stamp-studio",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/stamp-studio.mjs", "5190"],
+      "port": 5190
     }
   ]
 }
