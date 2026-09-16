@@ -68,7 +68,10 @@ async function register(req, env) {
 function loginPage({ params, client, error = '', name = '' }) {
   const hidden = ['client_id', 'redirect_uri', 'state', 'code_challenge', 'code_challenge_method', 'scope', 'resource']
     .map((k) => `<input type="hidden" name="${k}" value="${esc(params.get(k) || '')}">`).join('');
-  const host = (() => { try { return new URL(params.get('redirect_uri')).host; } catch { return '?'; } })();
+  const target = (() => { try { return new URL(params.get('redirect_uri')); } catch { return null; } })();
+  const host = target?.host || '?';
+  // Chrome prüft form-action auch für die Weiterleitung nach dem Absenden → Rücksprung-Adresse erlauben
+  const formAction = `'self'${target ? ` ${target.origin}` : ''}`;
   return new Response(`<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Weltenschmiede verbinden</title><style>
 :root{color-scheme:light dark;--bg:#f5f1ea;--card:#fffdf9;--fg:#2a2420;--muted:#7a6f66;--line:#e2d8cc;--accent:#b8452f}
@@ -89,7 +92,7 @@ ${error ? `<div class="err">${esc(error)}</div>` : ''}
 <label for="s">Geheimwort</label><input id="s" name="secret" type="password" autocomplete="current-password" required minlength="6">
 <button type="submit">Zugriff erlauben</button></form>
 <div class="who">Weiterleitung zu ${esc(host)}</div>
-</main></body></html>`, { headers: { 'content-type': 'text/html; charset=utf-8', 'x-frame-options': 'DENY', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'", 'referrer-policy': 'no-referrer' } });
+</main></body></html>`, { headers: { 'content-type': 'text/html; charset=utf-8', 'x-frame-options': 'DENY', 'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; form-action ${formAction}`, 'referrer-policy': 'no-referrer' } });
 }
 
 async function authorize(req, env) {
