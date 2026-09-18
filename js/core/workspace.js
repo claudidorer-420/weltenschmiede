@@ -189,11 +189,14 @@ export function updateParams(patch) {
 }
 
 // Nach dem Löschen einer Notiz: betroffene Tabs zurücknavigieren oder schließen
-export function forgetNote(noteId) {
+export const forgetNote = (noteId) => forgetView('note', noteId);
+
+// Dasselbe für andere Ansichten mit Kennung (Sitzung, Quest …)
+export function forgetView(view, id) {
   const s = ws.get();
   const tabs = [];
   for (const t of s.tabs) {
-    const stack = t.stack.filter((e) => !(e.view === 'note' && e.params.id === noteId));
+    const stack = t.stack.filter((e) => !(e.view === view && e.params.id === id));
     if (!stack.length) continue;
     tabs.push({ ...t, stack, pos: Math.min(t.pos, stack.length - 1) });
   }

@@ -40,14 +40,21 @@ export function DieIcon({ sides, size = 40, label }) {
   return html`<span class="die-icon" style=${{ width: `${size}px`, height: `${size}px` }} dangerouslySetInnerHTML=${{ __html: dieSvg(k, DICE_COLORS[sides] ? sides : k, label ?? (sides === 100 ? '%' : String(sides))) }} />`;
 }
 
-// ── Würfelschale in der Würfel-Ansicht ──
-export function DiceTray({ roll, onDone, height = 220, hint = 'Würfel antippen und werfen', class: cls = '' }) {
+// Der gewählte Würfel-Skin (Einstellungen → Würfel)
+const skinKey = () => settings.get().diceSkin || 'klassisch';
+
+// Bei der bildschirmfüllenden Schale bleiben die Würfel im oberen Band liegen,
+// damit die Bedienung darunter frei bleibt. Gleiche Rechnung wie --dice-play in app.css.
+export const playBand = () => Math.max(170, Math.min(360, innerHeight * 0.38));
+
+// ── Würfelschale: fest hoch oder (full) über die ganze Ansicht ──
+export function DiceTray({ roll, onDone, height = 220, full = false, hint = 'Würfel antippen und werfen', class: cls = '' }) {
   const ref = useRef();
   const scene = useRef(null);
   const done = useRef(onDone);
   done.current = onDone;
   useEffect(() => {
-    scene.current = createDiceScene(ref.current, { mode: 'tray' });
+    scene.current = createDiceScene(ref.current, { mode: 'tray', skin: skinKey, playH: full ? playBand : null });
     return () => scene.current?.destroy();
   }, []);
   useEffect(() => {
@@ -56,7 +63,7 @@ export function DiceTray({ roll, onDone, height = 220, hint = 'Würfel antippen 
     scene.current.clear();
     scene.current.throwRoll(roll, { persist: true, animate: animOn(), onDone: () => { if (fired) return; fired = true; done.current?.(roll); } });
   }, [roll?.ts]);
-  return html`<div class=${`dice-tray ${cls}${roll ? '' : ' idle'}`} data-hint=${hint} style=${{ height: `${height}px` }}><canvas ref=${ref} class="dice-tray-cv"></canvas></div>`;
+  return html`<div class=${`dice-tray ${cls}${full ? ' full' : ''}${roll ? '' : ' idle'}`} data-hint=${hint} style=${full ? null : { height: `${height}px` }}><canvas ref=${ref} class="dice-tray-cv"></canvas></div>`;
 }
 
 export function diceSummary(r) {
@@ -122,7 +129,7 @@ export function DiceOverlay() {
   const ref = useRef();
   const cards = useStore(tray, (s) => s.cards);
   useEffect(() => {
-    overlay = createDiceScene(ref.current, { mode: 'overlay' });
+    overlay = createDiceScene(ref.current, { mode: 'overlay', skin: skinKey });
     for (const r of waiting.splice(0)) showRollAnimated(r);
     return () => { overlay?.destroy(); overlay = null; };
   }, []);

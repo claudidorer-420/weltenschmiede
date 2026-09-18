@@ -54,7 +54,8 @@ function BlockCard({ b, onChange, onRemove, onMove, customBlocks }) {
   return html`<div class=${`block${b.muted ? ' muted-block' : ''}`} style=${{ '--block-c': def.color || 'var(--accent)' }}>
     <div class="block-head">
       <span class="ttl"><${Icon} name=${def.icon || 'feather'} size=${16} /><span class="ellipsis">${b.label}</span></span>
-      <button type="button" class="weight-dots" title=${`Gewichtung: ${WEIGHT_LABELS[b.weight]} (klicken zum Ändern)`} onClick=${() => onChange({ ...b, weight: (b.weight + 1) % 3 })}>
+      <button type="button" class="weight-dots" title="Klicken zum Ändern" onClick=${() => onChange({ ...b, weight: (b.weight + 1) % 3 })}>
+        <span class="w-lbl">Gewichtung: ${WEIGHT_LABELS[b.weight]}</span>
         ${[0, 1, 2].map((i) => html`<b class=${i <= b.weight ? 'on' : ''}></b>`)}
       </button>
       <${IconBtn} icon="d20" size=${16} class="sm" title="Zufällig wählen" onClick=${() => options.length && onChange({ ...b, values: [...b.values, pick(options)] })} />
@@ -151,11 +152,18 @@ export function ForgeView({ params, tabId }) {
     updateSettings({ forge: { recipes: [...recipes, { id: uid(6), name, config: { ...cfg, contextIds: [] } }] } });
     toast('Rezept gespeichert', 'success');
   };
+  // Rezeptliste: der Mülleimer steht direkt in der Zeile des Rezepts
   const recipeMenu = (e) => openMenu(e, recipes.length ? [
     { header: true, label: 'Rezepte' },
-    ...recipes.map((r) => ({ label: r.name, icon: 'book-open', onClick: () => set({ ...defaultConfig(r.config.typeId), ...r.config }) })),
-    { divider: true },
-    ...recipes.map((r) => ({ label: `„${r.name}“ löschen`, icon: 'trash', danger: true, onClick: () => updateSettings({ forge: { recipes: recipes.filter((x) => x.id !== r.id) } }) })),
+    ...recipes.map((r) => ({
+      label: r.name,
+      icon: 'book-open',
+      onClick: () => set({ ...defaultConfig(r.config.typeId), ...r.config }),
+      trailing: {
+        icon: 'trash', title: `„${r.name}“ löschen`, danger: true,
+        onClick: () => updateSettings({ forge: { recipes: recipes.filter((x) => x.id !== r.id) } }),
+      },
+    })),
   ] : [{ label: 'Noch keine Rezepte gespeichert', disabled: true }]);
 
   const sections = cfg.sections.map((k) => SECTIONS[k]).filter(Boolean);
@@ -214,16 +222,17 @@ export function ForgeView({ params, tabId }) {
   const ctxNotes = cfg.contextIds.map(noteById).filter(Boolean);
   const title = titleFromMarkdown(gen.out, type.label);
 
-  return html`<${ViewFrame} tabId=${tabId} title="Weltenschmiede" actions=${html`<div class="row nowrap" style="gap:2px">
-      <${IconBtn} icon="book-open" title="Rezepte laden" onClick=${recipeMenu} />
-      <${IconBtn} icon="archive" title="Archiv der Welten" onClick=${() => import('../core/workspace.js').then((m) => m.openView('archive'))} />
-    </div>`}>
+  return html`<${ViewFrame} tabId=${tabId} title="Weltenschmiede">
     <div class="page wide">
       <div class="split">
         <div class="stack lg">
-          <div class="page-head" style="margin:0">
+          <div class="page-head head-tools" style="margin:0">
             <h1><${Icon} name="anvil" size=${26} />Weltenschmiede</h1>
             <span class="sub">Kombiniere Themenblöcke, gib der KI deinen Codex als Kontext – und speichere das Ergebnis direkt als verlinkte Notizen.</span>
+            <div class="head-tools-btns">
+              <${IconBtn} icon="book-open" title="Rezepte laden" onClick=${recipeMenu} />
+              <${IconBtn} icon="archive" title="Archiv der Welten" onClick=${() => import('../core/workspace.js').then((m) => m.openView('archive'))} />
+            </div>
           </div>
 
           <div class="gen-types">

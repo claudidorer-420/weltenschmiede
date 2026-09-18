@@ -965,7 +965,8 @@ export function drawObjects(ctx, m, { legacyDefs, skip = null, view = null } = {
     }
     items.push({ o, a, z: LAYERS[o.layer || a.info?.layer || 'obj'] ?? 1 });
   }
-  items.sort((p, q) => p.z - q.z || p.o.y - q.o.y);
+  // Ebene zuerst, dann die selbst gesetzte Reihenfolge (o.z aus der Ebenenliste), zuletzt die Tiefe
+  items.sort((p, q) => p.z - q.z || (p.o.z || 0) - (q.o.z || 0) || p.o.y - q.o.y);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   for (let z = 0; z <= 2; z++) {

@@ -308,11 +308,17 @@ export async function openCampaign(cid) {
   };
   watchShared('notes', (notes) => vault.set((s) => ({ notes, version: s.version + 1, loaded: true })));
   watchShared('files', (files) => vault.set((s) => ({ files, version: s.version + 1 })));
-  if (gm) ensureVisibilityFields(cid).catch(() => {});
+  let mitglieder = '';
   unsubs.push(db.watchCol(col('members', cid), {}, (docs) => {
     const members = {};
     for (const d of docs) members[d.id] = d;
     vault.set({ members });
+    // Bei jeder Änderung der Mitspieler: Altbestand nachrüsten und „und zukünftige Spieler“ ergänzen
+    const key = docs.map((d) => d.id).sort().join(',');
+    if (gm && key !== mitglieder) {
+      mitglieder = key;
+      ensureVisibilityFields(cid).catch(() => {});
+    }
   }, onErr));
   return true;
 }
@@ -343,18 +349,43 @@ export async function deleteCampaign(cid) {
 }
 
 // ───────────────────────── Einladungen & Mitglieder ─────────────────────────
-// Einladungscodes einer Kampagne (nur SL) – werden beim ersten Aufruf angelegt
+// Einladungen gelten 48 Stunden, danach muss ein neuer Code erzeugt werden
+export const INVITE_TTL = 48 * 60 * 60 * 1000;
+const CODE_LEN = { player: 12, gm: 16 };
+
+// Jeder Code wird einmalig vergeben: bei einem (extrem unwahrscheinlichen) Treffer neu würfeln
+async function freshCode(len) {
+  for (let i = 0; i < 6; i += 1) {
+    const c = inviteCode(len);
+    const da = await db.get('invites', c).catch(() => null);
+    if (!da) return c;
+  }
+  return inviteCode(len + 4);
+}
+
+async function makeInvite(cid, name, role) {
+  const code = await freshCode(CODE_LEN[role] || 12);
+  await db.set('invites', code, { campaignId: cid, campaignName: name, role, createdAt: now(), expiresAt: now() + INVITE_TTL });
+  return code;
+}
+
+export const inviteExpired = (d) => !!d?.expiresAt && d.expiresAt <= now();
+
+// Einladungscodes einer Kampagne (nur SL) – beim ersten Aufruf und nach Ablauf neu erzeugt
 export async function getInvitesFor(cid, name = '') {
-  let inv = await db.get(`campaigns/${cid}/gm`, 'invites').catch(() => null);
-  if (inv?.player && inv?.gm) return inv;
-  const player = inviteCode(6);
-  const gm = inviteCode(8);
-  const base = { campaignId: cid, campaignName: name, createdAt: now() };
-  await db.set('invites', player, { ...base, role: 'player' });
-  await db.set('invites', gm, { ...base, role: 'gm' });
-  inv = { player, gm };
-  await db.set(`campaigns/${cid}/gm`, 'invites', inv);
-  return inv;
+  const inv = await db.get(`campaigns/${cid}/gm`, 'invites').catch(() => null);
+  const doc = async (code) => (code ? db.get('invites', code).catch(() => null) : null);
+  const [p, g] = await Promise.all([doc(inv?.player), doc(inv?.gm)]);
+  const pOk = !!p && !inviteExpired(p);
+  const gOk = !!g && !inviteExpired(g);
+  if (pOk && gOk) return { ...inv, playerUntil: p.expiresAt || 0, gmUntil: g.expiresAt || 0 };
+  const player = pOk ? inv.player : await makeInvite(cid, name, 'player');
+  const gm = gOk ? inv.gm : await makeInvite(cid, name, 'gm');
+  if (!pOk && inv?.player) await db.remove('invites', inv.player).catch(() => {});
+  if (!gOk && inv?.gm) await db.remove('invites', inv.gm).catch(() => {});
+  const next = { player, gm, updatedAt: now() };
+  await db.set(`campaigns/${cid}/gm`, 'invites', next);
+  return { ...next, playerUntil: pOk ? p.expiresAt : now() + INVITE_TTL, gmUntil: gOk ? g.expiresAt : now() + INVITE_TTL };
 }
 
 export function getInvites() {
@@ -373,11 +404,10 @@ export async function renewInvite(role) {
   const { cid, campaign } = app.get();
   const inv = await getInvites();
   const old = inv[role];
-  const code = inviteCode(role === 'gm' ? 8 : 6);
-  await db.set('invites', code, { campaignId: cid, campaignName: campaign?.name || '', role, createdAt: now() });
-  await db.set(col('gm'), 'invites', { ...inv, [role]: code });
+  const code = await makeInvite(cid, campaign?.name || '', role);
+  await db.set(col('gm'), 'invites', { player: inv.player, gm: inv.gm, [role]: code, updatedAt: now() });
   if (old) await db.remove('invites', old).catch(() => {});
-  return code;
+  return { code, until: now() + INVITE_TTL };
 }
 
 export async function joinCampaign(code) {
@@ -385,6 +415,7 @@ export async function joinCampaign(code) {
   if (db.mode !== 'cloud') throw new Error('Zum Beitreten muss die Cloud eingerichtet sein.');
   const inv = await db.get('invites', c);
   if (!inv) throw new Error('Diesen Einladungscode gibt es nicht (mehr).');
+  if (inviteExpired(inv)) throw new Error('Dieser Einladungslink ist abgelaufen (48 Stunden). Lass dir bitte einen neuen schicken.');
   const u = app.get().user;
   const existing = await db.get(`campaigns/${inv.campaignId}/members`, u.uid).catch(() => null);
   if (!existing) {
@@ -424,9 +455,15 @@ export function playerLens() {
   return a.role !== 'gm' || a.viewAsPlayer;
 }
 
+// Freigabe „ohne Inhalt“: Spieler bekommen nur die Überschrift – der Text wird hier entfernt,
+// damit er auch in Suche, Rückverweisen, Graph und Tags nicht auftaucht.
+export function stripTeaser(n) {
+  return n && n.teaser && playerLens() ? { ...n, body: '', links: [], tags: [], props: {} } : n;
+}
+
 export function visibleNotes() {
   const player = playerLens();
-  return Object.values(vault.get().notes).filter((n) => !player || n.visibility === 'players');
+  return Object.values(vault.get().notes).filter((n) => !player || n.visibility === 'players').map(stripTeaser);
 }
 
 export function getIndex() {
@@ -485,7 +522,7 @@ export function getIndex() {
 }
 
 export const resolveTitle = (t) => getIndex().resolve(t);
-export const noteById = (id) => vault.get().notes[id] || null;
+export const noteById = (id) => stripTeaser(vault.get().notes[id]) || null;
 
 export const deriveNoteFields = (body) => deriveFields(body);
 export const searchNotes = (query, opts) => searchNoteList(getIndex().notes, query, opts);
@@ -542,14 +579,15 @@ export async function moveNote(id, folder) {
 }
 
 // visibility: 'gm' (nur SL) oder 'players'; only = Liste von Spieler-Kennungen (leer = alle Spieler)
-export async function setNoteVisibility(id, visibility, only = []) {
-  await updateNote(id, visFields(visibility, only));
+export async function setNoteVisibility(id, visibility, only = [], opts = {}) {
+  await updateNote(id, visFields(visibility, only, opts));
 }
 
 // Felder für die Sichtbarkeit eines Dokuments – onlyN wird für die Abfrage der Spieler gebraucht
-export function visFields(visibility, only = []) {
+// future: neue Mitspieler werden später automatisch ergänzt · teaser: Spieler sehen nur die Überschrift
+export function visFields(visibility, only = [], opts = {}) {
   const list = visibility === 'players' ? [...new Set(only.filter(Boolean))] : [];
-  return { visibility, only: list, onlyN: list.length };
+  return { visibility, only: list, onlyN: list.length, future: !!opts.future, teaser: visibility === 'players' && !!opts.teaser };
 }
 
 // Abfragen, mit denen ein Spieler seine sichtbaren Dokumente bekommt (für alle + nur für ihn)
@@ -560,13 +598,24 @@ export function visQueries(uid) {
   ];
 }
 
-// Ältere Dokumente nachrüsten (onlyN fehlt) – läuft einmal je Kampagne bei der SL
+// Ältere Dokumente nachrüsten (onlyN fehlt) und Freigaben „und zukünftige Spieler“ ergänzen –
+// läuft bei der SL beim Öffnen der Kampagne
 export async function ensureVisibilityFields(cid) {
   const cols = ['notes', 'maps', 'quests', 'sessions', 'handouts', 'files', 'pins'];
+  const players = Object.values(vault.get().members || {}).filter((m) => m.role !== 'gm').map((m) => m.uid || m.id).filter(Boolean);
   const ops = [];
   for (const name of cols) {
     const docs = await db.list(col(name, cid), { where: [['visibility', '==', 'players']] }).catch(() => []);
-    for (const d of docs) if (d.onlyN === undefined) ops.push({ op: 'update', col: col(name, cid), id: d.id, data: { only: [], onlyN: 0 } });
+    for (const d of docs) {
+      if (d.onlyN === undefined) ops.push({ op: 'update', col: col(name, cid), id: d.id, data: { only: [], onlyN: 0 } });
+      else if (d.future && d.onlyN > 0) {
+        const fehlt = players.filter((u) => !(d.only || []).includes(u));
+        if (fehlt.length) {
+          const only = [...(d.only || []), ...fehlt];
+          ops.push({ op: 'update', col: col(name, cid), id: d.id, data: { only, onlyN: only.length } });
+        }
+      }
+    }
   }
   if (ops.length) await db.batch(ops).catch(() => {});
   return ops.length;
@@ -668,12 +717,22 @@ export async function deleteFolder(path) {
 }
 
 // ── GM-Geheimnisse (eigene Sammlung, für Spieler unlesbar) ──
+// SL-Geheimnis je Notiz. Standard: nur die Spielleitung – einzeln freigebbar (visibility/only).
 export function watchSecret(noteId, cb) {
-  return db.watchDoc(col('secrets'), noteId, (d) => cb(d?.body || ''), () => cb(''));
+  return db.watchDoc(col('secrets'), noteId, (d) => cb(d || null), () => cb(null));
 }
 export async function saveSecret(noteId, body) {
-  if (!body?.trim()) return db.remove(col('secrets'), noteId).catch(() => {});
-  return db.set(col('secrets'), noteId, { body, updatedAt: now() });
+  if (!body?.trim()) {
+    const alt = await db.get(col('secrets'), noteId).catch(() => null);
+    if (alt?.visibility === 'players') return db.set(col('secrets'), noteId, { ...alt, body: '', updatedAt: now() });
+    return db.remove(col('secrets'), noteId).catch(() => {});
+  }
+  const alt = await db.get(col('secrets'), noteId).catch(() => null);
+  return db.set(col('secrets'), noteId, { ...visFields('gm'), ...(alt || {}), body, updatedAt: now() });
+}
+export async function setSecretVisibility(noteId, visibility, only = [], opts = {}) {
+  const alt = await db.get(col('secrets'), noteId).catch(() => null);
+  return db.set(col('secrets'), noteId, { body: '', ...(alt || {}), ...visFields(visibility, only, opts), updatedAt: now() });
 }
 
 // ── Massenimport (Obsidian, Beispielkampagne, Backup) ──

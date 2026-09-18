@@ -13,7 +13,7 @@ import { fmtMod } from '../lib/dice.js';
 import { CONDITIONS, XP_LEVELS, ALIGNMENTS } from '../data/rules5e.js';
 import {
   AB, AB_NAME, AB_SHORT, ALL_SKILLS, skillName, skillAbility, charMods, rollTraits, resourcesFor, classExtras, spellSlots, classFeatures,
-  findClass, findSpecies, findBackground, findFeat, findWeapon, weaponAttack, ARMOR, ARMOR_TYPE, fmtDist, edOf, totalLevel, perEd, classLevel,
+  findClass, findSpecies, findBackground, findFeat, findWeapon, weaponAttack, ARMOR, ARMOR_TYPE, fmtDist, edOf, totalLevel, perEd, classLevel, RES_INFO,
 } from '../data/chargen.js';
 import { useSpells, damageAt, healAt, healHasMod, fmtDice, damageName, timeShort, rangeShort, levelName, listClassOf } from '../data/spells.js';
 import { CATALOG, CATEGORIES, catalogItem, catalogByName, fmtCost, fmtWeight, carryCapacity, WEAPON_RANGE, weaponReach } from '../data/items.js';
@@ -494,19 +494,39 @@ function VitalsCard({ c, cm, ed, canEdit, unlock, upd, roll20, units, res, hpDel
   </div>`;
 }
 
+// Ressourcenname mit Infotext: Zeiger darüber zeigt ihn kurz, Klick/Tipp öffnet ihn ganz
+function resName(r) {
+  const nach = `Frischt sich nach einer ${r.reset === 'short' ? 'kurzen' : 'langen'} Rast wieder auf${r.max >= 99 ? '' : ` · ${r.max}×`}.`;
+  const txt = RES_INFO[r.key] || 'Begrenzt nutzbare Fähigkeit.';
+  return html`<button type="button" class="res-name" title=${`${txt} ${nach}`}
+    onClick=${() => openModal(() => html`<div class="modal-body stack sm">
+      <p style="margin:0">${txt}</p><div class="small muted">${nach}</div></div>`, { title: r.name, icon: 'zap', size: 'sm' })}>
+    <span>${r.name}</span> <small class="faint">(${r.reset === 'short' ? 'kurze' : 'lange'} Rast)</small><${Icon} name="info" size=${12} />
+  </button>`;
+}
+
 function ConditionsCard({ c, ed, canEdit, upd, res }) {
+  const aktiv = CONDITIONS.filter((x) => (c.conditions || []).includes(x.name));
   return html`<div class="sheet-card stack sm">
     <b><${Icon} name="alert" size=${16} /> Zustände</b>
     <div class="chips">${CONDITIONS.filter((x) => x.name !== 'Erschöpft').map((x) => {
       const on = (c.conditions || []).includes(x.name);
       return html`<button type="button" title=${x.desc} class=${`chip${on ? ' selected' : ' suggest'}`} disabled=${!canEdit} onClick=${() => upd({ conditions: on ? c.conditions.filter((y) => y !== x.name) : [...(c.conditions || []), x.name] })}>${x.name}</button>`;
     })}</div>
+    ${aktiv.length ? html`<div class="stack sm cur-cond">
+      <b class="small"><${Icon} name="alert-triangle" size=${14} /> Aktueller Zustand</b>
+      ${aktiv.map((x) => html`<div class="cur-cond-item" key=${x.name}>
+        <div class="row nowrap"><b class="grow">${x.name}</b>
+          ${canEdit ? html`<${IconBtn} icon="x" size=${13} title=${`${x.name} aufheben`} onClick=${() => upd({ conditions: (c.conditions || []).filter((y) => y !== x.name) })} />` : null}</div>
+        <span class="small muted">${x.desc}</span>
+      </div>`)}
+    </div>` : null}
     <div class="row small"><span class="muted">Erschöpfung</span>
       <${IconBtn} icon="minus" disabled=${!canEdit || !c.exhaustion} onClick=${() => upd({ exhaustion: Math.max(0, (c.exhaustion || 0) - 1) })} /><b>${c.exhaustion || 0}</b><${IconBtn} icon="plus" disabled=${!canEdit || c.exhaustion >= 6} onClick=${() => upd({ exhaustion: Math.min(6, (c.exhaustion || 0) + 1) })} />
       <span class="faint">${ed === '2024' ? `−${2 * (c.exhaustion || 0)} auf W20-Würfe` : c.exhaustion ? 'siehe Regeln (Nachteile je Stufe)' : ''}</span>
     </div>
     ${res.length ? html`<div class="stack sm" style="margin-top:6px"><b><${Icon} name="zap" size=${15} /> Ressourcen</b>
-      ${res.map((r) => html`<div class="res-row"><span class="grow">${r.name} <small class="faint">(${r.reset === 'short' ? 'kurze' : 'lange'} Rast)</small></span>
+      ${res.map((r) => html`<div class="res-row"><span class="grow">${resName(r)}</span>
         <${Pips} max=${r.max >= 99 ? 0 : r.max} used=${c.resUsed?.[r.key] || 0} disabled=${!canEdit} onSet=${(v) => upd({ resUsed: { ...(c.resUsed || {}), [r.key]: Math.max(0, Math.min(r.max, v)) } })} />
         ${r.max >= 99 ? html`<b>unbegrenzt</b>` : null}</div>`)}
     </div>` : null}
@@ -520,6 +540,15 @@ function spellStats(cm, e) {
   return s ? { atk: s.attack, dc: s.dc, mod: cm.mods[s.ability] || 0, ability: s.ability } : { atk: cm.pb, dc: 8 + cm.pb, mod: 0, ability: 'int' };
 }
 const castable = (e) => e.level === 0 || e.prepared || e.always || e.arcanum || e.source;
+
+// Angriff im Detail – wie bei „Aktionen“ und „Sonstiges“ als Popup
+function openAttackDetail({ name, icon = 'swords', art, rows = [], text }) {
+  return openModal(() => html`<div class="modal-body stack sm">
+    ${art ? html`<div class="row" style="justify-content:center">${art}</div>` : null}
+    <div class="det-grid">${rows.filter(Boolean).map(([k, v]) => html`<div class="det-row"><span class="k">${k}</span><span class="v">${v}</span></div>`)}</div>
+    ${text ? html`<div class="small muted">${text}</div>` : null}
+  </div>`, { title: name, icon, size: 'sm' });
+}
 
 function ActionsTab({ c, cm, ed, canEdit, upd, roll20, rollDmg, spells, entries, res }) {
   const [f, setF] = useState('all');
@@ -536,9 +565,9 @@ function ActionsTab({ c, cm, ed, canEdit, upd, roll20, rollDmg, spells, entries,
   const perAction = attacksPerAction(c);
   const FILTERS = [['all', 'Alle'], ['attack', 'Angriffe'], ['action', 'Aktionen'], ['bonus', 'Bonusaktionen'], ['reaction', 'Reaktionen'], ['other', 'Sonstiges'], ['limited', 'Begrenzt']];
 
-  const atkRow = ({ key, art, name, sub, range, hit, onHit, dmg, dmgType, onDmg, extra }) => html`<div class="act-row" key=${key}>
+  const atkRow = ({ key, art, name, sub, range, hit, onHit, dmg, dmgType, onDmg, extra, onInfo }) => html`<div class="act-row" key=${key}>
     <span>${art}</span>
-    <span class="nm"><b>${name}</b><small>${sub}</small></span>
+    <span class=${`nm${onInfo ? ' click' : ''}`} onClick=${onInfo} title=${onInfo ? 'Angriff im Detail' : null}><b>${name}</b><small>${sub}</small></span>
     <span class="rng small">${range}</span>
     <span>${hit != null ? html`<button type="button" class="rollbtn" onClick=${onHit}>${hit}</button>` : null}</span>
     <span class="row nowrap" style="gap:4px">${dmg ? html`<button type="button" class="dmgbtn" onClick=${onDmg}><${DamageTag} type=${dmgType}>${fmtDice(dmg)}<//></button>` : null}${extra || null}</span>
@@ -558,8 +587,29 @@ function ActionsTab({ c, cm, ed, canEdit, upd, roll20, rollDmg, spells, entries,
           hit: fmtMod(a.bonus), onHit: () => roll20(a.bonus, `${a.name} – Angriff`, 'attack'),
           dmg: a.damage, dmgType: DMG_KEY[w.type], onDmg: () => rollDmg(a.damage, `${a.name} – Schaden`),
           extra: a.versatile ? html`<button type="button" class="dmgbtn" title="Zweihändig" onClick=${() => rollDmg(a.versatile, `${a.name} – Schaden (zweihändig)`)}>${fmtDice(a.versatile)}</button>` : null,
+          onInfo: () => openAttackDetail({
+            name: a.name, icon: 'swords',
+            art: html`<${ItemArt} item=${{ name: w.name, ref: `w:${w.key}` }} size=${64} />`,
+            rows: [
+              ['Art', /a/.test(w.p) ? 'Fernkampfwaffe' : 'Nahkampfwaffe'],
+              ['Reichweite', WEAPON_RANGE[w.key] ? `${WEAPON_RANGE[w.key].join(' / ')} m (normal / weit)` : fmtM(weaponReach(w))],
+              ['Angriffswurf', `W20 ${fmtMod(a.bonus)}${a.prof ? '' : ' – ungeübt, kein Übungsbonus'}`],
+              ['Schaden', `${fmtDice(a.damage)} ${w.type || ''}`],
+              a.versatile && ['Zweihändig', `${fmtDice(a.versatile)} ${w.type || ''}`],
+              a.props && ['Eigenschaften', a.props],
+              ed === '2024' && a.mastery && ['Meisterschaft', a.mastery],
+              w.weight != null && ['Gewicht', `${w.weight} kg`],
+            ],
+            text: `Der Angriffswurf ist W20 + Attributsmodifikator + Übungsbonus (${cm.pb >= 0 ? '+' : ''}${cm.pb}). Der Schaden wird um denselben Attributsmodifikator erhöht. Bei einem kritischen Treffer (natürliche 20) würfelst du die Schadenswürfel doppelt.`,
+          }),
         }))}
-        ${atkRow({ key: 'u', art: html`<${ItemArt} item=${{ name: 'Faust', icon: 'fist' }} size=${34} />`, name: unarmed.name, sub: md ? 'Kampfkunst' : 'Nahkampf', range: '1,5 m', hit: fmtMod(unarmed.bonus), onHit: () => roll20(unarmed.bonus, 'Waffenloser Schlag', 'attack'), dmg: unarmed.damage, dmgType: 'bludgeoning', onDmg: () => rollDmg(unarmed.damage, 'Waffenloser Schlag – Schaden') })}
+        ${atkRow({ key: 'u', art: html`<${ItemArt} item=${{ name: 'Faust', icon: 'fist' }} size=${34} />`, name: unarmed.name, sub: md ? 'Kampfkunst' : 'Nahkampf', range: '1,5 m', hit: fmtMod(unarmed.bonus), onHit: () => roll20(unarmed.bonus, 'Waffenloser Schlag', 'attack'), dmg: unarmed.damage, dmgType: 'bludgeoning', onDmg: () => rollDmg(unarmed.damage, 'Waffenloser Schlag – Schaden'),
+          onInfo: () => openAttackDetail({
+            name: 'Waffenloser Schlag', icon: 'fist', art: html`<${ItemArt} item=${{ name: 'Faust', icon: 'fist' }} size=${64} />`,
+            rows: [['Art', 'Nahkampf'], ['Reichweite', '1,5 m'], ['Angriffswurf', `W20 ${fmtMod(unarmed.bonus)}`], ['Schaden', `${fmtDice(unarmed.damage)} Wucht`]],
+            text: md ? 'Mit Kampfkunst schlägst du mit dem Kampfkunstwürfel statt mit 1 + Stärkemodifikator und darfst Stärke oder Geschicklichkeit nehmen.'
+              : 'Ohne Waffe verursachst du 1 + Stärkemodifikator Wuchtschaden. Statt Schaden darfst du auch festhalten oder zu Boden bringen.',
+          }) })}
         ${spellRows.map(({ e, sp }) => {
           const st = spellStats(cm, e);
           const d = damageAt(sp, { charLevel: cm.level });
@@ -570,6 +620,7 @@ function ActionsTab({ c, cm, ed, canEdit, upd, roll20, rollDmg, spells, entries,
             onHit: sp.attack ? () => roll20(st.atk, `${sp.name} – Zauberangriff`, 'attack') : () => toast(`${sp.name}: Ziele machen einen ${AB_NAME[sp.save] || ''}-Rettungswurf gegen SG ${st.dc}.`, 'info'),
             dmg: d ? d.dice : h ? `${h}${healHasMod(sp) ? sg(st.mod) : ''}` : null, dmgType: d?.type,
             onDmg: d ? () => rollDmg(d.dice, `${sp.name} – ${damageName(d.type)}schaden`) : () => rollDmg(`${h}${healHasMod(sp) ? sg(st.mod) : ''}`, `${sp.name} – Heilung`, 'free'),
+            onInfo: () => openSpellDetail(sp, { ed, charLevel: cm.level }),
           });
         })}
         ${attacks.map((a, i) => html`<div class="act-row custom" key=${a.id || i}>
@@ -622,7 +673,7 @@ function ActionsTab({ c, cm, ed, canEdit, upd, roll20, rollDmg, spells, entries,
 
     ${show('limited') ? html`<div class="sheet-card stack sm">
       <h3><${Icon} name="hourglass" size=${13} />Begrenzte Nutzung</h3>
-      ${res.length ? res.map((r) => html`<div class="res-row"><span class="grow">${r.name} <small class="faint">(${r.reset === 'short' ? 'kurze' : 'lange'} Rast)</small></span>
+      ${res.length ? res.map((r) => html`<div class="res-row"><span class="grow">${resName(r)}</span>
         <${Pips} max=${r.max >= 99 ? 0 : r.max} used=${c.resUsed?.[r.key] || 0} disabled=${!canEdit} onSet=${(v) => upd({ resUsed: { ...(c.resUsed || {}), [r.key]: Math.max(0, Math.min(r.max, v)) } })} />
         ${r.max >= 99 ? html`<b>unbegrenzt</b>` : null}</div>`) : html`<div class="small faint">Keine begrenzten Ressourcen.</div>`}
     </div>` : null}

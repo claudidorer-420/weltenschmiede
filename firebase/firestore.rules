@@ -102,8 +102,13 @@ service cloud.firestore {
         }
       }
 
+      // SL-Geheimnisse: standardmäßig nur die Spielleitung; einzeln freigebbar (visibility/only)
+      match /secrets/{id} {
+        allow read: if isGM(cid) || (isMember(cid) && sharedWithMe());
+        allow write: if isGM(cid);
+      }
+
       // Nur Spielleitung
-      match /secrets/{id}    { allow read, write: if isGM(cid); }
       match /gm/{id}         { allow read, write: if isGM(cid); }
       match /trash/{id}      { allow read, write: if isGM(cid); }
       match /monsters/{id}   { allow read, write: if isGM(cid); }

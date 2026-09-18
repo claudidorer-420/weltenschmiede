@@ -245,10 +245,18 @@ function MenuView({ menu }) {
     ${menu.items.map((it) => {
       if (it.divider) return html`<div class="menu-sep" />`;
       if (it.header) return html`<div class="menu-label">${it.label}</div>`;
-      return html`<button type="button" class=${`menu-item${it.danger ? ' danger' : ''}`} disabled=${it.disabled} onClick=${() => { overlay.set({ menu: null }); it.onClick?.(); }}>
+      const btn = html`<button type="button" class=${`menu-item${it.danger ? ' danger' : ''}`} disabled=${it.disabled} onClick=${() => { overlay.set({ menu: null }); it.onClick?.(); }}>
         ${it.icon ? html`<${Icon} name=${it.icon} size=${16} />` : html`<span style="width:16px;flex:none"></span>`}
         <span class="ellipsis">${it.label}</span>${it.hint ? html`<span class="hint">${it.hint}</span>` : null}
       </button>`;
+      // Eintrag mit eigener Nebenschaltfläche (z. B. Mülleimer direkt neben dem Rezept)
+      if (!it.trailing) return btn;
+      const t = it.trailing;
+      return html`<div class="menu-row">${btn}
+        <button type="button" class=${`menu-side${t.danger ? ' danger' : ''}`} title=${t.title || ''} onClick=${(e) => { e.stopPropagation(); overlay.set({ menu: null }); t.onClick?.(); }}>
+          <${Icon} name=${t.icon || 'trash'} size=${15} />
+        </button>
+      </div>`;
     })}
   </div>`;
 }

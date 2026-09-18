@@ -44,3 +44,12 @@ export function matchNames(list, q, limit = 60) {
   }
   return out.sort((a, b) => b[0] - a[0] || a[1].name.localeCompare(b[1].name, 'de')).slice(0, limit).map((x) => x[1]);
 }
+
+// Farbe für ein Genre: feste Farben für die bekannten Welten, für eigene Genres aus dem Namen abgeleitet
+export function originColor(o) {
+  if (!o) return '#8a8f98';
+  if (ORIGIN_COLORS[o]) return ORIGIN_COLORS[o];
+  let h = 0;
+  for (let i = 0; i < o.length; i += 1) h = (h * 31 + o.charCodeAt(i)) % 360;
+  return `hsl(${h} 52% 58%)`;
+}

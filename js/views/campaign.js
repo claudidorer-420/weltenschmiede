@@ -1,10 +1,10 @@
 // Kampagnen-Manager: Sitzungen (Vorbereitung, Live-Notizen, Rückblick mit KI), Quests (Kanban), Mitspieler & Einladungen.
 import { html, useState, useEffect, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { app, vault, col, getInvites, renewInvite, removeMember, setMemberField, myUid, inviteLink } from '../core/app.js';
+import { app, vault, col, getInvites, renewInvite, removeMember, setMemberField, myUid, inviteLink, visFields } from '../core/app.js';
 import { sendEvent } from '../core/relay.js';
 import { db } from '../core/db.js';
-import { openView } from '../core/workspace.js';
+import { openView, forgetView } from '../core/workspace.js';
 import { summarySystemPrompt, prepSystemPrompt, worldContext, notesContext } from '../core/prompts.js';
 import { loadParty } from '../core/party.js';
 import { ViewFrame } from '../ui/frame.js';
@@ -34,6 +34,14 @@ export function SessionsView({ tabId }) {
     await db.set(col('gm'), `session-${id}`, { prep: PREP_TEMPLATE, notes: '' });
     openView('session', { id, title: `Sitzung ${num}` });
   };
+  // Einzelne Sitzung löschen – samt Vorbereitung und Live-Notizen im SL-Bereich
+  const deleteSession = async (s) => {
+    if (!(await confirmDialog(`Sitzung „${s.title}“ wirklich löschen? Vorbereitung, Live-Notizen und Rückblick sind dann weg.`, { danger: true, ok: 'Löschen' }))) return;
+    await db.remove(col('sessions'), s.id);
+    await db.remove(col('gm'), `session-${s.id}`).catch(() => {});
+    forgetView('session', s.id);
+    toast(`„${s.title}“ gelöscht`, 'info');
+  };
   const sorted = list ? sortBy(list, (s) => Number(s.number) || 0, -1) : null;
   return html`<${ViewFrame} tabId=${tabId} title="Sitzungen">
     <div class="page narrow stack lg">
@@ -52,7 +60,8 @@ export function SessionsView({ tabId }) {
         ${sorted.map((s) => html`<div class="session-item" key=${s.id} onClick=${() => openView('session', { id: s.id, title: s.title })}>
           <div class="num">#${s.number || '?'}</div>
           <div><b>${s.title}</b><div class="small muted">${s.date ? fmtDate(new Date(s.date).getTime()) : 'ohne Datum'}${s.recap ? ' · Rückblick vorhanden' : ''}</div></div>
-          <div class="row nowrap">${gm ? html`<span class=${`badge ${s.visibility === 'players' ? 'players' : 'gm'}`}>${s.visibility === 'players' ? 'geteilt' : 'SL'}</span>` : null}<span class=${`badge ${s.status === 'done' ? 'accent' : ''}`}>${s.status === 'done' ? 'gespielt' : 'geplant'}</span></div>
+          <div class="row nowrap">${gm ? html`<span class=${`badge ${s.visibility === 'players' ? 'players' : 'gm'}`}>${s.visibility === 'players' ? 'geteilt' : 'SL'}</span>` : null}<span class=${`badge ${s.status === 'done' ? 'accent' : ''}`}>${s.status === 'done' ? 'gespielt' : 'geplant'}</span>
+            ${gm ? html`<${IconBtn} icon="trash" class="danger" title="Sitzung löschen" onClick=${(e) => { e.stopPropagation(); deleteSession(s); }} />` : null}</div>
         </div>`)}
       </div>`}
     </div>
@@ -150,9 +159,21 @@ const COLUMNS = [
   { id: 'failed', label: 'Gescheitert', icon: 'x' },
 ];
 
+// Kurzform der Freigabe – dieselbe Sprache wie im Codex
+function visHint(q) {
+  if (q.visibility !== 'players') return 'Nur die Spielleitung';
+  const wer = (q.only || []).length ? `${q.only.length} Mitspieler` : 'Alle Spieler';
+  return `${wer}${q.teaser ? ' · nur der Titel' : ''}${q.future && (q.only || []).length ? ' · auch spätere' : ''}`;
+}
+
 function QuestForm({ close, quest }) {
   const gm = app.get().role === 'gm';
   const [q, setQ] = useState({ title: '', status: 'open', description: '', giver: '', reward: '', visibility: 'gm', ...quest });
+  const shareQuest = async () => {
+    const { shareDialog } = await import('./codex.js');
+    const r = await shareDialog(q);
+    if (r) setQ({ ...q, ...visFields(r.visibility, r.only, r) });
+  };
   const secret = useDoc(quest?.id ? col('gm') : null, quest?.id ? `quest-${quest.id}` : null);
   const [gmNote, setGmNote] = useState(null);
   useEffect(() => { if (secret !== undefined && gmNote === null) setGmNote(secret?.body || ''); }, [secret]);
@@ -174,7 +195,12 @@ function QuestForm({ close, quest }) {
       <${Field} label="Belohnung"><input class="input" value=${q.reward} onInput=${(e) => setQ({ ...q, reward: e.target.value })} placeholder="z. B. 150 gp" /><//>
     </div>
     <${Field} label="Beschreibung (Markdown, [[Links]])"><${AutoTextarea} value=${q.description} minRows=${4} onInput=${(e) => setQ({ ...q, description: e.target.value })} /><//>
-    <${Field} label="Sichtbarkeit"><${Segmented} value=${q.visibility} onChange=${(v) => setQ({ ...q, visibility: v })} options=${[{ value: 'gm', label: 'Nur SL', icon: 'lock' }, { value: 'players', label: 'Im Quest-Log der Spieler', icon: 'users' }]} /><//>
+    <${Field} label="Für wen sichtbar?" hint="Wie im Codex: nur SL, alle Spieler oder ausgewählte – mit „und zukünftige Spieler“ und „ohne Inhalt“.">
+      <div class="row nowrap">
+        <${Btn} size="sm" icon=${q.visibility === 'players' ? ((q.only || []).length ? 'user' : 'users') : 'lock'} onClick=${shareQuest}>Freigabe ändern<//>
+        <span class="small muted">${visHint(q)}</span>
+      </div>
+    <//>
     ${gm ? html`<${Field} label="SL-Notizen (geheim)"><${AutoTextarea} value=${gmNote ?? ''} minRows=${2} onInput=${(e) => setGmNote(e.target.value)} placeholder="Was wirklich dahintersteckt …" /><//>` : null}
   </div>
   <div class="modal-foot">
@@ -202,11 +228,34 @@ export function QuestsView({ tabId }) {
       toast('Verschoben – die Spielleitung übernimmt es, sobald sie online ist.', 'info');
     }
   };
+  const deleteQuest = async (q) => {
+    if (!(await confirmDialog(`Quest „${q.title}“ löschen?`, { danger: true, ok: 'Löschen' }))) return;
+    await db.remove(col('quests'), q.id);
+    await db.remove(col('gm'), `quest-${q.id}`).catch(() => {});
+    toast(`„${q.title}“ gelöscht`, 'info');
+  };
+  const shareQuestDirect = async (q) => {
+    const { shareDialog } = await import('./codex.js');
+    const r = await shareDialog(q);
+    if (r) await db.update(col('quests'), q.id, { ...visFields(r.visibility, r.only, r), updatedAt: now() });
+  };
   const moveMenu = (e, q) => {
     e.stopPropagation();
-    openMenu(e, [{ header: true, label: 'Verschieben nach' }, ...COLUMNS.map((c) => ({ label: c.label, icon: (q.status || 'open') === c.id ? 'check' : c.icon, onClick: () => move(q.id, c.id) }))]);
+    openMenu(e, [
+      { header: true, label: 'Verschieben nach' },
+      ...COLUMNS.map((c) => ({ label: c.label, icon: (q.status || 'open') === c.id ? 'check' : c.icon, onClick: () => move(q.id, c.id) })),
+      ...(gm ? [
+        { divider: true },
+        { label: 'Bearbeiten …', icon: 'pencil', onClick: () => editQuest(q) },
+        { label: 'Freigabe für Spieler …', icon: 'users', hint: visHint(q), onClick: () => shareQuestDirect(q) },
+        { divider: true },
+        { label: 'Löschen', icon: 'trash', danger: true, onClick: () => deleteQuest(q) },
+      ] : []),
+    ]);
   };
-  const showQuest = (q) => openModal(() => html`<div class="modal-body"><${MarkdownView} src=${`${q.giver ? `**Auftraggeber:** ${q.giver}\n\n` : ''}${q.description || ''}${q.reward ? `\n\n**Belohnung:** ${q.reward}` : ''}`} /></div>`, { title: q.title, icon: 'list-checks' });
+  const showQuest = (q) => openModal(() => (q.teaser
+    ? html`<div class="modal-body"><p class="faint" style="font-style:italic;margin:0">Die Spielleitung hat von dieser Quest nur die Überschrift freigegeben.</p></div>`
+    : html`<div class="modal-body"><${MarkdownView} src=${`${q.giver ? `**Auftraggeber:** ${q.giver}\n\n` : ''}${q.description || ''}${q.reward ? `\n\n**Belohnung:** ${q.reward}` : ''}`} /></div>`), { title: q.title, icon: 'list-checks' });
   return html`<${ViewFrame} tabId=${tabId} title="Quests">
     <div class="page wide stack lg">
       <div class="page-head"><h1><${Icon} name="list-checks" size=${24} />Quests</h1><span class="grow"></span>${gm ? html`<${Btn} kind="primary" icon="plus" onClick=${() => editQuest(null)}>Neue Quest<//>` : null}
@@ -216,8 +265,8 @@ export function QuestsView({ tabId }) {
           <h4><${Icon} name=${c.icon} size=${14} />${c.label} <span class="faint">${list.filter((q) => (q.status || 'open') === c.id).length}</span></h4>
           ${sortBy(list.filter((q) => (q.status || 'open') === c.id), (q) => q.updatedAt || 0, -1).map((q) => html`<div class=${`quest-card${drag === q.id ? ' dragging' : ''}`} key=${q.id} draggable=${true} onDragStart=${() => setDrag(q.id)} onDragEnd=${() => { setDrag(null); setOver(null); }} onClick=${() => (gm ? editQuest(q) : showQuest(q))}>
             <div class="row nowrap" style="align-items:flex-start;gap:4px"><div class="t grow">${q.title}</div><${IconBtn} icon="more-vertical" size=${16} class="sm" title="Verschieben" onClick=${(e) => moveMenu(e, q)} /></div>
-            ${q.giver || q.reward ? html`<div class="tiny faint">${[q.giver && q.giver.replace(/\[\[|\]\]/g, ''), q.reward].filter(Boolean).join(' · ')}</div>` : null}
-            ${gm ? html`<div class="row" style="margin-top:6px"><span class=${`badge ${q.visibility === 'players' ? 'players' : 'gm'}`}>${q.visibility === 'players' ? 'sichtbar' : 'SL'}</span></div>` : null}
+            ${(gm || !q.teaser) && (q.giver || q.reward) ? html`<div class="tiny faint">${[q.giver && q.giver.replace(/\[\[|\]\]/g, ''), q.reward].filter(Boolean).join(' · ')}</div>` : null}
+            ${gm ? html`<div class="row" style="margin-top:6px"><span class=${`badge ${q.visibility === 'players' ? 'players' : 'gm'}`} title=${visHint(q)}>${q.visibility === 'players' ? ((q.only || []).length ? `${q.only.length} Spieler` : 'sichtbar') : 'SL'}${q.teaser ? ' · nur Titel' : ''}</span></div>` : null}
           </div>`)}
         </div>`)}
       </div>`}
@@ -253,8 +302,14 @@ export function MembersView({ tabId }) {
   };
   const renew = async (role) => {
     if (!(await confirmDialog('Neuen Code erzeugen? Der alte Code funktioniert danach nicht mehr (bereits Beigetretene bleiben).', { ok: 'Erneuern' }))) return;
-    const code = await renewInvite(role);
-    setInv({ ...inv, [role]: code });
+    const r = await renewInvite(role);
+    setInv({ ...inv, [role]: r.code, [role === 'gm' ? 'gmUntil' : 'playerUntil']: r.until });
+  };
+  // Restlaufzeit der Einladung (48 Stunden ab Erzeugung)
+  const gueltig = (until) => {
+    if (!until) return '';
+    const h = Math.max(0, Math.round((until - Date.now()) / 3600000));
+    return h > 0 ? `Gültig noch ${h} Stunden` : 'Abgelaufen – bitte erneuern';
   };
   const list = sortBy(Object.values(members), (m) => (m.role === 'gm' ? 0 : 1));
   return html`<${ViewFrame} tabId=${tabId} title="Mitspieler & Einladungen">
@@ -266,6 +321,7 @@ export function MembersView({ tabId }) {
           ${inv ? html`<div class="invite-code">${inv[role]}</div>
             <div class="small muted" style="word-break:break-all">${inviteLink(inv[role])}</div>
             <div class="btn-row"><${Btn} kind="primary" icon="share" onClick=${() => share(role)}>Teilen<//><${Btn} icon="copy" onClick=${() => { copyText(inviteLink(inv[role])); toast('Link kopiert'); }}>Link kopieren<//><${IconBtn} icon="refresh" title="Code erneuern" onClick=${() => renew(role)} /></div>
+            <div class="tiny faint"><${Icon} name="clock" size=${12} /> ${gueltig(role === 'gm' ? inv.gmUntil : inv.playerUntil)} – danach erzeugst du über ⟳ einen neuen.</div>
             ${role === 'gm' ? html`<div class="tiny faint">Co-SL sehen alle Geheimnisse und können alles bearbeiten.</div>` : null}` : html`<div class="empty"><span class="spinner" /></div>`}
         </div>`)}
       </div>

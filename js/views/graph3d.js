@@ -7,7 +7,7 @@ import { openNote, openSearch } from '../core/workspace.js';
 import { settings, updateSettings } from '../core/settings.js';
 import { groupColor } from '../core/groups.js';
 import { Icon, Btn } from '../ui/components.js';
-import { buildData, layout2d } from './graph.js';
+import { buildData, layout2d, pulsePhase } from './graph.js';
 
 const TAU = Math.PI * 2;
 const cssVar = (name, fb) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
@@ -239,19 +239,43 @@ function draw(s, cv, gs) {
 
   // Verbindungen
   ctx.lineCap = 'round';
-  for (const l of s.links) {
+  const puls = gs.pulses !== false;
+  const nowS = performance.now() / 1000;
+  for (let i = 0; i < s.links.length; i++) {
+    const l = s.links[i];
     const a = l.a;
     const b = l.b;
     if (!a.pv || !b.pv) continue;
     const hi = hov && (a === hov || b === hov);
     const dim = (hov && !hi) || (q && !(matches(a) || matches(b)));
-    ctx.globalAlpha = hi ? 0.9 : dim ? 0.04 : 0.3 * fog((a.pd + b.pd) / 2);
-    ctx.strokeStyle = hi ? C.accent : a.color || b.color || C.line;
+    const alpha = hi ? 0.9 : dim ? 0.04 : 0.3 * fog((a.pd + b.pd) / 2);
+    const col = hi ? C.accent : a.color || b.color || C.line;
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = col;
     ctx.lineWidth = Math.max(0.35, (hi ? 1.6 : 0.8) * (gs.linkWidth || 1) * Math.min(2, (a.pf + b.pf) / 2));
     ctx.beginPath();
     ctx.moveTo(a.px, a.py);
     ctx.lineTo(b.px, b.py);
     ctx.stroke();
+    // Impuls: ein Oval je Linie, das langsam hin und her wandert
+    if (puls && !dim) {
+      const ph = pulsePhase(i);
+      const u = 0.5 + 0.5 * Math.sin(nowS * ph.speed + ph.offset);
+      const dx = b.px - a.px;
+      const dy = b.py - a.py;
+      if (Math.hypot(dx, dy) > 22) {
+        const f = Math.min(2, (a.pf + b.pf) / 2);
+        ctx.globalAlpha = Math.min(1, alpha * 2.4);
+        ctx.fillStyle = col;
+        ctx.save();
+        ctx.translate(a.px + dx * u, a.py + dy * u);
+        ctx.rotate(Math.atan2(dy, dx));
+        ctx.beginPath();
+        ctx.ellipse(0, 0, Math.max(1.8, 2.8 * f), Math.max(0.9, 1.3 * f), 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
   }
 
   // Kugeln von hinten nach vorn
@@ -411,9 +435,10 @@ export function Graph3D({ active, focus, query = '' }) {
       if (!s.fitted && s.w > 10 && s.nodes.length) fitCam(s, !s.everFitted), (s.everFitted = true);
       else if (moved && ++s.frame % 12 === 0) { s.b = bounds(s); clampTarget(s); }
       if (g.spin !== false && !s.drag && !s.pinch && performance.now() - s.idleAt > 2500) {
-        s.cam.yaw += 0.0022;
+        s.cam.yaw += 0.0022 * (g.spinSpeed ?? 0.6);   // Tempo aus den Einstellungen
         s.dirty = true;
       }
+      if (g.pulses !== false && s.links.length) s.dirty = true;       // Impulse laufen immer weiter
       if (moved || s.dirty) {
         draw(s, canvasRef.current, g);
         s.dirty = false;

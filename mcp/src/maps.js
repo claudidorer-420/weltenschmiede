@@ -214,7 +214,7 @@ export function registerMapTools({ tool, S, str, num, bool, KAMPAGNE, RO, RW, ne
         formate: {
           raeume: '{ kind: rect|ellipse|poly|path|brush, pts, op?: add|sub (sub = ausschneiden), tex?: Bodentextur, roof?: Dachtextur, w?: Breite bei path/brush, wall?: 1 (dünne Wandlinie) } – Wände entstehen automatisch um Böden',
           gelaende: '{ kind: rect|ellipse|poly|brush|path, pts, mat: water|deepwater|swamp|lava|pit|blood|ice|difficult|tex:<id>, op?, w? }',
-          objekte: '{ a: "p:door" | "ph:treasure_chest" | kurz "door", x, y, r?: Grad, s?: Größe (1 = echte Größe), fx?: 1 gespiegelt, layer?: floor|obj|top, sh?: Schatten } – Türen auf die Raumkante setzen (r 0 = waagrechte Wand, 90 = senkrechte)',
+          objekte: '{ a: "p:door" | "ph:treasure_chest" | kurz "door", x, y, r?: Grad, s?: Größe (1 = echte Größe), fx?: 1 gespiegelt, layer?: floor|obj|top, z?: Reihenfolge in der Ebene (größer liegt oben), sh?: Schatten } – Türen auf die Raumkante setzen (r 0 = waagrechte Wand, 90 = senkrechte)',
           beschriftungen: '{ kind: room|text, text, x, y, size? }',
           lichter: '{ x, y, r: Radius in Feldern, color?: "rgba(255,190,110,.45)", i?: Stärke }',
         },

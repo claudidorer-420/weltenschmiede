@@ -237,11 +237,11 @@ export function EncounterView({ tabId, params = {} }) {
   };
   const maxCR = result ? Math.max(...result.monsters.map((m) => crToNumber(m.cr))) : 0;
 
-  return html`<${ViewFrame} tabId=${tabId} title="Encounter" actions=${html`<${IconBtn} icon="ghost" title="Bestiarium" onClick=${() => openView('bestiary')} />`}>
+  return html`<${ViewFrame} tabId=${tabId} title="Encounter">
     <div class="page wide">
       <div class="split">
         <div class="stack lg">
-          <div class="page-head" style="margin:0"><h1><${Icon} name="swords" size=${26} />Encounter-Generator</h1><span class="sub">Monster aus jeder Welt – lore-getreu in 5e übertragen, mit Schwierigkeit 1–10 (KI + DMG-Formel), Taktik, Gelände und Beute.</span></div>
+          <div class="page-head head-tools" style="margin:0"><h1><${Icon} name="swords" size=${26} />Encounter-Generator</h1><span class="sub">Monster aus jeder Welt – lore-getreu in 5e übertragen, mit Schwierigkeit 1–10 (KI + DMG-Formel), Taktik, Gelände und Beute.</span><div class="head-tools-btns"><${IconBtn} icon="ghost" title="Bestiarium" onClick=${() => openView('bestiary')} /></div></div>
 
           <div class="card stack">
             <div class="card-head" style="margin:0"><h3><${Icon} name="users" size=${18} />Gruppe</h3><span class="grow"></span><${Btn} size="sm" icon="download" onClick=${importParty}>Aus Kampagne<//></div>
@@ -260,11 +260,13 @@ export function EncounterView({ tabId, params = {} }) {
             </div>
           </div>
 
+          <datalist id="ws-genres">${[...new Set([...ORIGINS, ...(bestiary || []).map((b) => b.origin).filter(Boolean)])].map((o) => html`<option key=${o} value=${o}></option>`)}</datalist>
           <div class="card stack">
             <div class="card-head" style="margin:0"><h3><${Icon} name="ghost" size=${18} />Gegner</h3></div>
             ${draft.monsters.map((m, i) => html`<div class="monster-row" key=${m.id}>
               <input class="input" type="number" min="1" max="99" value=${m.qty} title="Anzahl" onInput=${(e) => setMon(i, { qty: Math.max(1, Number(e.target.value) || 1) })} />
-              <${Select} class="origin" value=${m.origin} onChange=${(v) => setMon(i, { origin: v })} options=${ORIGINS} title="Welt – bestimmt die Namensliste" />
+              <input class="input origin" list="ws-genres" value=${m.origin} placeholder="Genre / Kategorie" title="Genre – frei eintragbar; bekannte Welten liefern zusätzlich Namensvorschläge"
+                onInput=${(e) => setMon(i, { origin: e.target.value })} />
               <${MonsterNameInput} value=${m.name} origin=${m.origin} bestiary=${bestiary} onChange=${(v) => setMon(i, { name: v })} />
               <${IconBtn} icon="x" class="danger" title="Entfernen" onClick=${() => draft.monsters.length > 1 ? set({ monsters: draft.monsters.filter((_, j) => j !== i) }) : toast('Mindestens ein Monster ist nötig.', 'error')} />
               <input class="input sm extra" value=${m.note} placeholder="Hinweis (optional): Anführer, verwundet, reitet einen Warg …" onInput=${(e) => setMon(i, { note: e.target.value })} />
@@ -307,7 +309,7 @@ export function EncounterView({ tabId, params = {} }) {
           ${result ? html`
             <div class="toolbar">
               <${Btn} kind="primary" icon="sword" onClick=${() => startCombat(true)}>Kampf starten<//>
-              <${Btn} icon="save" onClick=${saveEncounter}>Speichern<//>
+              <${Btn} icon="save" onClick=${saveEncounter}>Encounter speichern<//>
               <${Btn} icon="file-text" onClick=${asNote}>Als Notiz<//>
               <${Btn} icon="refresh" onClick=${run}>Neu<//>
             </div>
@@ -315,7 +317,7 @@ export function EncounterView({ tabId, params = {} }) {
             ${result.monsters.map((m, i) => html`<div key=${i}>
               <div class="row" style="margin-bottom:6px"><span class="badge accent">${m.qty}×</span><b>${m.name}</b><span class="faint small">HG ${m.cr}</span></div>
               <${Statblock} monster=${m} twoCol=${true} tools=${html`
-                <${IconBtn} icon="save" title="Ins Bestiarium" onClick=${() => saveToBestiary(m)} />
+                <${IconBtn} icon="ghost" title="Zum Bestiarium hinzufügen" onClick=${() => saveToBestiary(m)} />
                 <${IconBtn} icon="file-text" title="Als Notiz" onClick=${() => monsterToNote(m)} />
                 <${IconBtn} icon="sword" title="In den Kampf" onClick=${async () => { await addToCombat(combatantsFromMonsters([m]), `${m.qty}× ${m.name}`); toast('Im Kampf-Tracker', 'success', { action: { label: 'Öffnen', onClick: () => openView('combat') } }); }} />
                 <${IconBtn} icon="pencil" title="JSON bearbeiten" onClick=${async () => { const nm = await editJson(m); if (nm) updateMonster(i, nm); }} />`} />

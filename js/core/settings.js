@@ -54,7 +54,11 @@ export const DEFAULTS = {
     arrows: false,
     dim: '2d',
     spin: true,
+    spinSpeed: 0.6,   // 40 % langsamer als früher
+    pulses: true,
   },
+  diceSkin: 'klassisch',
+  mcpUrl: '',
   forge: { recipes: [], customBlocks: [], lastConfig: null },
   bookmarks: [],
   layout: { left: true, right: false },

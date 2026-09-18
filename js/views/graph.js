@@ -164,9 +164,11 @@ function GraphCanvas({ active, focus, local, depth = 1, compact = false, query =
     let raf;
     const loop = () => {
       const s = S.current;
-      const moved = step(s, settings.get().graph, false);
+      const gsNow = settings.get().graph;
+      const moved = step(s, gsNow, false);
       if (!s.fitted && s.w > 10) fit(s);
       else if (moved && !s.pan && !s.pinch) clampView(s);
+      if (gsNow.pulses !== false && s.links.length) s.dirty = true;   // Impulse laufen immer weiter
       if (moved || s.dirty) {
         draw(s, canvasRef.current, settings.get().graph, compact);
         s.dirty = false;
@@ -432,6 +434,14 @@ function step(s, gs, warm) {
   return true;
 }
 
+// Jede Linie bekommt eine eigene Geschwindigkeit und einen eigenen Startpunkt,
+// damit die Impulse so unabhängig wie möglich voneinander laufen (goldener Schnitt = gute Streuung).
+export function pulsePhase(i) {
+  const g = ((i + 1) * 0.6180339887) % 1;
+  const h = ((i + 1) * 0.7548776662) % 1;
+  return { speed: 0.22 + g * 0.26, offset: h * Math.PI * 2 };
+}
+
 function draw(s, cv, gs, compact) {
   if (!cv) return;
   const ctx = cv.getContext('2d');
@@ -449,11 +459,38 @@ function draw(s, cv, gs, compact) {
   for (const l of s.links) {
     const hi = hov && (l.a === hov || l.b === hov);
     ctx.globalAlpha = hi ? 0.95 : hov ? 0.12 : q && !(matches(l.a) || matches(l.b)) ? 0.1 : 0.55;
-    ctx.strokeStyle = hi ? C.accent : C.line;
+    // Farbige Linien wie im 3D-Graph: die Farbe der verbundenen Knoten
+    ctx.strokeStyle = hi ? C.accent : l.a.color || l.b.color || C.line;
     ctx.beginPath();
     ctx.moveTo(l.a.x * k + tx, l.a.y * k + ty);
     ctx.lineTo(l.b.x * k + tx, l.b.y * k + ty);
     ctx.stroke();
+  }
+  // Impulse: je Linie ein Oval, das langsam hin und her wandert – alle versetzt
+  if (gs.pulses !== false && !q) {
+    const t = performance.now() / 1000;
+    for (let i = 0; i < s.links.length; i++) {
+      const l = s.links[i];
+      const hi = hov && (l.a === hov || l.b === hov);
+      if (hov && !hi) continue;
+      const ph = pulsePhase(i);
+      const u = 0.5 + 0.5 * Math.sin(t * ph.speed + ph.offset);
+      const ax = l.a.x * k + tx;
+      const ay = l.a.y * k + ty;
+      const dx = l.b.x * k + tx - ax;
+      const dy = l.b.y * k + ty - ay;
+      const len = Math.hypot(dx, dy);
+      if (len < 24) continue;
+      ctx.globalAlpha = hi ? 0.95 : 0.7;
+      ctx.fillStyle = hi ? C.accent : l.a.color || l.b.color || C.line;
+      ctx.save();
+      ctx.translate(ax + dx * u, ay + dy * u);
+      ctx.rotate(Math.atan2(dy, dx));
+      ctx.beginPath();
+      ctx.ellipse(0, 0, Math.max(2.4, 3.4 * Math.min(1.6, k)), Math.max(1.1, 1.6 * Math.min(1.6, k)), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
   const rs = rScale(k);
   for (const n of s.nodes) {
@@ -523,6 +560,14 @@ function GraphControls({ query, setQuery, onClose }) {
     ${slider('Knotengröße', 'nodeSize', 0.4, 2.5, 0.1)}
     ${slider('Linienstärke', 'linkWidth', 0.3, 3, 0.1)}
     ${slider('Text ab Zoom', 'textFade', 0.3, 2.5, 0.1)}
+    <div class="stack sm" style="margin-top:8px">
+      <${Toggle} checked=${gs.pulses !== false} onChange=${(v) => set({ pulses: v })} label="Impulse auf den Linien" />
+    </div>
+    ${gs.dim === '3d' ? html`<h4>3D-Ansicht</h4>
+      <div class="stack sm">
+        <${Toggle} checked=${gs.spin !== false} onChange=${(v) => set({ spin: v })} label="Von selbst drehen" />
+      </div>
+      ${slider('Drehgeschwindigkeit', 'spinSpeed', 0, 2, 0.05)}` : null}
     <h4>Kräfte</h4>
     ${slider('Zentrierung', 'centerForce', 0, 3, 0.1)}
     ${slider('Abstoßung', 'repel', 0.2, 4, 0.1)}

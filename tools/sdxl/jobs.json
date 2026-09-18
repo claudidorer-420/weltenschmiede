@@ -2,7 +2,8 @@
  {
   "id": "folterbank",
   "name": "Folterbank",
-  "en": "medieval wooden torture rack with ropes and iron chains",
+  "en": "medieval wooden torture rack",
+  "look": "a long rectangular wooden frame lying flat on the ground, an iron roller drum at each short end, coiled ropes and rusty chains stretched along its length, the whole rectangle fully visible",
   "kind": "object",
   "cat": "dungeon",
   "w": 1.6,
@@ -10,27 +11,10 @@
   "rough": 1
  },
  {
-  "id": "eiserne_jungfrau",
-  "name": "Eiserne Jungfrau",
-  "en": "iron maiden torture device, closed, rusty iron",
-  "kind": "object"
- },
- {
-  "id": "galgen",
-  "name": "Galgen",
-  "en": "wooden gallows with hanging noose and stone base",
-  "kind": "object"
- },
- {
-  "id": "pranger",
-  "name": "Pranger",
-  "en": "wooden pillory stocks on a stone platform",
-  "kind": "object"
- },
- {
   "id": "streckbett",
   "name": "Streckbett",
-  "en": "medieval stretching bench with iron winch",
+  "en": "medieval stretching bench",
+  "look": "a narrow rectangular wooden bench lying flat, an iron winch drum at the head end, leather straps at the four corners, planks running lengthwise",
   "kind": "object",
   "cat": "dungeon",
   "w": 1.2,
@@ -40,7 +24,8 @@
  {
   "id": "opferaltar",
   "name": "Blutopfer-Altar",
-  "en": "dark stone sacrificial altar with dried blood and candles",
+  "en": "dark stone sacrificial altar",
+  "look": "a wide rectangular stone slab lying flat, dark dried blood pooled in a carved gutter around the rim, four burning candles standing at the corners",
   "kind": "object",
   "cat": "dungeon",
   "w": 2,
@@ -50,7 +35,8 @@
  {
   "id": "runenstein",
   "name": "Runenstein",
-  "en": "standing stone monolith carved with glowing blue runes",
+  "en": "carved standing stone monolith",
+  "look": "from straight above only the flat top face of the upright weathered granite monolith is visible, a rough rounded slab, glowing blue runes carved into the stone, moss in the cracks",
   "kind": "object",
   "cat": "dungeon",
   "w": 1,
@@ -58,27 +44,10 @@
   "block": 1
  },
  {
-  "id": "zauberbuch",
-  "name": "Aufgeschlagenes Zauberbuch",
-  "en": "open spellbook on a wooden lectern, glowing pages",
-  "kind": "object"
- },
- {
-  "id": "kristallkugel",
-  "name": "Kristallkugel",
-  "en": "crystal ball on an ornate bronze stand",
-  "kind": "object"
- },
- {
-  "id": "alchemietisch",
-  "name": "Alchemietisch",
-  "en": "alchemy table with glass flasks, retorts and bottles",
-  "kind": "object"
- },
- {
   "id": "hexenkessel_feuer",
   "name": "Hexenkessel über Feuer",
-  "en": "black iron cauldron over a campfire with glowing embers",
+  "en": "black iron cauldron over a fire",
+  "look": "a round black iron cauldron centred, its circular rim and dark bubbling liquid filling the middle, burning logs and glowing orange embers arranged in a ring around the base",
   "kind": "object",
   "cat": "dungeon",
   "w": 1.1,
@@ -88,7 +57,8 @@
  {
   "id": "skelett_boden",
   "name": "Skelett am Boden",
-  "en": "human skeleton lying on the ground, bones and tattered cloth",
+  "en": "human skeleton lying on the ground",
+  "look": "a complete human skeleton lying flat on its back, skull at one end, ribcage, arms and legs spread out, tattered grey rags beneath the bones",
   "kind": "object",
   "cat": "dungeon",
   "w": 1.4,
@@ -96,15 +66,10 @@
   "layer": "floor"
  },
  {
-  "id": "goldhaufen",
-  "name": "Goldhaufen",
-  "en": "pile of gold coins, gems and treasure",
-  "kind": "object"
- },
- {
   "id": "juwelentruhe",
   "name": "Juwelentruhe",
-  "en": "open treasure chest overflowing with gold coins and jewels",
+  "en": "open treasure chest",
+  "look": "a rectangular wooden chest with iron bands, the lid folded wide open and lying flat, gold coins, jewels and a necklace spilling over the front edge",
   "kind": "object",
   "cat": "behaelter",
   "w": 1,
@@ -114,7 +79,8 @@
  {
   "id": "waffenstaender",
   "name": "Waffenständer",
-  "en": "wooden weapon rack with swords, axes and spears",
+  "en": "wooden weapon rack",
+  "look": "a long low wooden rack, swords, axes and spears lying parallel in their slots side by side, the whole rack a narrow rectangle",
   "kind": "object",
   "cat": "werkzeug",
   "w": 2,
@@ -122,15 +88,10 @@
   "rough": 1
  },
  {
-  "id": "ruestungsstaender",
-  "name": "Rüstungsständer",
-  "en": "suit of plate armor on a wooden armor stand",
-  "kind": "object"
- },
- {
   "id": "katapult",
   "name": "Katapult",
-  "en": "medieval wooden catapult siege engine",
+  "en": "medieval wooden catapult",
+  "look": "a square timber frame with four wheels at the corners, the throwing arm lying along the centre line, the bucket at one end, twisted rope bundles at the pivot",
   "kind": "object",
   "cat": "werkzeug",
   "w": 2.4,
@@ -140,7 +101,8 @@
  {
   "id": "rammbock",
   "name": "Rammbock",
-  "en": "medieval battering ram with iron head on wheels",
+  "en": "medieval battering ram",
+  "look": "a long tree trunk with an iron ram head at one end, slung by chains inside a narrow wheeled wooden frame, forming a long rectangle",
   "kind": "object",
   "cat": "werkzeug",
   "w": 1.2,
@@ -150,7 +112,8 @@
  {
   "id": "baerenfalle",
   "name": "Bärenfalle",
-  "en": "rusty iron bear trap, open jaws",
+  "en": "rusty iron bear trap",
+  "look": "an open bear trap lying flat, two circular serrated jaws spread wide apart, the flat pressure plate in the middle, a short chain coiled to one side",
   "kind": "object",
   "cat": "dungeon",
   "w": 0.8,
@@ -159,16 +122,104 @@
  {
   "id": "kerzenleuchter_boden",
   "name": "Bodenleuchter",
-  "en": "tall wrought iron floor candelabra with lit candles",
+  "en": "wrought iron floor candelabra",
+  "look": "a round iron base with arms radiating out symmetrically like a star, a lit candle with a bright flame at the tip of every arm, wax dripping down",
   "kind": "object",
   "cat": "licht",
   "w": 0.6,
   "h": 0.6
  },
  {
+  "id": "eiserne_jungfrau",
+  "name": "Eiserne Jungfrau",
+  "en": "closed iron maiden torture cabinet",
+  "look": "from straight above only the rounded rusty iron lid of the closed upright sarcophagus is visible, riveted seams, a hinge line down the middle, a small barred slot near the top",
+  "kind": "object",
+  "cat": "dungeon",
+  "w": 0.9,
+  "h": 0.9,
+  "block": 1
+ },
+ {
+  "id": "galgen",
+  "name": "Galgen",
+  "en": "wooden gallows",
+  "look": "from straight above a square stone base plate, the thick upright post as a small square in its middle, the horizontal beam crossing over it, a rope ending in a round noose",
+  "kind": "object",
+  "cat": "dungeon",
+  "w": 2,
+  "h": 2,
+  "block": 1
+ },
+ {
+  "id": "pranger",
+  "name": "Pranger",
+  "en": "wooden pillory stocks",
+  "look": "a low stone platform with a horizontal wooden plank across it, three round holes cut for a head and two hands, iron hinges and a padlock at the side",
+  "kind": "object",
+  "cat": "dungeon",
+  "w": 1.6,
+  "h": 1.2,
+  "rough": 1
+ },
+ {
+  "id": "zauberbuch",
+  "name": "Aufgeschlagenes Zauberbuch",
+  "en": "open spellbook on a lectern",
+  "look": "an open leather book lying flat with two written glowing pages and a ribbon marker, the slanted wooden lectern top just visible as a frame around it",
+  "kind": "object",
+  "cat": "moebel",
+  "w": 0.8,
+  "h": 0.8
+ },
+ {
+  "id": "kristallkugel",
+  "name": "Kristallkugel",
+  "en": "crystal ball on a bronze stand",
+  "look": "straight from above only the bright glass sphere is visible as a perfect circle in the middle, four curved ornate bronze claws reaching inwards from a round base ring around it",
+  "kind": "object",
+  "cat": "moebel",
+  "w": 0.6,
+  "h": 0.6
+ },
+ {
+  "id": "alchemietisch",
+  "name": "Alchemietisch",
+  "en": "alchemy work table",
+  "look": "a rectangular wooden table top, glass flasks, a retort, corked bottles, a mortar and an open book standing on it, the table edges forming a clean rectangle",
+  "kind": "object",
+  "cat": "moebel",
+  "w": 2,
+  "h": 1.2,
+  "block": 1
+ },
+ {
+  "id": "goldhaufen",
+  "name": "Goldhaufen",
+  "en": "pile of gold coins and treasure",
+  "look": "a loose roughly circular heap of gold coins spread on the ground, gemstones, a goblet and a necklace scattered among them, coins thinning out at the edge",
+  "kind": "object",
+  "cat": "behaelter",
+  "w": 1,
+  "h": 1,
+  "layer": "floor"
+ },
+ {
+  "id": "ruestungsstaender",
+  "name": "Rüstungsständer",
+  "en": "suit of plate armour on a stand",
+  "look": "from straight above the domed helmet top and the two shoulder plates form the widest shape, gauntleted arms hanging down at both sides, a round wooden base ring underneath",
+  "kind": "object",
+  "cat": "dungeon",
+  "w": 1,
+  "h": 1,
+  "block": 1
+ },
+ {
   "id": "blutboden",
   "name": "Blutverschmierter Steinboden",
-  "en": "old stone dungeon floor smeared with dried blood",
+  "en": "blood smeared dungeon stone floor",
+  "look": "worn grey flagstones of different sizes, dark dried blood smeared across them and soaked into the joints, a few fresh red drops",
   "kind": "texture",
   "cat": "boden",
   "m": 3
@@ -176,7 +227,8 @@
  {
   "id": "runenboden",
   "name": "Runenboden",
-  "en": "dark stone floor engraved with arcane runes and circles",
+  "en": "arcane rune floor",
+  "look": "polished dark slate slabs engraved with concentric circles and angular runes, the carved lines filled with faint pale blue light",
   "kind": "texture",
   "cat": "boden",
   "m": 3
@@ -184,7 +236,8 @@
  {
   "id": "knochenboden",
   "name": "Knochenboden",
-  "en": "ground covered with old bones and skulls, dirt between them",
+  "en": "bone covered ground",
+  "look": "dry brown dirt densely littered with bleached bones, ribs, vertebrae and half buried skulls, dust between them",
   "kind": "texture",
   "cat": "gelaende",
   "m": 3
@@ -192,7 +245,8 @@
  {
   "id": "lavariss",
   "name": "Lavarisse",
-  "en": "cracked black volcanic rock with glowing orange lava veins",
+  "en": "cracked volcanic rock with lava",
+  "look": "a black basalt crust broken by a web of narrow glowing orange and yellow lava veins, fine grey ash settled on the cooled rock",
   "kind": "texture",
   "cat": "gelaende",
   "m": 4
@@ -200,7 +254,8 @@
  {
   "id": "verkohltes_holz",
   "name": "Verkohltes Holz",
-  "en": "charred burnt wooden planks, black and cracked",
+  "en": "charred burnt wooden planks",
+  "look": "black burnt planks running in one direction, deep alligator cracking across the charcoal surface, grey ash caught in the grooves",
   "kind": "texture",
   "cat": "boden",
   "m": 3
@@ -208,7 +263,8 @@
  {
   "id": "kryptastein",
   "name": "Krypta-Stein",
-  "en": "damp mossy crypt stone slabs, dark and worn",
+  "en": "damp mossy crypt stone slabs",
+  "look": "large dark grey stone slabs with chipped edges, a little green moss and pale lichen only in the narrow joints between them, damp water stains on the stone",
   "kind": "texture",
   "cat": "boden",
   "m": 3

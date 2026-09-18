@@ -1,6 +1,6 @@
 // NPC-Schmiede: Schnell-NPCs offline + KI-Dossiers mit Stimme, Geheimnis, Bemal-Guide, Porträt und Statblock.
 import { html, useState } from '../lib/preact.js';
-import { noteById, createNote } from '../core/app.js';
+import { noteById, createNote, allFolders } from '../core/app.js';
 import { openNote } from '../core/workspace.js';
 import { generate, generateImage, extractJSON } from '../core/ai.js';
 import { npcSystemPrompt, buildNpcPrompt, encounterSystemPrompt } from '../core/prompts.js';
@@ -19,6 +19,13 @@ import { dataURLToBlob, pick } from '../lib/util.js';
 const PERSONALITY = ['herzlich', 'mürrisch', 'paranoid', 'geschwätzig', 'ehrgeizig', 'melancholisch', 'fromm', 'gierig', 'loyal', 'feige', 'charmant', 'rätselhaft', 'jähzornig', 'naiv', 'weise', 'zynisch'];
 const RELATIONS = ['neutral', 'Verbündeter', 'Auftraggeber', 'Rivale', 'Feind', 'Informant', 'Händler', 'Liebesinteresse'];
 const FM = '---\ntyp: npc\ntags: [npc]\n---\n';
+
+// Zielordner für NPC-Notizen: erst „NPCs“, sonst „NPC“ – gibt es beides nicht, wird „NPCs“ angelegt
+export function npcFolder() {
+  const alle = allFolders();
+  const treffer = (name) => alle.find((f) => f.split('/').pop().toLowerCase() === name);
+  return treffer('npcs') || treffer('npc') || 'NPCs';
+}
 
 export function NpcView({ tabId }) {
   const [qSpecies, setQSpecies] = useState('Zufall');
@@ -47,7 +54,7 @@ export function NpcView({ tabId }) {
   };
   const quickToNote = async (q) => {
     const body = `${FM}- **Volk:** ${q.species}\n- **Beruf:** ${q.job}\n- **Aussehen:** ${q.look}\n- **Marotte:** ${q.quirk}\n- **Motivation:** ${q.motive}\n\n> [!gm] Geheimnis\n> ${q.name.split(' ')[0]} ${q.secret}.\n`;
-    const n = await createNote({ title: q.name, folder: 'NPCs', body });
+    const n = await createNote({ title: q.name, folder: npcFolder(), body });
     toast(`„${n.title}“ angelegt`, 'success', { action: { label: 'Öffnen', onClick: () => openNote(n.id) } });
   };
   const quickToAI = (q) => {
@@ -57,7 +64,7 @@ export function NpcView({ tabId }) {
   const rollCrowd = () => setCrowd(Array.from({ length: 6 }, () => npcQuick(pick(SPECIES_NAMES))));
   const crowdToNote = async () => {
     const body = crowd.map((q) => `- **${q.name}** (${q.species}, ${q.job}) – ${q.look}; ${q.quirk}.`).join('\n');
-    const n = await createNote({ title: `Passanten ${new Date().toLocaleDateString('de-DE')}`, folder: 'NPCs', body });
+    const n = await createNote({ title: `Passanten ${new Date().toLocaleDateString('de-DE')}`, folder: npcFolder(), body });
     openNote(n.id);
   };
 
@@ -113,7 +120,7 @@ export function NpcView({ tabId }) {
 
   const saveAllSplit = async () => {
     const parts = gen.out.split(/\n(?=#\s)/).map((s) => s.trim()).filter((s) => /^#\s/.test(s));
-    for (const p of parts) await saveTextAsNote({ text: p.replace(/\n-{3,}\s*$/, ''), title: titleFromMarkdown(p, 'NPC'), folder: 'NPCs', frontmatter: FM });
+    for (const p of parts) await saveTextAsNote({ text: p.replace(/\n-{3,}\s*$/, ''), title: titleFromMarkdown(p, 'NPC'), folder: npcFolder(), frontmatter: FM });
     toast(`${parts.length} NPCs gespeichert`, 'success');
   };
 
@@ -177,7 +184,7 @@ export function NpcView({ tabId }) {
 
         <div class="gen-output sticky stack">
           <${GenStatus} gen=${gen} label="Die Figur nimmt Gestalt an …" />
-          <${OutputToolbar} gen=${gen} title=${title} folder="NPCs" frontmatter=${FM} onRegenerate=${run}
+          <${OutputToolbar} gen=${gen} title=${title} folder=${npcFolder()} frontmatter=${FM} onRegenerate=${run}
             extra=${html`
               <${Btn} icon="image" loading=${pBusy} onClick=${makePortrait}>Porträt<//>
               <${Btn} icon="ghost" loading=${sbBusy} onClick=${makeStatblock}>Statblock<//>

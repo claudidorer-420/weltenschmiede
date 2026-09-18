@@ -847,6 +847,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const [sel, setSel] = useState([]);
   const [showLight, setShowLight] = useState(true);
   const [layerQ, setLayerQ] = useState('');
+  const [lDrag, setLDrag] = useState({ id: null, over: null, zone: null });   // Ebenenliste: Ziehen & Ablegen
   const [measureText, setMeasureText] = useState('');
   const [busy, setBusy] = useState('');
   const [, setTick] = useState(0);
@@ -2423,10 +2424,38 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     const q = layerQ.trim().toLowerCase();
     const rows = [];
     const LAYERS = [['top', 'Oben (Kronen, Dächer)'], ['obj', 'Objekte'], ['floor', 'Boden (Teppiche, Spuren)']];
-    const objRow = (o) => {
+    // Anzeige in Zeichenreihenfolge, oberste Zeile = liegt ganz oben
+    const stapel = (list) => [...list].sort((a, b) => (b.z || 0) - (a.z || 0) || b.y - a.y);
+    // Ziehen & Ablegen: die neue Reihenfolge wird als z gespeichert und schlägt die Tiefensortierung
+    const dropLayer = (lay, targetId, zone) => {
+      const id = lDrag.id;
+      setLDrag({ id: null, over: null, zone: null });
+      if (!id || id === targetId) return;
+      const grp = stapel(d.objects.filter((o) => (o.layer || objMeta(o)?.layer || 'obj') === lay));
+      const von = grp.findIndex((o) => o.id === id);
+      if (von < 0) return;
+      const [gezogen] = grp.splice(von, 1);
+      let at = grp.findIndex((o) => o.id === targetId);
+      if (at < 0) at = grp.length; else if (zone === 'after') at += 1;
+      grp.splice(at, 0, gezogen);
+      const z = new Map(grp.map((o, i) => [o.id, grp.length - i]));   // oben in der Liste = größtes z
+      commit({ objects: d.objects.map((o) => (z.has(o.id) ? { ...o, z: z.get(o.id) } : o)) }, { geom: false });
+    };
+    const objRow = (o, lay) => {
       const m = objMeta(o);
       const name = m?.name || 'Objekt';
-      return html`<div key=${o.id} class=${`mw-lrow${isSel(o.id) ? ' sel' : ''}${o.hidden ? ' off' : ''}`} title=${`${name} · ${r2(o.x)} / ${r2(o.y)}`}
+      const zone = lDrag.over === o.id ? (lDrag.zone === 'after' ? ' drop-after' : ' drop-before') : '';
+      return html`<div key=${o.id} class=${`mw-lrow${isSel(o.id) ? ' sel' : ''}${o.hidden ? ' off' : ''}${zone}`} title=${`${name} · ${r2(o.x)} / ${r2(o.y)} – zum Umsortieren ziehen`}
+          draggable=${!q} onDragStart=${(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', o.id); setLDrag({ id: o.id, over: null, zone: null }); }}
+          onDragEnd=${() => setLDrag({ id: null, over: null, zone: null })}
+          onDragOver=${(e) => {
+            if (!lDrag.id) return;
+            e.preventDefault();
+            const r = e.currentTarget.getBoundingClientRect();
+            const zn = (e.clientY - r.top) / Math.max(1, r.height) < 0.5 ? 'before' : 'after';
+            if (lDrag.over !== o.id || lDrag.zone !== zn) setLDrag({ ...lDrag, over: o.id, zone: zn });
+          }}
+          onDrop=${(e) => { e.preventDefault(); e.stopPropagation(); dropLayer(lay, o.id, lDrag.zone); }}
           onClick=${(e) => pickFromList({ kind: 'obj', id: o.id }, e)} onDblClick=${() => focusOn(o.x, o.y)}>
         ${o.t === 'stamp' ? html`<img src=${thumbFor(o.a)} alt="" loading="lazy" />` : html`<span class="mw-lico"><${Icon} name="gem" size=${13} /></span>`}
         <span class="grow ellipsis">${name}</span>
@@ -2441,10 +2470,10 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     </div>`;
     const match = (n) => !q || String(n).toLowerCase().includes(q);
     for (const [lay, label] of LAYERS) {
-      const list = d.objects.filter((o) => (o.layer || objMeta(o)?.layer || 'obj') === lay && match(objMeta(o)?.name || ''));
+      const list = stapel(d.objects.filter((o) => (o.layer || objMeta(o)?.layer || 'obj') === lay && match(objMeta(o)?.name || '')));
       if (!list.length) continue;
       rows.push(html`<div class="mw-lgroup" key=${lay}><div class="mw-lgroup-t"><${Icon} name="layers" size=${12} />${label}<span class="badge">${list.length}</span></div>
-        ${list.slice(0, 400).map(objRow)}${list.length > 400 ? html`<div class="tiny faint">… und ${list.length - 400} weitere (filtern)</div>` : null}</div>`);
+        ${list.slice(0, 400).map((o) => objRow(o, lay))}${list.length > 400 ? html`<div class="tiny faint">… und ${list.length - 400} weitere (filtern)</div>` : null}</div>`);
     }
     const lights = (d.lights || []).filter(() => match('licht'));
     if (lights.length) rows.push(html`<div class="mw-lgroup" key="li"><div class="mw-lgroup-t"><${Icon} name="sun" size=${12} />Lichter<span class="badge">${lights.length}</span></div>${lights.map((l) => simpleRow('light', l, 'sun', `Licht ${r2(l.r || 4)} Felder`))}</div>`);
@@ -2470,7 +2499,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const panelSig = [
     mode, tool, shape, matShape, op, snap, width, brushW, wallThick, mat, matCat, shapeTex, doorKey, objKey,
     objScale, objRandom, objAlpha, objBlur, objShadow, objLayer, scatterSet, scatterR, scatterN, lightKind, lightR,
-    textKind, fogBrush, showLight, layerQ, busy, gm, real, matMod, sidebarOpen, s.ver, s.geom, s.undo.length, s.redo.length,
+    textKind, fogBrush, showLight, layerQ, lDrag.id || '', lDrag.over || '', lDrag.zone || '', busy, gm, real, matMod, sidebarOpen, s.ver, s.geom, s.undo.length, s.redo.length,
     sel.map((x) => `${x.kind}:${x.id}`).join(','), map.fileId || '', map.bake?.fileId || '', map.fog?.enabled ? 1 : 0, B.combat?.active ? 1 : 0, B.showNames ? 1 : 0,
   ].join('|');
   useEffect(() => {

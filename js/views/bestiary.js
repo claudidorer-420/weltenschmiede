@@ -16,7 +16,7 @@ import { Icon, Btn, Statblock, toast, confirmDialog, Empty, useMedia, openModal 
 import { MonsterArt, creatureType } from '../ui/art.js';
 import { CREATURE_TYPES } from '../data/artmap.js';
 import { crToNumber } from '../data/rules5e.js';
-import { ORIGINS, DND, ORIGIN_COLORS, originOf, originShort, namesFor, matchNames, hasNameList } from '../data/origins.js';
+import { ORIGINS, DND, originColor, originOf, originShort, namesFor, matchNames, hasNameList } from '../data/origins.js';
 import { monsterToNote } from './encounter.js';
 import { now } from '../lib/util.js';
 
@@ -42,10 +42,11 @@ function MonsterDetail({ m, src, busy, onCopy, onCombat, onNote, onPaint, onDele
         <h2>${m.name}</h2>
         <div class="muted small">${[m.size, m.type].filter(Boolean).join(' ')}${m.alignment ? `, ${m.alignment}` : ''}</div>
         <div class="chips"><span class="badge gold">HG ${m.cr || '?'}</span><span class="badge">RK ${m.ac}</span><span class="badge">TP ${m.hp}</span>${m.speed ? html`<span class="badge">${m.speed}</span>` : null}</div>
-        ${src === 'own' ? html`<label class="row small nowrap" style="gap:6px"><span class="muted">Welt</span>
-          <select class="select sm" style="width:auto;max-width:100%" value=${originOf(m)} onChange=${(e) => onOrigin(e.target.value)}>
-            <option value="">– ohne –</option>${ORIGINS.map((o) => html`<option value=${o}>${o}</option>`)}
-          </select></label>` : null}
+        ${src === 'own' ? html`<label class="row small nowrap" style="gap:6px"><span class="muted">Genre</span>
+          <input class="input sm" style="width:auto;max-width:100%" list="ws-genres-best" value=${originOf(m)} placeholder="Genre / Kategorie"
+            onChange=${(e) => onOrigin(e.target.value.trim())} />
+          <datalist id="ws-genres-best">${ORIGINS.map((o) => html`<option key=${o} value=${o}></option>`)}</datalist>
+        </label>` : null}
         <div class="btn-row">
           <${Btn} size="sm" kind="primary" icon="sword" onClick=${onCombat}>In den Kampf<//>
           ${src === 'srd' ? html`<${Btn} size="sm" icon="plus" onClick=${onCopy}>Ins Bestiarium<//>` : null}
@@ -91,6 +92,8 @@ export function BestiaryView({ tabId }) {
     }
     return c;
   }, [own]);
+  // Genre-Filter entstehen erst durch die Monster im Bestiarium – keine voreingestellten Welten
+  const genres = useMemo(() => Object.keys(counts).filter(Boolean).sort((a, b) => (counts[b] - counts[a]) || a.localeCompare(b, 'de')), [counts]);
   const list = src === 'srd' ? srd : own ? own.filter((m) => !world || (originOf(m) || '-') === world) : null;
   const filtered = useMemo(() => (list || []).filter((m) => {
     if (q && !`${m.name} ${m.type || ''}`.toLowerCase().includes(q.toLowerCase())) return false;
@@ -177,7 +180,7 @@ export function BestiaryView({ tabId }) {
           </div>
           ${src === 'own' ? html`<div class="world-chips">
             <button type="button" class=${`world-chip${!world ? ' on' : ''}`} onClick=${() => setWorld('')}>Alle Welten <small>${own?.length || 0}</small></button>
-            ${ORIGINS.map((o) => html`<button type="button" class=${`world-chip${world === o ? ' on' : ''}${counts[o] ? '' : ' none'}`} style=${{ '--c': ORIGIN_COLORS[o] }} title=${o} onClick=${() => setWorld(o)}><span class="od" />${originShort(o)} <small>${counts[o] || 0}</small></button>`)}
+            ${genres.map((o) => html`<button type="button" class=${`world-chip${world === o ? ' on' : ''}`} style=${{ '--c': originColor(o) }} title=${o} onClick=${() => setWorld(o)}><span class="od" />${originShort(o)} <small>${counts[o] || 0}</small></button>`)}
             ${counts[''] ? html`<button type="button" class=${`world-chip${world === '-' ? ' on' : ''}`} onClick=${() => setWorld('-')}>Ohne Welt <small>${counts['']}</small></button>` : null}
           </div>` : null}
           <div class="row">
@@ -194,7 +197,7 @@ export function BestiaryView({ tabId }) {
                 return html`<button type="button" key=${m.id} class=${`best-card${m.id === sel ? ' on' : ''}`} onClick=${() => select(m)}>
                   <${MonsterArt} m=${m} size=${54} cr=${true} />
                   <span class="bc-main"><b>${m.name}</b><small>${[m.size, m.type].filter(Boolean).join(' ')}</small>
-                    <small>RK ${m.ac} · TP ${m.hp}${o ? html` · <span class="bc-origin" style=${{ '--c': ORIGIN_COLORS[o] }}><span class="od" />${originShort(o)}</span>` : null}</small></span>
+                    <small>RK ${m.ac} · TP ${m.hp}${o ? html` · <span class="bc-origin" style=${{ '--c': originColor(o) }}><span class="od" />${originShort(o)}</span>` : null}</small></span>
                 </button>`;
               })}</div>`}
           ${filtered.length > 240 ? html`<div class="small faint">${filtered.length - 240} weitere – Suche oder Filter nutzen.</div>` : null}

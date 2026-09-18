@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Kartenbibliothek – Herkunft der Bausteine</title>
+<style>
+  body { background: #14161a; color: #e6e6e6; font: 14px/1.45 system-ui, sans-serif; margin: 0; padding: 18px 20px 40px; }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .sub { color: #9aa0a8; font-size: 12.5px; margin-bottom: 18px; }
+  section { margin: 0 0 26px; }
+  h2 { font-size: 15px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+  .tag { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 99px; text-transform: uppercase; }
+  .ph { background: #1d4b6e; color: #cfe8ff; }
+  .proc { background: #4a2f6b; color: #e6d6ff; }
+  .ai { background: #6b3a20; color: #ffdcc4; }
+  .var { background: #24543a; color: #ccf3dc; }
+  .meta { color: #9aa0a8; font-size: 12px; margin: 2px 0 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 9px; }
+  figure { margin: 0; text-align: center; }
+  img { width: 100%; height: 84px; object-fit: contain; border-radius: 9px;
+        background: repeating-conic-gradient(#2a2d33 0 25%, #23262b 0 50%) 50% / 14px 14px; }
+  img.tex { object-fit: cover; }
+  figcaption { font-size: 10.5px; color: #b6bcc4; margin-top: 4px; line-height: 1.2; }
+</style>
+</head>
+<body>
+<h1>Kartenbibliothek – wer hat was gemacht?</h1>
+<div class="sub" id="sum">lädt …</div>
+<div id="out"></div>
+<script type="module">
+  const [{ STAMPS, TEXTURES }, tv, mr] = await Promise.all([
+    import('/js/data/mapassets.js'),
+    import('/js/data/texvars.js'),
+    import('/js/views/maprender.js'),
+  ]);
+  const genAssets = await fetch('/tools/sdxl/gen-assets.json').then((r) => r.json()).catch(() => ({ stamps: {}, textures: {} }));
+  const aiStamps = new Set(Object.keys(genAssets.stamps || {}));
+  const aiTex = new Set(Object.keys(genAssets.textures || {}));
+  const proc = Object.entries(mr.PROC);
+
+  const out = document.getElementById('out');
+  const sec = (title, tag, cls, meta, items) => {
+    const el = document.createElement('section');
+    el.innerHTML = `<h2>${title}<span class="tag ${cls}">${tag}</span></h2><div class="meta">${meta}</div>`
+      + `<div class="grid">${items.map((i) => `<figure><img class="${i.tex ? 'tex' : ''}" src="${i.src}" alt="" loading="lazy" /><figcaption>${i.name}</figcaption></figure>`).join('')}</div>`;
+    out.appendChild(el);
+  };
+  const pick = (arr, n) => arr.filter((_, i) => i % Math.max(1, Math.floor(arr.length / n)) === 0).slice(0, n);
+
+  const phStamps = STAMPS.filter((s) => !aiStamps.has(s.id));
+  const phTex = TEXTURES.filter((t) => !aiTex.has(t.id));
+
+  sec('Poly Haven – 3D-Modelle, von mir von oben gerendert', 'CC0 · Poly Haven', 'ph',
+    `${phStamps.length} Objekte. Quelle: polyhaven.com (CC0). Die glTF-Modelle laufen durch tools/stamp-studio.html: orthografische Draufsicht, Tiefenschattierung, Kantenabdunklung, Freistellen, WebP.`,
+    pick(phStamps, 14).map((s) => ({ name: s.name, src: mr.stampUrl(s.id, true) })));
+
+  sec('Poly Haven – Fototexturen', 'CC0 · Poly Haven', 'ph',
+    `${phTex.length} Texturen. Quelle: polyhaven.com (CC0), auf 512 px verkleinert.`,
+    pick(phTex, 14).map((t) => ({ name: t.name, src: mr.texUrl(t.id, true), tex: 1 })));
+
+  sec('Prozedural – im Code gezeichnet', 'selbst · Canvas-Code', 'proc',
+    `${proc.length} Bauteile. Keine Bilddatei: js/views/maprender.js zeichnet sie beim Laden mit Canvas-Befehlen (Türen, Treppen, Säulen, Teppiche, Feuer, Zauberkreis …), teils mit Poly-Haven-Texturen als Füllung.`,
+    pick(proc, 14).map(([id, p]) => ({ name: p.name, src: mr.assetThumb('p:' + id) })));
+
+  sec('SDXL, lokal auf deiner RTX 5080 erzeugt', 'selbst erzeugt · KI', 'ai',
+    `${aiStamps.size} Objekte und ${aiTex.size} Texturen. Stable Diffusion XL (base 1.0) über tools/sdxl/gen.py: Texturen nahtlos gekachelt, Objekte auf Magenta erzeugt und freigestellt. 5,5 s pro Bild, nichts hochgeladen, keine Kosten.`,
+    [...[...aiStamps].map((id) => ({ name: STAMPS.find((s) => s.id === id)?.name || id, src: mr.stampUrl(id, true) })),
+     ...[...aiTex].map((id) => ({ name: TEXTURES.find((t) => t.id === id)?.name || id, src: mr.texUrl(id, true), tex: 1 }))]);
+
+  const base = phTex.find((t) => t.id === 'leafy_grass') || phTex[0];
+  // Vorschau der Basis erst in den Bildspeicher des Renderers holen, sonst fällt texThumb() aufs Original zurück
+  await new Promise((ok) => {
+    if (mr.texThumb(base.id + '~dunkel') !== mr.texUrl(base.id, true)) return ok();
+    const off = mr.onAssets(() => { off(); ok(); });
+    setTimeout(ok, 2000);
+  });
+  sec('Spielarten – beim Zeichnen berechnet', 'selbst · Rechenweg', 'var',
+    `${tv.TEX_VARIANTS.length} Varianten aus ${TEXTURES.length} Grundtexturen (js/data/texvars.js). Eine Datei, viele Spielarten: Helligkeit, Sättigung, Kontrast und Farbton werden per Canvas-Filter gerechnet. Beispiel unten: „${base.name}“.`,
+    [{ name: 'Original', src: mr.texUrl(base.id, true), tex: 1 },
+     ...Object.keys(tv.TEX_MODS).map((k) => ({ name: tv.TEX_MODS[k].name, src: mr.texThumb(base.id + '~' + k), tex: 1 }))]);
+
+  document.getElementById('sum').textContent =
+    `${STAMPS.length} Objekte und ${TEXTURES.length} Texturdateien · mit Spielarten ${tv.ALL_TEXTURES.length} wählbare Texturen · Gesamtgröße der Bilddateien: rund 25 MB`;
+</script>
+</body>
+</html>

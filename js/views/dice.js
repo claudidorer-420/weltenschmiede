@@ -189,16 +189,15 @@ export function DiceView({ tabId }) {
     </div>`;
   };
 
-  return html`<${ViewFrame} tabId=${tabId} title="Würfel">
-    <div class="page stack lg dice-page">
-      <div class="dice-stage">
-        <${DiceTray} roll=${current} onDone=${onDone} height=${250} hint="Würfel antippen – dann „Würfeln“" />
-        <div class="dice-result">
-          ${rolling ? html`<span class="rolling-note"><span class="spinner sm" />${diceSummary(current)} rollen …</span>`
-            : current ? (statSets ? html`<div class="stack sm"><b>Attributswerte</b><div class="row" style="gap:6px">${statSets.map((v) => html`<span class="badge accent" style="font-size:16px;padding:4px 12px">${v} (${fmtMod(Math.floor((v - 10) / 2))})</span>`)}</div><span class="small muted">Summe ${statSets.reduce((a, b) => a + b, 0)} – frei auf die Attribute verteilen.</span></div>`
-              : html`<${RollResult} r=${current} />`)
-            : html`<span class="faint small">Tippe Würfel an, um sie in den Becher zu legen. Die Summe erscheint, sobald alle Würfel liegen.</span>`}
-        </div>
+  return html`<${ViewFrame} tabId=${tabId} title="Würfel" noScroll=${true}>
+    <div class="dice-room">
+      <${DiceTray} roll=${current} onDone=${onDone} full=${true} hint="Der ganze Bildschirm ist die Würfelunterlage – Würfel wählen und werfen" />
+      <div class="page stack lg dice-page">
+      <div class="dice-result panel">
+        ${rolling ? html`<span class="rolling-note"><span class="spinner sm" />${diceSummary(current)} rollen …</span>`
+          : current ? (statSets ? html`<div class="stack sm"><b>Attributswerte</b><div class="row" style="gap:6px">${statSets.map((v) => html`<span class="badge accent" style="font-size:16px;padding:4px 12px">${v} (${fmtMod(Math.floor((v - 10) / 2))})</span>`)}</div><span class="small muted">Summe ${statSets.reduce((a, b) => a + b, 0)} – frei auf die Attribute verteilen.</span></div>`
+            : html`<${RollResult} r=${current} />`)
+          : html`<span class="faint small">Tippe Würfel an, um sie in den Becher zu legen. Die Summe erscheint, sobald alle Würfel liegen.</span>`}
       </div>
 
       <div class="row between">
@@ -282,6 +281,7 @@ export function DiceView({ tabId }) {
           <span class="small"><b>${r.label || r.input}</b>${r.character ? html` <span class="faint">· ${r.character}</span>` : null}<br /><span class="mono faint">${String(r.text).replace(/~(-?\d+)~/g, '($1)')}</span></span>
           <span class="tiny faint">${fmtTime(r.ts)}</span>
         </div>`) : html`<div class="faint small">Noch keine Würfe.</div>`}
+      </div>
       </div>
     </div>
   <//>`;

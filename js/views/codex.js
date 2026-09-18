@@ -4,7 +4,7 @@ import { useStore } from '../core/store.js';
 import {
   app, vault, isGM, isRealGM, myUid, getIndex, noteById, updateNote, renameNote, moveNote, deleteNote, duplicateNote,
   createNote, createFolder, renameFolder, deleteFolder, allFolders, watchSecret, saveSecret, searchNotes, restoreNote,
-  purgeNote, setNoteVisibility, col, setFolderMeta,
+  purgeNote, setNoteVisibility, setSecretVisibility, col, setFolderMeta,
 } from '../core/app.js';
 import { ws, openNote, openView, setEditMode, forgetNote, openSearch, currentOf, isMobile } from '../core/workspace.js';
 import { settings, updateSettings } from '../core/settings.js';
@@ -31,13 +31,17 @@ export function shareDialog(doc) {
   return openModal(({ close }) => {
     const [only, setOnly] = useState(() => new Set(doc.only || []));
     const [mode, setMode] = useState(doc.visibility === 'players' ? ((doc.only || []).length ? 'some' : 'all') : 'gm');
+    const [future, setFuture] = useState(doc.future !== false);
+    const [teaser, setTeaser] = useState(!!doc.teaser);
     const toggle = (uid) => {
       const n = new Set(only);
       if (n.has(uid)) n.delete(uid); else n.add(uid);
       setOnly(n);
       setMode(n.size ? 'some' : 'all');
     };
-    const ok = () => close(mode === 'gm' ? { visibility: 'gm', only: [] } : { visibility: 'players', only: mode === 'some' ? [...only] : [] });
+    const ok = () => close(mode === 'gm'
+      ? { visibility: 'gm', only: [], future: false, teaser: false }
+      : { visibility: 'players', only: mode === 'some' ? [...only] : [], future: mode === 'all' ? true : future, teaser });
     return html`<div class="modal-body stack">
       <${Segmented} value=${mode} onChange=${(v) => { setMode(v); if (v !== 'some') setOnly(new Set()); }} options=${[
         { value: 'gm', label: 'Nur SL', icon: 'lock' },
@@ -53,6 +57,18 @@ export function shareDialog(doc) {
       </div>` : html`<div class="tiny faint">Noch keine Mitspieler in dieser Kampagne – lade zuerst jemanden ein.</div>`) : null}
       ${mode === 'all' ? html`<div class="tiny faint">Alle Mitspieler dieser Kampagne sehen das Dokument.</div>` : null}
       ${mode === 'gm' ? html`<div class="tiny faint">Nur du als Spielleitung siehst es.</div>` : null}
+      ${mode !== 'gm' ? html`<div class="stack sm share-opts">
+        <label class="row nowrap share-row">
+          <input type="checkbox" checked=${mode === 'all' || future} disabled=${mode === 'all'} onChange=${(e) => setFuture(e.target.checked)} />
+          <span class="grow">und zukünftige Spieler</span>
+        </label>
+        <div class="tiny faint">${mode === 'all' ? 'Bei „Alle Spieler“ gilt das immer – auch für alle, die später dazukommen.' : 'Wer der Kampagne später beitritt, wird automatisch mit freigegeben.'}</div>
+        <label class="row nowrap share-row">
+          <input type="checkbox" checked=${teaser} onChange=${(e) => setTeaser(e.target.checked)} />
+          <span class="grow">Ohne Inhalt – nur die Überschrift</span>
+        </label>
+        <div class="tiny faint">Die Spieler sehen den Titel im Explorer, in der Suche und in Rückverweisen, der Text bleibt verborgen.</div>
+      </div>` : null}
     </div><div class="modal-foot">
       <${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//>
       <${Btn} kind="primary" icon="check" disabled=${mode === 'some' && !only.size} onClick=${ok}>Übernehmen<//>
@@ -63,14 +79,42 @@ export function shareDialog(doc) {
 export async function shareNoteDialog(n) {
   const r = await shareDialog(n);
   if (!r) return;
-  await setNoteVisibility(n.id, r.visibility, r.only);
-  if (r.visibility === 'players') {
+  await setNoteVisibility(n.id, r.visibility, r.only, r);
+  // Bilder aus der Notiz nur mitfreigeben, wenn der Text überhaupt zu sehen ist
+  if (r.visibility === 'players' && !r.teaser) {
     for (const name of extractEmbeddedFiles(n.body)) {
       const f = getIndex().fileByName.get(name.toLowerCase());
-      if (f && f.visibility !== 'players') await updateFileMeta(app.get().cid, f.id, { visibility: 'players', only: r.only, onlyN: r.only.length }).catch(() => {});
+      if (f && f.visibility !== 'players') await updateFileMeta(app.get().cid, f.id, { visibility: 'players', only: r.only, onlyN: r.only.length, future: !!r.future }).catch(() => {});
     }
   }
-  toast(r.visibility === 'gm' ? 'Nur für die Spielleitung' : r.only.length ? `Freigegeben für ${r.only.length} Mitspieler` : 'Für alle Spieler freigegeben', 'success');
+  toast(shareToast(r), 'success');
+}
+
+// Kurzer Hinweis, was die Freigabe bedeutet
+export function shareToast(r) {
+  if (r.visibility === 'gm') return 'Nur für die Spielleitung';
+  const wer = r.only.length ? `für ${r.only.length} Mitspieler` : 'für alle Spieler';
+  return `${r.teaser ? 'Überschrift' : 'Freigegeben'} ${wer}${r.future && r.only.length ? ' (auch für spätere)' : ''}`;
+}
+
+// Freigabe für mehrere Notizen auf einmal (Ordner oder Mehrfachauswahl)
+async function shareManyDialog(list, wo = '') {
+  if (!list.length) return;
+  const erste = list[0];
+  const r = await shareDialog({ visibility: erste.visibility, only: erste.only, future: erste.future, teaser: erste.teaser });
+  if (!r) return;
+  for (const n of list) await setNoteVisibility(n.id, r.visibility, r.only, r);
+  toast(`${list.length} Notizen${wo ? ` in „${wo}“` : ''}: ${shareToast(r)}`, 'success');
+}
+
+async function deleteManyDialog(list) {
+  if (!list.length) return;
+  if (!(await confirmDialog(`${list.length} Notizen in den Papierkorb verschieben?`, { ok: 'In den Papierkorb', danger: true }))) return;
+  for (const n of list) {
+    await deleteNote(n.id);
+    forgetNote(n.id);
+  }
+  toast(`${list.length} Notizen gelöscht`, 'info');
 }
 
 export async function toggleVisibility(n) {
@@ -149,6 +193,13 @@ async function shareAsHandout(n) {
   toast('Als Handout an die Spieler geschickt', 'success', { action: { label: 'Ansehen', onClick: () => openView('handouts') } });
 }
 
+// Kurzform der aktuellen Freigabe für Menüeinträge
+export function shareHint(n) {
+  if (n.visibility !== 'players') return 'Nur SL';
+  const wer = (n.only || []).length ? `${n.only.length} Mitspieler` : 'Alle';
+  return n.teaser ? `${wer} · ohne Inhalt` : wer;
+}
+
 export function noteMenu(e, n) {
   const gm = isGM();
   const bm = (settings.get().bookmarks || []).includes(n.id);
@@ -158,8 +209,7 @@ export function noteMenu(e, n) {
     gm && { divider: true },
     gm && { label: 'Umbenennen …', icon: 'edit-square', onClick: () => renameDialog(n) },
     gm && { label: 'Verschieben nach …', icon: 'folder', onClick: () => moveDialog([n.id]) },
-    gm && { label: n.visibility === 'players' ? 'Vor Spielern verbergen' : 'Für alle Spieler freigeben', icon: n.visibility === 'players' ? 'lock' : 'users', onClick: () => toggleVisibility(n) },
-    gm && { label: 'Freigabe für bestimmte Spieler …', icon: 'user', hint: (n.only || []).length ? `${n.only.length} Mitspieler` : '', onClick: () => shareNoteDialog(n) },
+    gm && { label: 'Freigabe für Spieler …', icon: n.visibility === 'players' ? ((n.only || []).length ? 'user' : 'users') : 'lock', hint: shareHint(n), onClick: () => shareNoteDialog(n) },
     gm && { label: 'Duplizieren', icon: 'copy', onClick: async () => { const c = await duplicateNote(n.id); if (c) openNote(c.id); } },
     gm && { label: 'Als Handout an Spieler senden', icon: 'scroll', onClick: () => shareAsHandout(n) },
     { divider: true },
@@ -228,16 +278,7 @@ function folderMenu(e, path) {
       const t = await promptDialog('Neuer Ordnername', leaf, { title: 'Ordner umbenennen' });
       if (t) await renameFolder(path, path.split('/').slice(0, -1).concat(t).join('/'));
     } },
-    { label: 'Alles darin für Spieler freigeben', icon: 'users', onClick: async () => {
-      const list = inside();
-      for (const n of list) if (n.visibility !== 'players') await setNoteVisibility(n.id, 'players');
-      toast(`${list.length} Notizen freigegeben`, 'success');
-    } },
-    { label: 'Alles darin verbergen', icon: 'lock', onClick: async () => {
-      const list = inside();
-      for (const n of list) if (n.visibility !== 'gm') await setNoteVisibility(n.id, 'gm');
-      toast(`${list.length} Notizen verborgen`, 'success');
-    } },
+    { label: 'Freigabe für Spieler …', icon: 'users', hint: `${inside().length} Notizen`, onClick: () => shareManyDialog(inside(), path) },
     { divider: true },
     { label: 'Ordner löschen', icon: 'trash', danger: true, onClick: async () => {
       const count = inside().length;
@@ -368,6 +409,8 @@ function FileExplorer() {
   });
   const [dragOver, setDragOver] = useState(null);
   const [drag, setDrag] = useState({ id: null, kind: null, over: null, zone: null });
+  const [sel, setSel] = useState([]);          // markierte Zeilen (Schlüssel) – Strg/Umschalt wie im Ordner
+  const anchor = useRef(null);
   const [q, setQ] = useState('');
   const bookmarks = useStore(settings, (s) => s.bookmarks || []);
   const meta = campaign?.folderMeta || {};
@@ -448,6 +491,72 @@ function FileExplorer() {
       ...applyOrder(node.files, path, 'file').map((f) => `x:${f.id}`),
     ];
   };
+  // ── Mehrfachauswahl mit Strg und Umschalt (wie im Dateimanager) ──
+  // Alle sichtbaren Zeilen in Anzeigereihenfolge – Grundlage für die Umschalt-Auswahl
+  const flatRows = () => {
+    const out = [];
+    const walk = (node) => {
+      applyOrder([...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name, 'de')), node.path, 'folder').forEach((f) => {
+        out.push({ key: `f:${f.path}`, kind: 'folder', item: f });
+        if (query || expanded[f.path]) walk(f);
+      });
+      sortNotes(node.notes, node.path).forEach((n) => out.push({ key: n.id, kind: 'note', item: n }));
+      applyOrder(node.files, node.path, 'file').forEach((f) => out.push({ key: `x:${f.id}`, kind: 'file', item: f }));
+    };
+    walk(tree);
+    return out;
+  };
+  const selItems = () => {
+    const map = new Map(flatRows().map((r) => [r.key, r]));
+    return sel.map((k) => map.get(k)).filter(Boolean);
+  };
+  const rowClick = (e, item, kind, open) => {
+    const key = keyOf(item, kind);
+    if (e.shiftKey && anchor.current) {
+      e.preventDefault();
+      const keys = flatRows().map((r) => r.key);
+      const a = keys.indexOf(anchor.current);
+      const b = keys.indexOf(key);
+      if (a >= 0 && b >= 0) {
+        setSel(keys.slice(Math.min(a, b), Math.max(a, b) + 1));
+        return;
+      }
+    }
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      anchor.current = key;
+      setSel(sel.includes(key) ? sel.filter((k) => k !== key) : [...sel, key]);
+      return;
+    }
+    anchor.current = key;
+    if (sel.length) setSel([]);
+    open?.();
+  };
+  const selCls = (item, kind) => (sel.includes(keyOf(item, kind)) ? ' sel' : '');
+  const multiMenu = (e) => {
+    const items = selItems();
+    const notes = items.filter((r) => r.kind === 'note').map((r) => r.item);
+    openMenu(e, [
+      { header: true, label: `${items.length} Einträge markiert` },
+      gm && notes.length && { label: 'Verschieben nach …', icon: 'folder', onClick: () => moveDialog(notes.map((n) => n.id)) },
+      gm && notes.length && { label: 'Freigabe für Spieler …', icon: 'users', onClick: () => shareManyDialog(notes) },
+      { label: 'In neuen Tabs öffnen', icon: 'plus', onClick: () => notes.forEach((n) => openNote(n.id, { newTab: true })) },
+      { divider: true },
+      { label: 'Auswahl aufheben', icon: 'x', onClick: () => setSel([]) },
+      gm && notes.length && { divider: true },
+      gm && notes.length && { label: `${notes.length} Notizen löschen`, icon: 'trash', danger: true, onClick: () => deleteManyDialog(notes) },
+    ].filter(Boolean));
+  };
+  // Rechtsklick auf eine markierte Zeile betrifft die ganze Auswahl
+  const rowMenu = (e, item, kind, single) => {
+    if (sel.length > 1 && sel.includes(keyOf(item, kind))) {
+      e.preventDefault();
+      e.stopPropagation();
+      multiMenu(e);
+      return;
+    }
+    single(e);
+  };
   const dropZone = (e, el, canInto) => {
     const r = el.getBoundingClientRect();
     const rel = (e.clientY - r.top) / Math.max(1, r.height);
@@ -474,12 +583,30 @@ function FileExplorer() {
     if (!gm || !drag.id) return;
     const dragged = { kind: drag.kind, id: drag.id };
     if (dragged.kind === 'folder' && kind === 'folder' && (target.path === dragged.id || target.path.startsWith(`${dragged.id}/`))) return;
+    const dragKey = dragged.kind === 'folder' ? `f:${dragged.id}` : dragged.kind === 'file' ? `x:${dragged.id}` : dragged.id;
+    // Ist die gezogene Zeile Teil einer Mehrfachauswahl, wandern alle markierten Notizen mit
+    const mehr = sel.length > 1 && sel.includes(dragKey)
+      ? selItems().filter((r) => r.kind === 'note').map((r) => r.item) : null;
+    if (mehr?.length) {
+      const ziel = zone === 'into' && kind === 'folder' ? target.path : (kind === 'folder' ? parentOf(target.path) : (target.folder || ''));
+      for (const n of mehr) if ((n.folder || '') !== ziel) await moveNote(n.id, ziel);
+      if (zone !== 'into' || kind !== 'folder') {
+        const ids = mehr.map((n) => n.id);
+        const targetKey = kind === 'folder' ? `f:${target.path}` : kind === 'file' ? `x:${target.id}` : target.id;
+        const keys = visibleKeys(ziel).filter((k) => !ids.includes(k));
+        const at = keys.indexOf(targetKey);
+        keys.splice(at < 0 ? keys.length : at + (zone === 'after' ? 1 : 0), 0, ...ids);
+        saveOrder(ziel, keys);
+        if (sort !== 'custom') { setSort('custom'); localStorage.setItem('ws.sort', 'custom'); }
+      }
+      toast(`${mehr.length} Notizen verschoben`, 'success');
+      return;
+    }
     if (zone === 'into' && kind === 'folder') {
       await moveItem(dragged, target.path);
       return;
     }
     const path = kind === 'folder' ? parentOf(target.path) : (target.folder || '');
-    const dragKey = dragged.kind === 'folder' ? `f:${dragged.id}` : dragged.kind === 'file' ? `x:${dragged.id}` : dragged.id;
     const targetKey = kind === 'folder' ? `f:${target.path}` : kind === 'file' ? `x:${target.id}` : target.id;
     let moved = dragged;
     if (dragged.kind === 'folder') {
@@ -504,6 +631,7 @@ function FileExplorer() {
       const id = kind === 'folder' ? item.path : item.id;
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData(kind === 'note' ? 'text/x-note' : kind === 'folder' ? 'text/x-folder' : 'text/x-file', id);
+      if (sel.length && !sel.includes(keyOf(item, kind))) setSel([]);   // außerhalb der Auswahl gezogen
       setDrag({ id, kind, over: null, zone: null });
     },
     onDragEnd: () => setDrag({ id: null, kind: null, over: null, zone: null }),
@@ -522,7 +650,10 @@ function FileExplorer() {
     if (drag.over !== key) return '';
     return drag.zone === 'into' ? ' drop' : drag.zone === 'before' ? ' drop-before' : ' drop-after';
   };
-  // Beim Ziehen an den Rand: die Liste scrollt langsam mit
+  // Beim Ziehen an den Rand: die Liste scrollt mit. Los geht es in den oberen und unteren 15 %
+  // der Liste; je weiter außen der Zeiger ist, desto schneller – höchstens SCROLL_MAX je Bild.
+  const SCROLL_ZONE = 0.15;
+  const SCROLL_MAX = 4.6;
   useEffect(() => {
     if (!drag.id) return undefined;
     let raf = 0;
@@ -530,10 +661,12 @@ function FileExplorer() {
     const el = () => document.querySelector('.sidebar .sidebar-body.tree');
     const onOver = (e) => {
       const box = el()?.getBoundingClientRect();
-      if (!box) return;
-      const edge = 46;
-      dy = e.clientY < box.top + edge ? -(edge - (e.clientY - box.top)) / 4
-        : e.clientY > box.bottom - edge ? (edge - (box.bottom - e.clientY)) / 4 : 0;
+      if (!box) { dy = 0; return; }
+      const zone = Math.max(28, box.height * SCROLL_ZONE);
+      const oben = (box.top + zone - e.clientY) / zone;
+      const unten = (e.clientY - (box.bottom - zone)) / zone;
+      const t = oben > 0 ? -Math.min(1, oben) : unten > 0 ? Math.min(1, unten) : 0;
+      dy = Math.sign(t) * SCROLL_MAX * t * t;   // quadratisch: außen schneller, innen sanft
     };
     const step = () => {
       if (dy) el()?.scrollBy(0, dy);
@@ -575,9 +708,9 @@ function FileExplorer() {
     const open = query ? true : !!expanded[f.path];
     const m = meta[f.path] || {};
     return html`<div key=${`f:${f.path}`}>
-      <div class=${`tree-row folder${dragOver === f.path ? ' drop' : ''}${dragCls(f, 'folder')}`} style=${m.color ? { '--fc': m.color } : null} title=${f.path}
-        onClick=${() => !query && persistExp({ ...expanded, [f.path]: !open })}
-        onContextMenu=${(e) => gm && folderMenu(e, f.path)}
+      <div class=${`tree-row folder${dragOver === f.path ? ' drop' : ''}${dragCls(f, 'folder')}${selCls(f, 'folder')}`} style=${m.color ? { '--fc': m.color } : null} title=${f.path}
+        onClick=${(e) => rowClick(e, f, 'folder', () => !query && persistExp({ ...expanded, [f.path]: !open }))}
+        onContextMenu=${(e) => gm && rowMenu(e, f, 'folder', () => folderMenu(e, f.path))}
         ...${dragProps(f, 'folder')}
         onDragLeave=${() => setDragOver(null)}>
         <span class=${`chev${open ? ' open' : ''}`}><${Icon} name="chevron-right" size=${14} /></span>
@@ -593,18 +726,21 @@ function FileExplorer() {
   const noteRow = (n) => {
     const color = groupColor(n, groups);
     const kindIcon = KIND_ICON[n.kind];
-    return html`<div key=${n.id} class=${`tree-row${n.id === activeId ? ' active' : ''}${dragCls(n, 'note')}`} title=${n.folder ? `${n.folder}/${n.title}` : n.title}
+    return html`<div key=${n.id} class=${`tree-row${n.id === activeId ? ' active' : ''}${dragCls(n, 'note')}${selCls(n, 'note')}`} title=${n.folder ? `${n.folder}/${n.title}` : n.title}
         ...${dragProps(n, 'note')}
-        onClick=${(e) => openNote(n.id, { newTab: e.ctrlKey || e.metaKey })}
+        onClick=${(e) => (e.altKey ? openNote(n.id, { newTab: true }) : rowClick(e, n, 'note', () => openNote(n.id)))}
         onAuxClick=${(e) => e.button === 1 && openNote(n.id, { newTab: true })}
-        onContextMenu=${(e) => noteMenu(e, n)}>
+        onContextMenu=${(e) => rowMenu(e, n, 'note', () => noteMenu(e, n))}>
       <span class="chev"></span>
       ${color ? html`<span class="dot" style=${{ background: color }}></span>` : kindIcon ? html`<span class="k-icon"><${Icon} name=${kindIcon} size=${13} /></span>` : null}
       <span class="name">${n.title}</span>
       ${gm && n.visibility === 'players' ? html`<span class="lock" title=${(n.only || []).length ? `Nur für ${n.only.length} Mitspieler sichtbar` : 'Für alle Spieler sichtbar'}><${Icon} name=${(n.only || []).length ? 'user' : 'users'} size=${12} /></span>` : null}
     </div>`;
   };
-  const fileRow = (f) => html`<div key=${`file:${f.id}`} class=${`tree-row${dragCls(f, 'file')}`} title=${f.name} onClick=${() => fileUrl(cid, f.id).then((u) => u && openLightbox(u))} onContextMenu=${(e) => gm && fileMenu(e, f)}>
+  const fileRow = (f) => html`<div key=${`file:${f.id}`} class=${`tree-row${dragCls(f, 'file')}${selCls(f, 'file')}`} title=${f.name}
+    ...${dragProps(f, 'file')}
+    onClick=${(e) => rowClick(e, f, 'file', () => fileUrl(cid, f.id).then((u) => u && openLightbox(u)))}
+    onContextMenu=${(e) => gm && rowMenu(e, f, 'file', () => fileMenu(e, f))}>
     <span class="chev"></span><${Icon} name="image" size=${14} /><span class="name">${f.name}</span>
   </div>`;
 
@@ -623,7 +759,13 @@ function FileExplorer() {
       <input class="input" value=${q} onInput=${(e) => setQ(e.target.value)} placeholder="Notizen & Ordner filtern …" />
       ${q ? html`<${IconBtn} icon="x" size=${14} title="Filter löschen" onClick=${() => setQ('')} />` : null}
     </div>
-    <div class=${`sidebar-body tree${dragOver === '' ? ' drop' : ''}`} onDragOver=${(e) => { if (gm) e.preventDefault(); }} onDrop=${(e) => dropOn(e, '')}>
+    <div class=${`sidebar-body tree${dragOver === '' ? ' drop' : ''}`} onDragOver=${(e) => { if (gm) e.preventDefault(); }} onDrop=${(e) => dropOn(e, '')}
+      onClick=${(e) => { if (e.target === e.currentTarget && sel.length) setSel([]); }}>
+      ${sel.length > 1 ? html`<div class="tree-sel-bar">
+        <span class="grow">${sel.length} markiert</span>
+        <${IconBtn} icon="more-horizontal" size=${15} title="Aktionen für die Auswahl" onClick=${multiMenu} />
+        <${IconBtn} icon="x" size=${15} title="Auswahl aufheben" onClick=${() => setSel([])} />
+      </div>` : null}
       ${pinned.length && !query ? html`<div class="tree-section"><div class="tree-sec-title"><${Icon} name="bookmark" size=${12} />Angeheftet</div>${pinned.map(noteRow)}</div>` : null}
       ${children(tree)}
       ${query && empty ? html`<div class="tree-empty">Nichts gefunden für „${q}“.</div>` : null}
@@ -841,7 +983,7 @@ export function NoteView({ params, active, tabId }) {
   return html`<${ViewFrame} tabId=${tabId} title=${note.title} actions=${actions}>
     <div class="note-wrap">
       ${editing ? html`<${NoteEditor} note=${note} key=${`e:${note.id}`} />` : html`<${NoteReader} note=${note} heading=${params.heading} active=${active} />`}
-      ${gm && isRealGM() ? html`<${GmSecret} note=${note} key=${`s:${note.id}`} />` : null}
+      ${(gm && isRealGM()) || !gm ? html`<${GmSecret} note=${note} key=${`s:${note.id}`} />` : null}
       <${BacklinksBottom} note=${note} />
     </div>
   <//>`;
@@ -890,7 +1032,9 @@ function NoteReader({ note, heading, active }) {
     <h1 class="inline-title" onDblClick=${() => gm && setEditMode(note.id, true)}>${note.title}</h1>
     <${NoteMeta} note=${note} />
     <${Properties} props=${props} />
-    ${empty
+    ${!gm && note.teaser
+      ? html`<p class="faint" style="font-style:italic">Die Spielleitung hat von dieser Notiz nur die Überschrift freigegeben.</p>`
+      : empty
       ? html`<p class="faint" style="font-style:italic">Diese Notiz ist noch leer.${gm ? html` <a href="#" onClick=${(e) => { e.preventDefault(); setEditMode(note.id, true); }}>Jetzt schreiben</a>` : ''}</p>`
       : html`<${MarkdownView} src=${note.body} onToggleTask=${gm ? (line) => updateNote(note.id, { body: toggleTask(note.body, line) }) : null} />`}
   </div>`;
@@ -906,26 +1050,44 @@ function BacklinksBottom({ note }) {
   const titles = [note.title, ...(note.aliases || [])];
   return html`<div class="backlinks-section">
     <div class="section-title" style="margin-top:0"><${Icon} name="link" size=${14} /> ${list.length} ${list.length === 1 ? 'Rückverweis' : 'Rückverweise'}</div>
-    ${list.map((n) => html`<div class="backlink-item" key=${n.id} onClick=${(e) => openNote(n.id, { newTab: e.ctrlKey || e.metaKey })}><div class="t">${n.title}</div><div class="s">${linkContext(n.body, titles)}</div></div>`)}
+    ${list.map((n) => html`<div class="backlink-item" key=${n.id} onClick=${(e) => openNote(n.id, { newTab: e.ctrlKey || e.metaKey })}><div class="t">${n.title}</div>
+      <div class="s">${n.teaser && !isGM() ? 'Nur die Überschrift freigegeben' : linkContext(n.body, titles)}</div></div>`)}
   </div>`;
 }
 
 function GmSecret({ note }) {
+  const [doc, setDoc] = useState(undefined);
   const [body, setBody] = useState(null);
   const [edit, setEdit] = useState(false);
-  useEffect(() => watchSecret(note.id, (b) => setBody((cur) => (edit && cur !== null ? cur : b))), [note.id]);
+  const gm = isGM();
+  useEffect(() => watchSecret(note.id, (d) => {
+    setDoc(d);
+    setBody((cur) => (edit && cur !== null ? cur : (d?.body || '')));
+  }), [note.id]);
   const save = useMemo(() => debounce((val) => saveSecret(note.id, val), 700), [note.id]);
   useEffect(() => () => save.cancel?.(), []);
-  if (body === null) return null;
-  return html`<details class="gm-secret" open=${!!body || edit}>
-    <summary><${Icon} name="lock" size=${16} /> SL-Geheimnisse ${body ? null : html`<span class="small faint">(leer)</span>`}
+  if (doc === undefined || body === null) return null;
+  const frei = doc?.visibility === 'players';
+  if (!gm && (!frei || !body)) return null;   // Spieler sehen nur eigens freigegebene Geheimnisse
+  // Die Freigabe gilt immer nur für dieses eine Geheimnis, nie für ein ganzes Dokument
+  const share = async (e) => {
+    e.preventDefault();
+    const r = await shareDialog(doc || {});
+    if (!r) return;
+    await setSecretVisibility(note.id, r.visibility, r.only, r);
+    toast(`Geheimnis zu „${note.title}“: ${shareToast(r)}`, 'success');
+  };
+  return html`<details class=${`gm-secret${frei ? ' shared' : ''}`} open=${!!body || edit}>
+    <summary><${Icon} name=${frei ? 'users' : 'lock'} size=${16} /> ${gm ? 'SL-Geheimnisse' : 'Von der Spielleitung freigegeben'} ${body ? null : html`<span class="small faint">(leer)</span>`}
       <span class="grow"></span>
-      <button type="button" class="icon-btn sm" title=${edit ? 'Fertig' : 'Bearbeiten'} onClick=${(e) => { e.preventDefault(); if (edit) save.flush?.(body); setEdit(!edit); }}><${Icon} name=${edit ? 'check' : 'pencil'} size=${14} /></button>
+      ${gm ? html`<button type="button" class="icon-btn sm" title=${`Freigabe für Spieler – ${shareHint(doc || {})}`} onClick=${share}><${Icon} name=${frei ? ((doc.only || []).length ? 'user' : 'users') : 'lock'} size=${14} /></button>` : null}
+      ${gm ? html`<button type="button" class="icon-btn sm" title=${edit ? 'Fertig' : 'Bearbeiten'} onClick=${(e) => { e.preventDefault(); if (edit) save.flush?.(body); setEdit(!edit); }}><${Icon} name=${edit ? 'check' : 'pencil'} size=${14} /></button>` : null}
     </summary>
     <div class="inner">
-      ${edit
+      ${!gm && doc.teaser ? html`<div class="small faint">Hier gibt es etwas – die Spielleitung hat den Text aber noch nicht freigegeben.</div>`
+        : edit
         ? html`<${AutoTextarea} value=${body} onInput=${(e) => { setBody(e.target.value); save(e.target.value); }} placeholder="Nur du siehst das – wahre Motive, Fallen, Wendungen … (Markdown & [[Links]] funktionieren)" />`
-        : body ? html`<${MarkdownView} src=${body} />` : html`<div class="small faint">Geheimnisse, die Spieler nie sehen – selbst wenn die Notiz freigegeben ist (liegt technisch getrennt, geschützt durch die Firestore-Regeln).</div>`}
+        : body ? html`<${MarkdownView} src=${body} />` : html`<div class="small faint">Geheimnisse, die Spieler nie sehen – außer du gibst genau dieses hier über das Personen-Symbol frei (liegt technisch getrennt, geschützt durch die Firestore-Regeln).</div>`}
     </div>
   </details>`;
 }

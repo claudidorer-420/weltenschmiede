@@ -1,5 +1,5 @@
 // Einstellungen: KI & Modelle (nur Spielleitung), Konto, Darstellung, Spiel, Daten, Über.
-import { html, useState, useEffect } from '../lib/preact.js';
+import { html, useState, useEffect, useRef } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import { app, renameLocalProfile, refreshCampaigns, updateCampaign } from '../core/app.js';
 import { settings, updateSettings } from '../core/settings.js';
@@ -8,9 +8,11 @@ import {
   testProvider, usageStats,
 } from '../core/ai.js';
 import { ViewFrame } from '../ui/frame.js';
-import { Icon, Btn, Field, Toggle, Segmented, Avatar, toast, confirmDialog, promptDialog } from '../ui/components.js';
+import { Icon, IconBtn, Btn, Field, Toggle, Segmented, Avatar, toast, confirmDialog, promptDialog } from '../ui/components.js';
 import { changeSecretDialog, signOutDialog, switchKind } from '../ui/account.js';
 import { localSummary, migrateLocalToCloud } from './importexport.js';
+import { copyText } from '../lib/util.js';
+import { DICE_SKINS, drawSkinPreview } from '../ui/dice3d.js';
 
 const ALL_SECTIONS = [
   { value: 'ai', label: 'KI & Modelle', icon: 'sparkles' },
@@ -137,8 +139,8 @@ function AISection() {
       <b>Günstiger Start:</b> Google Gemini (Flash-Modelle mit Gratis-Kontingent). <b>Beste Texte:</b> Claude Opus 5. <b>Viele Modelle mit einem Schlüssel:</b> OpenRouter.
     </div></div>
     <div class="card row nowrap" style="gap:12px">
-      <${Icon} name="lock" size=${20} class="accent-text" />
-      <div class="small muted" style="line-height:1.55">${mode === 'cloud'
+      <${Icon} name="lock" size=${20} class="accent-text" style=${{ flex: 'none' }} />
+      <div class="small muted" style="line-height:1.55;min-width:0;overflow-wrap:anywhere">${mode === 'cloud'
         ? `Deine Schlüssel gehören nur zu deinem Konto: Sie liegen im privaten Bereich deines Kontos – nur du kannst sie lesen, ${gm ? 'deine Spieler' : 'weder die Spielleitung noch deine Mitspieler'} sehen sie nie. Sie stehen auf all deinen Geräten bereit und werden beim Abmelden von diesem Gerät entfernt; meldet sich jemand anderes an, sind sie weg.`
         : 'Offline-Modus: Die Schlüssel liegen nur auf diesem Gerät und gehören zum Offline-Profil.'}</div>
     </div>
@@ -153,6 +155,8 @@ function AISection() {
       <div class="small muted">⭐ = Top-Empfehlung, ☆ = gute Alternative. In jedem Generator kannst du das Modell zusätzlich pro Anfrage wechseln.</div>
       ${tasks.map((t) => html`<${TaskRow} key=${t} task=${t} />`)}
     </div>
+
+    <${McpCard} />
 
     ${Object.keys(usage).length ? html`<div class="card"><div class="card-head"><h3><${Icon} name="activity" size=${18} />Nutzung auf diesem Gerät</h3><span class="grow"></span><${Btn} size="sm" kind="ghost" onClick=${() => { localStorage.removeItem('ws.usage'); toast('Zurückgesetzt'); }}>Zurücksetzen<//></div>
       <table class="xp-table">${Object.entries(usage).map(([p, u]) => html`<tr><td>${PROVIDERS[p]?.label || p}</td><td>${u.calls} Anfragen · ${(u.input || 0).toLocaleString('de-DE')} → ${(u.output || 0).toLocaleString('de-DE')} Tokens</td></tr>`)}</table>
@@ -242,6 +246,60 @@ async function changeEdition(v, camp, ed) {
   }
 }
 
+// ── Würfel-Aussehen ──
+function SkinPreview({ skin }) {
+  const ref = useRef();
+  useEffect(() => { drawSkinPreview(ref.current, skin); }, [skin]);
+  return html`<canvas ref=${ref}></canvas>`;
+}
+
+function SkinPicker() {
+  const cur = useStore(settings, (s) => s.diceSkin || 'klassisch');
+  return html`<div class="skin-grid">
+    ${DICE_SKINS.map((s) => html`<button type="button" key=${s.key} class=${`skin-card${cur === s.key ? ' on' : ''}`} title=${s.name} onClick=${() => updateSettings({ diceSkin: s.key })}>
+      <${SkinPreview} skin=${s.key} /><span>${s.name}</span>
+    </button>`)}
+  </div>`;
+}
+
+// ── Weltenschmiede in Claude bedienen (MCP-Connector) ──
+function McpCard() {
+  const url = useStore(settings, (s) => s.mcpUrl || '');
+  const [open, setOpen] = useState(false);
+  const ziel = url.trim() || 'https://weltenschmiede-mcp.<dein-name>.workers.dev/mcp';
+  return html`<div class="card stack sm">
+    <div class="card-head" style="margin:0"><h3><${Icon} name="plug" size=${18} />Weltenschmiede in Claude bedienen (MCP)</h3>
+      <span class="grow"></span><${Btn} size="sm" kind="ghost" icon=${open ? 'chevron-up' : 'chevron-down'} onClick=${() => setOpen(!open)}>${open ? 'Weniger' : 'Anleitung'}<//></div>
+    <div class="small muted" style="line-height:1.6">
+      Der Connector macht deine Kampagne in Claude bedienbar – am Rechner, in der App und am Handy: Codex durchsuchen und
+      schreiben, Quests und Sitzungen pflegen, Handouts und Szene zeigen, im Spieltisch-Chat schreiben, würfeln, Monster
+      und Zauber nachschlagen, Karten bauen. Änderungen erscheinen sofort bei allen Mitspielern.
+    </div>
+    <${Field} label="Adresse deines Servers" hint="Die Adresse, die beim Veröffentlichen ausgegeben wird – endet auf /mcp. Wird nur bei dir gespeichert.">
+      <div class="row nowrap">
+        <input class="input mono" value=${url} placeholder="https://weltenschmiede-mcp.<dein-name>.workers.dev/mcp" onInput=${(e) => updateSettings({ mcpUrl: e.target.value })} />
+        <${IconBtn} icon="copy" title="Adresse kopieren" disabled=${!url.trim()} onClick=${() => { copyText(url.trim()); toast('Adresse kopiert'); }} />
+      </div>
+    <//>
+    ${open ? html`<div class="step-list small" style="line-height:1.6">
+      <div class="step"><div><b>1. Server veröffentlichen (einmalig):</b> kostenloses Cloudflare-Konto anlegen und im
+        Projektordner <code>powershell -ExecutionPolicy Bypass -File mcp\\deploy.ps1</code> ausführen. Am Ende steht die
+        Adresse – oben eintragen.</div></div>
+      <div class="step"><div><b>2. In Claude verbinden:</b> Einstellungen → Connectors → „Benutzerdefinierten Connector
+        hinzufügen“. Name <b>Weltenschmiede</b>, als MCP-Server-URL die Adresse von oben (mit <code>/mcp</code>).</div></div>
+      <div class="step"><div><b>3. Anmelden:</b> „Verbinden“ öffnet die Anmeldeseite der Weltenschmiede – derselbe Name und
+        dasselbe Geheimwort wie in der App, dann „Zugriff erlauben“.</div></div>
+      <div class="step"><div><b>4. Losreden:</b> „Zeig mir alle offenen Quests“, „Leg eine NSC-Notiz für den Schmied Borin
+        an und verlinke ihn mit [[Eisenfurt]]“, „Baue eine Höhlenkarte mit drei Räumen“, „Würfle 4W6 sechsmal und poste es
+        in den Chat“.</div></div>
+      <div class="step"><div><b>Sicherheit:</b> Der Server speichert nichts. Alle Zugriffe laufen mit deinem Konto durch
+        dieselben Firestore-Regeln wie die App – ein Spieler-Konto sieht auch über Claude nur Freigegebenes. Das Geheimwort
+        in der App zu ändern meldet alle Verbindungen ab.</div></div>
+    </div>
+    <div class="tiny faint">Volle Beschreibung samt Werkzeugliste: <code>mcp/README.md</code> im Projektordner.</div>` : null}
+  </div>`;
+}
+
 function GameSection() {
   const s = useStore(settings, (x) => x);
   const mode = useStore(app, (x) => x.mode);
@@ -253,6 +311,9 @@ function GameSection() {
       <${Segmented} value=${ed} onChange=${(v) => changeEdition(v, camp, ed)} options=${[{ value: '2014', label: 'D&D 5e (2014)' }, { value: '2024', label: 'D&D 5e (2024)' }]} /><//>` : null}
     <${Field} label="Entfernungen"><${Segmented} value=${s.units} onChange=${(v) => updateSettings({ units: v })} options=${[{ value: 'm', label: 'Meter (dt. Regelwerk)' }, { value: 'ft', label: 'Fuß' }]} /><//>
     <${Toggle} checked=${s.diceAnim !== false} onChange=${(v) => updateSettings({ diceAnim: v })} label="Würfel-Animation (Würfel rollen über den Tisch)" />
+    <${Field} label="Würfel-Aussehen" hint="Gilt überall: in der Würfel-Ansicht, im Kampf und bei den fliegenden Würfeln über der App.">
+      <${SkinPicker} />
+    <//>
     <${Toggle} checked=${s.shareRolls !== false} onChange=${(v) => updateSettings({ shareRolls: v })} label="Würfe automatisch im Spieltisch-Chat zeigen" />
     ${mode === 'local' ? html`<${Field} label="Dein Name (offline)"><input class="input" value=${s.profileName} onInput=${(e) => { updateSettings({ profileName: e.target.value }); renameLocalProfile(e.target.value); }} /><//>` : null}
   </div>`;
