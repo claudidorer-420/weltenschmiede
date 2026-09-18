@@ -6,12 +6,14 @@ import { REAL_INK } from './maprender.js';
 
 export const STYLES = {
   real: { label: 'Realistisch', real: true, bg: '#0a0b0d', hatch: '#000000', floor: '#8d8172', grid: 'rgba(0,0,0,.28)', wall: '#1a1714', ink: REAL_INK.ink, halo: REAL_INK.halo, hatchKind: 'none' },
+  bild: { label: 'Bildkarte', image: true, bg: '#0a0b0d', hatch: '#000000', floor: '#8d8172', grid: 'rgba(0,0,0,.4)', wall: '#1a1714', ink: REAL_INK.ink, halo: REAL_INK.halo, hatchKind: 'none' },
   klassisch: { label: 'Klassisch', bg: '#f3efe6', hatch: '#3b3b3b', floor: '#ffffff', grid: 'rgba(80,70,60,.3)', wall: '#1d1d1d', ink: '#222222', halo: '#ffffff', hatchKind: 'lines' },
   pergament: { label: 'Pergament', bg: '#e6d5b1', hatch: '#6a4e2b', floor: '#f7eed8', grid: 'rgba(110,80,40,.28)', wall: '#3a2915', ink: '#3a2915', halo: '#f7eed8', hatchKind: 'cross' },
   blaupause: { label: 'Oldschool blau', bg: '#ffffff', hatch: '#2f67b1', floor: '#ffffff', grid: 'rgba(47,103,177,.4)', wall: '#2f67b1', ink: '#1f4f95', halo: '#ffffff', hatchKind: 'grid' },
   dunkel: { label: 'Dunkel (Spieltisch)', bg: '#101014', hatch: '#2b2b36', floor: '#4a433b', grid: 'rgba(255,255,255,.1)', wall: '#050506', ink: '#f1e7d0', halo: '#15120f', hatchKind: 'lines' },
 };
 export const isReal = (m) => !!(STYLES[m?.style] || STYLES.klassisch).real;
+export const isImageMap = (m) => !!(STYLES[m?.style] || STYLES.klassisch).image;
 
 // Klassische Gelände-Materialien (Vektorstile). Im realistischen Stil kommen Texturen und Flüssigkeiten dazu.
 export const MATS = {

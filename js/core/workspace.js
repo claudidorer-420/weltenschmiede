@@ -3,6 +3,17 @@ import { createStore } from './store.js';
 import { uid, debounce } from '../lib/util.js';
 import { app } from './app.js';
 
+// Grundbreiten der Seitenleisten (CSS: --left-w/--right-w). In der Kartenwerkstatt ist links mehr Platz.
+export const SB_BASE = { left: 280, right: 300, mapLeft: 364, mapRight: 330 };
+const sbLoad = () => {
+  const out = {};
+  for (const k of Object.keys(SB_BASE)) {
+    const v = Number(localStorage.getItem(`ws.sbw.${k}`));
+    out[k] = v >= 120 && v <= 900 ? v : SB_BASE[k];
+  }
+  return out;
+};
+
 export const ws = createStore({
   tabs: [],
   active: null,
@@ -15,7 +26,22 @@ export const ws = createStore({
   chatUnread: false,
   searchQuery: '',
   editMode: {}, // noteId -> true
+  sbw: sbLoad(),
 });
+
+// Breite einer Seitenleiste ziehen: 30 % schmaler bis 50 % breiter als die Grundbreite
+export function setSidebarWidth(key, px) {
+  const base = SB_BASE[key] || 280;
+  const v = Math.round(Math.max(base * 0.7, Math.min(base * 1.5, px)));
+  const cur = ws.get().sbw;
+  if (cur[key] === v) return;
+  try { localStorage.setItem(`ws.sbw.${key}`, String(v)); } catch { /* voll */ }
+  ws.set({ sbw: { ...cur, [key]: v } });
+}
+export function resetSidebarWidth(key) {
+  try { localStorage.removeItem(`ws.sbw.${key}`); } catch { /* egal */ }
+  ws.set({ sbw: { ...ws.get().sbw, [key]: SB_BASE[key] } });
+}
 
 // Ansichten, die es nur einmal gibt (werden fokussiert statt neu geöffnet)
 const SINGLETON = new Set(['home', 'graph', 'forge', 'encounter', 'combat', 'npc', 'maps', 'dice', 'table', 'characters', 'sessions', 'quests', 'rules', 'oracle', 'bestiary', 'generators', 'settings', 'archive', 'journal', 'import', 'trash', 'members', 'handouts', 'campaigns']);

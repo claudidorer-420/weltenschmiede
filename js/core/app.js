@@ -295,16 +295,20 @@ export async function openCampaign(cid) {
       db.update(`users/${u.uid}/campaigns`, cid, { name: c.name }).then(refreshCampaigns).catch(() => {});
     }
   }, onErr));
-  unsubs.push(db.watchCol(col('notes', cid), vis, (docs) => {
-    const notes = {};
-    for (const d of docs) notes[d.id] = d;
-    vault.set((s) => ({ notes, version: s.version + 1, loaded: true }));
-  }, onErr));
-  unsubs.push(db.watchCol(col('files', cid), vis, (docs) => {
-    const files = {};
-    for (const d of docs) files[d.id] = d;
-    vault.set((s) => ({ files, version: s.version + 1 }));
-  }, onErr));
+  // Spieler bekommen zwei Abfragen: für alle freigegeben und nur für sie freigegeben
+  const watchShared = (name, apply) => {
+    const parts = gm ? [{}] : visQueries(u.uid);
+    const buckets = parts.map(() => []);
+    parts.forEach((q, i) => unsubs.push(db.watchCol(col(name, cid), q, (docs) => {
+      buckets[i] = docs;
+      const out = {};
+      for (const b of buckets) for (const d of b) out[d.id] = d;
+      apply(out);
+    }, onErr)));
+  };
+  watchShared('notes', (notes) => vault.set((s) => ({ notes, version: s.version + 1, loaded: true })));
+  watchShared('files', (files) => vault.set((s) => ({ files, version: s.version + 1 })));
+  if (gm) ensureVisibilityFields(cid).catch(() => {});
   unsubs.push(db.watchCol(col('members', cid), {}, (docs) => {
     const members = {};
     for (const d of docs) members[d.id] = d;
@@ -537,8 +541,35 @@ export async function moveNote(id, folder) {
   await updateNote(id, { folder: cleanPath(folder) });
 }
 
-export async function setNoteVisibility(id, visibility) {
-  await updateNote(id, { visibility });
+// visibility: 'gm' (nur SL) oder 'players'; only = Liste von Spieler-Kennungen (leer = alle Spieler)
+export async function setNoteVisibility(id, visibility, only = []) {
+  await updateNote(id, visFields(visibility, only));
+}
+
+// Felder für die Sichtbarkeit eines Dokuments – onlyN wird für die Abfrage der Spieler gebraucht
+export function visFields(visibility, only = []) {
+  const list = visibility === 'players' ? [...new Set(only.filter(Boolean))] : [];
+  return { visibility, only: list, onlyN: list.length };
+}
+
+// Abfragen, mit denen ein Spieler seine sichtbaren Dokumente bekommt (für alle + nur für ihn)
+export function visQueries(uid) {
+  return [
+    { where: [['visibility', '==', 'players'], ['onlyN', '==', 0]] },
+    { where: [['visibility', '==', 'players'], ['only', 'array-contains', uid]] },
+  ];
+}
+
+// Ältere Dokumente nachrüsten (onlyN fehlt) – läuft einmal je Kampagne bei der SL
+export async function ensureVisibilityFields(cid) {
+  const cols = ['notes', 'maps', 'quests', 'sessions', 'handouts', 'files', 'pins'];
+  const ops = [];
+  for (const name of cols) {
+    const docs = await db.list(col(name, cid), { where: [['visibility', '==', 'players']] }).catch(() => []);
+    for (const d of docs) if (d.onlyN === undefined) ops.push({ op: 'update', col: col(name, cid), id: d.id, data: { only: [], onlyN: 0 } });
+  }
+  if (ops.length) await db.batch(ops).catch(() => {});
+  return ops.length;
 }
 
 export async function duplicateNote(id) {

@@ -10,7 +10,7 @@ import { ws, openNote, openView, setEditMode, forgetNote, openSearch, currentOf,
 import { settings, updateSettings } from '../core/settings.js';
 import {
   Icon, IconBtn, Btn, Field, MarkdownView, openMenu, confirmDialog, promptDialog, toast, Empty, VisibilityBadge, openModal,
-  DictateButton, scrollToHeading, handleMarkdownClick, pickFiles, openLightbox, AutoTextarea,
+  DictateButton, scrollToHeading, handleMarkdownClick, pickFiles, openLightbox, AutoTextarea, Segmented, Avatar,
 } from '../ui/components.js';
 import { ViewFrame } from '../ui/frame.js';
 import { parseFrontmatter, extractHeadings, toggleTask, renderInline, wordCount, extractEmbeddedFiles, stripMarkdown } from '../lib/markdown.js';
@@ -24,6 +24,55 @@ import { useCol } from '../core/hooks.js';
 import { campaignMenu } from './home.js';
 
 // ───────────────────────── Aktionen ─────────────────────────
+
+// Freigabe: für alle Spieler oder nur für bestimmte Mitspieler
+export function shareDialog(doc) {
+  const members = Object.values(vault.get().members || {}).filter((m) => m.role !== 'gm');
+  return openModal(({ close }) => {
+    const [only, setOnly] = useState(() => new Set(doc.only || []));
+    const [mode, setMode] = useState(doc.visibility === 'players' ? ((doc.only || []).length ? 'some' : 'all') : 'gm');
+    const toggle = (uid) => {
+      const n = new Set(only);
+      if (n.has(uid)) n.delete(uid); else n.add(uid);
+      setOnly(n);
+      setMode(n.size ? 'some' : 'all');
+    };
+    const ok = () => close(mode === 'gm' ? { visibility: 'gm', only: [] } : { visibility: 'players', only: mode === 'some' ? [...only] : [] });
+    return html`<div class="modal-body stack">
+      <${Segmented} value=${mode} onChange=${(v) => { setMode(v); if (v !== 'some') setOnly(new Set()); }} options=${[
+        { value: 'gm', label: 'Nur SL', icon: 'lock' },
+        { value: 'all', label: 'Alle Spieler', icon: 'users' },
+        { value: 'some', label: 'Bestimmte', icon: 'user' },
+      ]} />
+      ${mode === 'some' ? (members.length ? html`<div class="stack sm">
+        <div class="tiny faint">Nur die angehakten Mitspieler sehen dieses Dokument. Alle anderen finden es nicht – auch nicht über die Suche oder Links.</div>
+        ${members.map((m) => html`<label key=${m.uid || m.id} class="row nowrap share-row">
+          <input type="checkbox" checked=${only.has(m.uid || m.id)} onChange=${() => toggle(m.uid || m.id)} />
+          <${Avatar} name=${m.name} size="sm" /><span class="grow">${m.name || 'Mitspieler'}</span>
+        </label>`)}
+      </div>` : html`<div class="tiny faint">Noch keine Mitspieler in dieser Kampagne – lade zuerst jemanden ein.</div>`) : null}
+      ${mode === 'all' ? html`<div class="tiny faint">Alle Mitspieler dieser Kampagne sehen das Dokument.</div>` : null}
+      ${mode === 'gm' ? html`<div class="tiny faint">Nur du als Spielleitung siehst es.</div>` : null}
+    </div><div class="modal-foot">
+      <${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//>
+      <${Btn} kind="primary" icon="check" disabled=${mode === 'some' && !only.size} onClick=${ok}>Übernehmen<//>
+    </div>`;
+  }, { title: 'Für wen sichtbar?', icon: 'users' });
+}
+
+export async function shareNoteDialog(n) {
+  const r = await shareDialog(n);
+  if (!r) return;
+  await setNoteVisibility(n.id, r.visibility, r.only);
+  if (r.visibility === 'players') {
+    for (const name of extractEmbeddedFiles(n.body)) {
+      const f = getIndex().fileByName.get(name.toLowerCase());
+      if (f && f.visibility !== 'players') await updateFileMeta(app.get().cid, f.id, { visibility: 'players', only: r.only, onlyN: r.only.length }).catch(() => {});
+    }
+  }
+  toast(r.visibility === 'gm' ? 'Nur für die Spielleitung' : r.only.length ? `Freigegeben für ${r.only.length} Mitspieler` : 'Für alle Spieler freigegeben', 'success');
+}
+
 export async function toggleVisibility(n) {
   const v = n.visibility === 'players' ? 'gm' : 'players';
   await setNoteVisibility(n.id, v);
@@ -66,8 +115,14 @@ export function moveDialog(ids) {
       close(true);
       toast(`Verschoben nach „${f || 'Hauptordner'}“`, 'success');
     };
+    const inp = useRef();
+    useEffect(() => {
+      const t = setTimeout(() => { inp.current?.focus(); inp.current?.select(); }, 40);
+      return () => clearTimeout(t);
+    }, []);
     return html`<div class="modal-body stack">
-      <input class="input" placeholder="Ordner suchen oder neuen Pfad eingeben (z. B. Orte/Städte)" value=${q} onInput=${(e) => setQ(e.target.value)} autoFocus />
+      <input ref=${inp} class="input" placeholder="Ordner suchen oder neuen Pfad eingeben (z. B. Orte/Städte)" value=${q} onInput=${(e) => setQ(e.target.value)}
+        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); const f = folders[0] ?? q.trim(); if (allFolders().includes(f) || !q.trim()) go(f); else createFolder(q.trim()).then(() => go(q.trim())); } }} autoFocus />
       <div class="list" style="max-height:50vh;overflow:auto">
         ${folders.map((f) => html`<div class="list-item" onClick=${() => go(f)}><${Icon} name=${f ? 'folder' : 'home'} size=${16} /><span class="title">${f || 'Hauptordner'}</span></div>`)}
         ${q && !allFolders().includes(q) ? html`<div class="list-item" onClick=${async () => { await createFolder(q); go(q); }}><${Icon} name="folder-plus" size=${16} /><span class="title">Neuer Ordner „${q}“</span></div>` : null}
@@ -103,7 +158,8 @@ export function noteMenu(e, n) {
     gm && { divider: true },
     gm && { label: 'Umbenennen …', icon: 'edit-square', onClick: () => renameDialog(n) },
     gm && { label: 'Verschieben nach …', icon: 'folder', onClick: () => moveDialog([n.id]) },
-    gm && { label: n.visibility === 'players' ? 'Vor Spielern verbergen' : 'Für Spieler freigeben', icon: n.visibility === 'players' ? 'lock' : 'users', onClick: () => toggleVisibility(n) },
+    gm && { label: n.visibility === 'players' ? 'Vor Spielern verbergen' : 'Für alle Spieler freigeben', icon: n.visibility === 'players' ? 'lock' : 'users', onClick: () => toggleVisibility(n) },
+    gm && { label: 'Freigabe für bestimmte Spieler …', icon: 'user', hint: (n.only || []).length ? `${n.only.length} Mitspieler` : '', onClick: () => shareNoteDialog(n) },
     gm && { label: 'Duplizieren', icon: 'copy', onClick: async () => { const c = await duplicateNote(n.id); if (c) openNote(c.id); } },
     gm && { label: 'Als Handout an Spieler senden', icon: 'scroll', onClick: () => shareAsHandout(n) },
     { divider: true },
@@ -286,6 +342,16 @@ function buildTree(notes, files, folders) {
   return root;
 }
 
+function findNode(root, path) {
+  if (!path) return root;
+  let n = root;
+  for (const part of path.split('/')) {
+    n = n?.folders.get(part);
+    if (!n) return null;
+  }
+  return n;
+}
+
 function FileExplorer() {
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
   const cid = useStore(app, (s) => s.cid);
@@ -301,6 +367,7 @@ function FileExplorer() {
     try { return JSON.parse(localStorage.getItem(`ws.expanded.${cid}`) || '{}'); } catch { return {}; }
   });
   const [dragOver, setDragOver] = useState(null);
+  const [drag, setDrag] = useState({ id: null, kind: null, over: null, zone: null });
   const [q, setQ] = useState('');
   const bookmarks = useStore(settings, (s) => s.bookmarks || []);
   const meta = campaign?.folderMeta || {};
@@ -348,15 +415,138 @@ function FileExplorer() {
     return () => clearTimeout(t);
   }, [activeId]);
 
-  const sortNotes = (arr) => {
+  const sortNotes = (arr, path) => {
+    if (sort === 'custom') return applyOrder(arr, path, 'note');
     if (sort === 'za') return sortBy(arr, 'title', -1);
     if (sort === 'new') return sortBy(arr, (n) => n.updatedAt || 0, -1);
     if (sort === 'old') return sortBy(arr, (n) => n.createdAt || 0, 1);
     return sortBy(arr, 'title');
   };
   const sortMenu = (e) => openMenu(e, [
-    ['az', 'Name (A–Z)'], ['za', 'Name (Z–A)'], ['new', 'Zuletzt bearbeitet'], ['old', 'Erstellt (älteste zuerst)'],
-  ].map(([k, l]) => ({ label: l, icon: sort === k ? 'check' : 'sort', onClick: () => { setSort(k); localStorage.setItem('ws.sort', k); } })));
+    ['custom', 'Eigene Reihenfolge (Ziehen & Ablegen)'], ['az', 'Name (A–Z)'], ['za', 'Name (Z–A)'], ['new', 'Zuletzt bearbeitet'], ['old', 'Erstellt (älteste zuerst)'],
+  ].map(([k, l]) => ({ label: l, icon: sort === k ? 'check' : k === 'custom' ? 'layers' : 'sort', onClick: () => { setSort(k); localStorage.setItem('ws.sort', k); } })));
+  // ── Eigene Reihenfolge (pro Nutzer gespeichert) & Ziehen/Ablegen ──
+  const orders = useStore(settings, (x) => x.explorerOrder?.[cid] || {});
+  const keyOf = (it, kind) => (kind === 'folder' ? `f:${it.path}` : kind === 'file' ? `x:${it.id}` : it.id);
+  const applyOrder = (items, path, kind) => {
+    const list = orders[path || ''] || [];
+    if (!list.length) return items;
+    const idx = (it) => {
+      const i = list.indexOf(keyOf(it, kind));
+      return i < 0 ? 1e6 : i;
+    };
+    return [...items].sort((a, b) => idx(a) - idx(b));
+  };
+  const saveOrder = (path, keys) => updateSettings({ explorerOrder: { ...(settings.get().explorerOrder || {}), [cid]: { ...orders, [path || '']: keys } } });
+  // Reihenfolge eines Ordners so, wie sie gerade angezeigt wird
+  const visibleKeys = (path) => {
+    const node = findNode(tree, path);
+    if (!node) return [];
+    return [
+      ...applyOrder([...node.folders.values()], path, 'folder').map((f) => `f:${f.path}`),
+      ...sortNotes(node.notes, path).map((n) => n.id),
+      ...applyOrder(node.files, path, 'file').map((f) => `x:${f.id}`),
+    ];
+  };
+  const dropZone = (e, el, canInto) => {
+    const r = el.getBoundingClientRect();
+    const rel = (e.clientY - r.top) / Math.max(1, r.height);
+    if (canInto && rel > 0.28 && rel < 0.72) return 'into';
+    return rel < 0.5 ? 'before' : 'after';
+  };
+  const parentOf = (path) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
+  const moveItem = async (drag, folder) => {
+    if (drag.kind === 'note') return moveNote(drag.id, folder);
+    if (drag.kind === 'folder') {
+      const name = drag.id.split('/').pop();
+      const target = folder ? `${folder}/${name}` : name;
+      if (target === drag.id || target.startsWith(`${drag.id}/`)) return null;
+      return renameFolder(drag.id, target);
+    }
+    return null;
+  };
+  // Ablegen auf einer Zeile: hinein verschieben oder davor/danach einsortieren
+  const dropOnRow = async (e, target, kind) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const zone = drag.zone;
+    setDrag({ id: null, kind: null, over: null, zone: null });
+    if (!gm || !drag.id) return;
+    const dragged = { kind: drag.kind, id: drag.id };
+    if (dragged.kind === 'folder' && kind === 'folder' && (target.path === dragged.id || target.path.startsWith(`${dragged.id}/`))) return;
+    if (zone === 'into' && kind === 'folder') {
+      await moveItem(dragged, target.path);
+      return;
+    }
+    const path = kind === 'folder' ? parentOf(target.path) : (target.folder || '');
+    const dragKey = dragged.kind === 'folder' ? `f:${dragged.id}` : dragged.kind === 'file' ? `x:${dragged.id}` : dragged.id;
+    const targetKey = kind === 'folder' ? `f:${target.path}` : kind === 'file' ? `x:${target.id}` : target.id;
+    let moved = dragged;
+    if (dragged.kind === 'folder') {
+      const name = dragged.id.split('/').pop();
+      const nt = path ? `${path}/${name}` : name;
+      if (nt !== dragged.id) { await moveItem(dragged, path); moved = { kind: 'folder', id: nt }; }
+    } else if (dragged.kind === 'note') {
+      const n = vault.get().notes[dragged.id];
+      if ((n?.folder || '') !== path) await moveNote(dragged.id, path);
+    }
+    const movedKey = moved.kind === 'folder' ? `f:${moved.id}` : dragKey;
+    const keys = visibleKeys(path).filter((k) => k !== dragKey && k !== movedKey);
+    const at = keys.indexOf(targetKey);
+    const i = at < 0 ? keys.length : at + (zone === 'after' ? 1 : 0);
+    keys.splice(i, 0, movedKey);
+    saveOrder(path, keys);
+    if (sort !== 'custom') { setSort('custom'); localStorage.setItem('ws.sort', 'custom'); }
+  };
+  const dragProps = (item, kind) => ({
+    draggable: gm,
+    onDragStart: (e) => {
+      const id = kind === 'folder' ? item.path : item.id;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData(kind === 'note' ? 'text/x-note' : kind === 'folder' ? 'text/x-folder' : 'text/x-file', id);
+      setDrag({ id, kind, over: null, zone: null });
+    },
+    onDragEnd: () => setDrag({ id: null, kind: null, over: null, zone: null }),
+    onDragOver: (e) => {
+      if (!gm || !drag.id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const zone = dropZone(e, e.currentTarget, kind === 'folder');
+      const key = kind === 'folder' ? `f:${item.path}` : item.id;
+      if (drag.over !== key || drag.zone !== zone) setDrag({ ...drag, over: key, zone });
+    },
+    onDrop: (e) => dropOnRow(e, item, kind),
+  });
+  const dragCls = (item, kind) => {
+    const key = kind === 'folder' ? `f:${item.path}` : item.id;
+    if (drag.over !== key) return '';
+    return drag.zone === 'into' ? ' drop' : drag.zone === 'before' ? ' drop-before' : ' drop-after';
+  };
+  // Beim Ziehen an den Rand: die Liste scrollt langsam mit
+  useEffect(() => {
+    if (!drag.id) return undefined;
+    let raf = 0;
+    let dy = 0;
+    const el = () => document.querySelector('.sidebar .sidebar-body.tree');
+    const onOver = (e) => {
+      const box = el()?.getBoundingClientRect();
+      if (!box) return;
+      const edge = 46;
+      dy = e.clientY < box.top + edge ? -(edge - (e.clientY - box.top)) / 4
+        : e.clientY > box.bottom - edge ? (edge - (box.bottom - e.clientY)) / 4 : 0;
+    };
+    const step = () => {
+      if (dy) el()?.scrollBy(0, dy);
+      raf = requestAnimationFrame(step);
+    };
+    document.addEventListener('dragover', onOver);
+    raf = requestAnimationFrame(step);
+    return () => {
+      document.removeEventListener('dragover', onOver);
+      cancelAnimationFrame(raf);
+    };
+  }, [drag.id]);
+
 
   const dropOn = async (e, path) => {
     e.preventDefault();
@@ -377,18 +567,19 @@ function FileExplorer() {
   };
 
   const children = (node) => html`
-    ${[...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name, 'de')).map(folderRow)}
-    ${sortNotes(node.notes).map(noteRow)}
-    ${node.files.map(fileRow)}`;
+    ${applyOrder([...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name, 'de')), node.path, 'folder').map(folderRow)}
+    ${sortNotes(node.notes, node.path).map(noteRow)}
+    ${applyOrder(node.files, node.path, 'file').map(fileRow)}`;
 
   const folderRow = (f) => {
     const open = query ? true : !!expanded[f.path];
     const m = meta[f.path] || {};
     return html`<div key=${`f:${f.path}`}>
-      <div class=${`tree-row folder${dragOver === f.path ? ' drop' : ''}`} style=${m.color ? { '--fc': m.color } : null} title=${f.path}
+      <div class=${`tree-row folder${dragOver === f.path ? ' drop' : ''}${dragCls(f, 'folder')}`} style=${m.color ? { '--fc': m.color } : null} title=${f.path}
         onClick=${() => !query && persistExp({ ...expanded, [f.path]: !open })}
         onContextMenu=${(e) => gm && folderMenu(e, f.path)}
-        onDragOver=${(e) => { if (gm) { e.preventDefault(); setDragOver(f.path); } }} onDragLeave=${() => setDragOver(null)} onDrop=${(e) => dropOn(e, f.path)}>
+        ...${dragProps(f, 'folder')}
+        onDragLeave=${() => setDragOver(null)}>
         <span class=${`chev${open ? ' open' : ''}`}><${Icon} name="chevron-right" size=${14} /></span>
         <span class="f-icon"><${Icon} name=${m.icon || (open ? 'folder-open' : 'folder')} size=${15} /></span>
         <span class="name folder-name">${f.name}</span>
@@ -402,18 +593,18 @@ function FileExplorer() {
   const noteRow = (n) => {
     const color = groupColor(n, groups);
     const kindIcon = KIND_ICON[n.kind];
-    return html`<div key=${n.id} class=${`tree-row${n.id === activeId ? ' active' : ''}`} title=${n.folder ? `${n.folder}/${n.title}` : n.title} draggable=${gm}
-        onDragStart=${(e) => e.dataTransfer.setData('text/x-note', n.id)}
+    return html`<div key=${n.id} class=${`tree-row${n.id === activeId ? ' active' : ''}${dragCls(n, 'note')}`} title=${n.folder ? `${n.folder}/${n.title}` : n.title}
+        ...${dragProps(n, 'note')}
         onClick=${(e) => openNote(n.id, { newTab: e.ctrlKey || e.metaKey })}
         onAuxClick=${(e) => e.button === 1 && openNote(n.id, { newTab: true })}
         onContextMenu=${(e) => noteMenu(e, n)}>
       <span class="chev"></span>
       ${color ? html`<span class="dot" style=${{ background: color }}></span>` : kindIcon ? html`<span class="k-icon"><${Icon} name=${kindIcon} size=${13} /></span>` : null}
       <span class="name">${n.title}</span>
-      ${gm && n.visibility === 'players' ? html`<span class="lock" title="Für Spieler sichtbar"><${Icon} name="users" size=${12} /></span>` : null}
+      ${gm && n.visibility === 'players' ? html`<span class="lock" title=${(n.only || []).length ? `Nur für ${n.only.length} Mitspieler sichtbar` : 'Für alle Spieler sichtbar'}><${Icon} name=${(n.only || []).length ? 'user' : 'users'} size=${12} /></span>` : null}
     </div>`;
   };
-  const fileRow = (f) => html`<div key=${`file:${f.id}`} class="tree-row" title=${f.name} onClick=${() => fileUrl(cid, f.id).then((u) => u && openLightbox(u))} onContextMenu=${(e) => gm && fileMenu(e, f)}>
+  const fileRow = (f) => html`<div key=${`file:${f.id}`} class=${`tree-row${dragCls(f, 'file')}`} title=${f.name} onClick=${() => fileUrl(cid, f.id).then((u) => u && openLightbox(u))} onContextMenu=${(e) => gm && fileMenu(e, f)}>
     <span class="chev"></span><${Icon} name="image" size=${14} /><span class="name">${f.name}</span>
   </div>`;
 

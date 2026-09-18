@@ -2,7 +2,7 @@
 // mit Gelände-Pinsel, Generatoren, Tokens, Nebel des Krieges und Maßband. Live synchron für alle Mitspieler.
 import { html, useState, useEffect, useRef, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { app, vault, col, myUid, getIndex, noteById, isGM } from '../core/app.js';
+import { app, vault, col, myUid, getIndex, noteById, isGM, visFields } from '../core/app.js';
 import { db } from '../core/db.js';
 import { openView, openNote } from '../core/workspace.js';
 import { settings } from '../core/settings.js';
@@ -21,6 +21,7 @@ import { useCol, useDoc, useVisibleCol } from '../core/hooks.js';
 import { now, debounce, initials, colorFromString, sortBy } from '../lib/util.js';
 import { uploadImage } from './codex.js';
 import { DungeonMapView, newScrawlMap, SCRAWL_GENERATORS, STYLES } from './mapeditor.js';
+import { detectGrid, evenGrid } from '../lib/gridfind.js';
 
 const cssVar = (n, fb) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || fb;
 
@@ -68,6 +69,96 @@ function NewScrawlForm({ close }) {
     <${Field} label="Stil"><div class="style-pick">${Object.entries(STYLES).map(([k, sv]) => html`<button type="button" class=${f.style === k ? 'active' : ''} onClick=${() => setF({ ...f, style: k })}><span class="sw" style=${{ background: `linear-gradient(135deg, ${sv.bg} 0 45%, ${sv.floor} 45% 70%, ${sv.wall} 70%)` }}></span>${sv.label}</button>`)}</div><//>
     <${Field} label="Start" hint="Generierte Karten kannst du danach frei weiterbauen."><div class="chips">${Object.entries(SCRAWL_GENERATORS).map(([k, g]) => html`<button type="button" class=${`chip${f.gen === k ? ' selected' : ' suggest'}`} onClick=${() => setF({ ...f, gen: k })}>${g.label}</button>`)}</div><//>
   </div><div class="modal-foot"><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" type="submit" icon="castle">Erstellen<//></div></form>`;
+}
+
+
+// ───────────────────────── Bildkarte: fertiges Kartenbild mit erkanntem Raster ─────────────────────────
+function ImageMapForm({ close }) {
+  const [file, setFile] = useState(null);
+  const [img, setImg] = useState(null);
+  const [g, setG] = useState(null);
+  const [name, setName] = useState('Neue Bildkarte');
+  const [note, setNote] = useState('');
+  const cvRef = useRef();
+  const pick = async () => {
+    const [f] = await pickFiles({ accept: 'image/*' });
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    const im = new Image();
+    im.onload = () => {
+      setFile(f);
+      setImg(im);
+      setName(f.name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').slice(0, 60) || 'Bildkarte');
+      try {
+        const found = detectGrid(im);
+        setG(found);
+        setNote(found.sure ? `Raster erkannt: ${found.cols} × ${found.rows} Felder à ${Math.round(found.cell)} px` : 'Kein klares Raster gefunden – bitte Felder selbst einstellen.');
+        if (!found.sure) setG(evenGrid(im.naturalWidth, im.naturalHeight, 30));
+      } catch (e) {
+        setG(evenGrid(im.naturalWidth, im.naturalHeight, 30));
+        setNote(`Rastersuche fehlgeschlagen (${e.message}) – bitte selbst einstellen.`);
+      }
+    };
+    im.onerror = () => toast('Bild konnte nicht gelesen werden', 'error');
+    im.src = url;
+  };
+  const upd = (patch) => setG((cur) => {
+    const n = { ...cur, ...patch };
+    if (patch.cell || patch.ox != null || patch.oy != null) {
+      n.cols = Math.max(1, Math.round((n.w - n.ox) / n.cell));
+      n.rows = Math.max(1, Math.round((n.h - n.oy) / n.cell));
+    } else if (patch.cols) n.cell = Math.max(4, (n.w - n.ox) / patch.cols);
+    else if (patch.rows) n.cell = Math.max(4, (n.h - n.oy) / patch.rows);
+    if (patch.cols || patch.rows) {
+      n.cols = Math.max(1, Math.round((n.w - n.ox) / n.cell));
+      n.rows = Math.max(1, Math.round((n.h - n.oy) / n.cell));
+    }
+    n.cell = Math.round(n.cell * 100) / 100;
+    return n;
+  });
+  useEffect(() => {
+    const cv = cvRef.current;
+    if (!cv || !img || !g) return;
+    const maxW = 460;
+    const k = Math.min(1, maxW / img.naturalWidth);
+    cv.width = Math.round(img.naturalWidth * k);
+    cv.height = Math.round(img.naturalHeight * k);
+    const c = cv.getContext('2d');
+    c.drawImage(img, 0, 0, cv.width, cv.height);
+    c.strokeStyle = 'rgba(255,60,60,.85)';
+    c.lineWidth = 1;
+    c.beginPath();
+    for (let x = g.ox; x <= img.naturalWidth + 0.5; x += g.cell) { c.moveTo(Math.round(x * k) + 0.5, 0); c.lineTo(Math.round(x * k) + 0.5, cv.height); }
+    for (let y = g.oy; y <= img.naturalHeight + 0.5; y += g.cell) { c.moveTo(0, Math.round(y * k) + 0.5); c.lineTo(cv.width, Math.round(y * k) + 0.5); }
+    c.stroke();
+  }, [img, g]);
+  const num = (label, value, onChange, step = 1) => html`<${Field} label=${label}>
+    <input class="input" type="number" step=${step} value=${value} onInput=${(e) => onChange(Number(e.target.value))} /><//>`;
+  return html`<div class="modal-body stack">
+    ${!img ? html`<div class="stack">
+      <div class="small">Lade ein fertiges Kartenbild (z. B. von Forgotten Adventures, Crosshead, Dungeon Alchemist oder KI-gemalt). Das Raster wird automatisch gesucht – du kannst es danach anpassen. Alle gängigen Bildformate funktionieren.</div>
+      <${Btn} kind="primary" icon="image" onClick=${pick}>Bild wählen<//>
+    </div>` : html`
+      <${Field} label="Name"><input class="input" value=${name} onInput=${(e) => setName(e.target.value)} /><//>
+      <div class="row small"><span class="muted grow">${note}</span><${Btn} size="sm" kind="ghost" icon="image" onClick=${pick}>Anderes Bild<//></div>
+      <canvas ref=${cvRef} style="width:100%;max-width:460px;border-radius:10px;border:1px solid var(--border);align-self:center" />
+      ${g ? html`<div class="grid two" style="gap:8px">
+        ${num('Spalten', g.cols, (v) => upd({ cols: Math.max(1, v) }))}
+        ${num('Zeilen', g.rows, (v) => upd({ rows: Math.max(1, v) }))}
+        ${num('Feldgröße (px)', g.cell, (v) => upd({ cell: Math.max(4, v) }), 0.5)}
+        <${Field} label="Versatz X / Y (px)"><div class="row nowrap">
+          <input class="input" type="number" step="0.5" value=${g.ox} onInput=${(e) => upd({ ox: Number(e.target.value) })} />
+          <input class="input" type="number" step="0.5" value=${g.oy} onInput=${(e) => upd({ oy: Number(e.target.value) })} />
+        </div><//>
+      </div>
+      <div class="btn-row"><${Btn} size="sm" kind="ghost" icon="target" onClick=${() => { const f = detectGrid(img); setG(f); setNote(f.sure ? `Raster erkannt: ${f.cols} × ${f.rows} Felder` : 'Kein klares Raster gefunden.'); }}>Raster erneut suchen<//>
+        <${Btn} size="sm" kind="ghost" icon="grid" onClick=${() => setG(evenGrid(img.naturalWidth, img.naturalHeight, 30))}>Gleichmäßig (30 Felder)<//></div>
+      <div class="tiny faint">Ein Feld = 1,5 m / 5 ft. Die roten Linien sollten auf dem Raster des Bildes liegen – sonst Feldgröße und Versatz nachstellen. Du kannst später Wände, Licht, Objekte und Nebel darüberlegen.</div>` : null}
+    `}
+  </div><div class="modal-foot">
+    <${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//>
+    <${Btn} kind="primary" icon="castle" disabled=${!img || !g} onClick=${() => close({ file, name, g })}>Karte erstellen<//>
+  </div>`;
 }
 
 function AiMapForm({ close }) {
@@ -174,6 +265,26 @@ export function MapsView({ tabId }) {
     const id = await db.add(col('maps'), newScrawlMap(r));
     openView('map', { id, title: r.name });
   };
+  // Bildkarte: Bild hochladen, Raster erkennen, als bespielbare Karte anlegen
+  const createImageMap = async () => {
+    const r = await openModal(({ close }) => html`<${ImageMapForm} close=${close} />`, { title: 'Karte aus Bild', icon: 'image', size: 'lg' });
+    if (!r) return;
+    setBusy('img');
+    try {
+      const meta = await uploadImage(r.file, { folder: 'Karten', visibility: 'gm', maxDim: 4600 });
+      const k = meta.w && r.g.w ? meta.w / r.g.w : 1;   // beim Hochladen evtl. verkleinert
+      const doc = newScrawlMap({ name: r.name, w: r.g.cols, h: r.g.rows, style: 'bild', gen: 'leer' });
+      doc.fileId = meta.id;
+      doc.bgFit = { cell: Math.round(r.g.cell * k * 100) / 100, ox: Math.round(r.g.ox * k * 100) / 100, oy: Math.round(r.g.oy * k * 100) / 100 };
+      doc.bgAlpha = 1;
+      const id = await db.add(col('maps'), doc);
+      openView('map', { id, title: r.name });
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setBusy('');
+    }
+  };
   const createAi = async () => {
     const r = await openModal(({ close }) => html`<${AiMapForm} close=${close} />`, { title: 'Karte per KI malen', icon: 'sparkles' });
     if (!r) return;
@@ -197,7 +308,7 @@ export function MapsView({ tabId }) {
   return html`<${ViewFrame} tabId=${tabId} title="Karten">
     <div class="page wide stack lg">
       <div class="page-head"><h1><${Icon} name="map" size=${24} />Karten</h1><span class="grow"></span>
-        ${gm ? html`<${Btn} kind="primary" icon="castle" onClick=${createScrawl}>Kartenwerkstatt<//><${Btn} icon="map" loading=${busy === 'world'} onClick=${createWorld}>Weltkarte hochladen<//><${Btn} icon="sparkles" loading=${busy === 'ai'} onClick=${createAi}>Per KI malen<//><${Btn} kind="ghost" icon="grid" onClick=${createBattle}>Einfache Rasterkarte<//>` : null}
+        ${gm ? html`<${Btn} kind="primary" icon="castle" onClick=${createScrawl}>Kartenwerkstatt<//><${Btn} icon="image" loading=${busy === 'img'} onClick=${createImageMap}>Karte aus Bild<//><${Btn} icon="map" loading=${busy === 'world'} onClick=${createWorld}>Weltkarte hochladen<//><${Btn} icon="sparkles" loading=${busy === 'ai'} onClick=${createAi}>Per KI malen<//><${Btn} kind="ghost" icon="grid" onClick=${createBattle}>Einfache Rasterkarte<//>` : null}
         <span class="sub">${gm ? 'Kartenwerkstatt: Räume, Gänge und Gelände aufziehen – texturierte Böden, Wände und Licht entstehen automatisch, dazu über 300 Objekte, Streu-Pinsel, Tokens und Nebel. Weltkarten mit verlinkten Pins (Farbcodes wie „(Blau 2)“ werden erkannt). Spieler sehen nur, was du freigibst.' : 'Karten, die die Spielleitung freigegeben hat.'}</span></div>
       ${!maps ? html`<div class="empty"><span class="spinner" /></div>` : !maps.length ? html`<${Empty} icon="map" title="Noch keine Karten">${gm ? 'Lade deine Weltkarte hoch oder erstelle eine Battlemap.' : 'Die Spielleitung hat noch keine Karte freigegeben.'}<//>`
         : html`<div class="grid cards">${sortBy(maps, (m) => m.createdAt || 0, -1).map((m) => html`<${MapCard} key=${m.id} m=${m} gm=${gm} />`)}</div>`}
@@ -234,10 +345,15 @@ function TokenForm({ close, token, members }) {
 }
 
 function MapSettingsForm({ close, map }) {
-  const [f, setF] = useState({ name: map.name, visibility: map.visibility, grid: map.grid !== false, cols: map.cols, rows: map.rows, terrainAlpha: map.terrainAlpha ?? 1, scaleText: map.scale ? `${map.scale.value} ${map.scale.unit}` : '' });
+  const members = Object.values(vault.get().members || {}).filter((x) => x.role !== 'gm');
+  const [f, setF] = useState({ name: map.name, visibility: map.visibility, only: map.only || [], grid: map.grid !== false, cols: map.cols, rows: map.rows, terrainAlpha: map.terrainAlpha ?? 1, scaleText: map.scale ? `${map.scale.value} ${map.scale.unit}` : '' });
   return html`<div class="modal-body stack">
     <${Field} label="Name"><input class="input" value=${f.name} onInput=${(e) => setF({ ...f, name: e.target.value })} /><//>
-    <${Field} label="Sichtbarkeit"><${Segmented} value=${f.visibility} onChange=${(v) => setF({ ...f, visibility: v })} options=${[{ value: 'gm', label: 'Nur SL', icon: 'lock' }, { value: 'players', label: 'Spieler sehen die Karte', icon: 'users' }]} /><//>
+    <${Field} label="Sichtbarkeit"><${Segmented} value=${f.visibility} onChange=${(v) => setF({ ...f, visibility: v, only: v === 'gm' ? [] : f.only })} options=${[{ value: 'gm', label: 'Nur SL', icon: 'lock' }, { value: 'players', label: 'Spieler sehen die Karte', icon: 'users' }]} /><//>
+    ${f.visibility === 'players' && members.length ? html`<${Field} label="Nur für bestimmte Mitspieler (leer = alle)">
+      <div class="stack sm">${members.map((p) => html`<label key=${p.uid || p.id} class="row nowrap share-row">
+        <input type="checkbox" checked=${f.only.includes(p.uid || p.id)} onChange=${() => { const id = p.uid || p.id; setF({ ...f, only: f.only.includes(id) ? f.only.filter((x) => x !== id) : [...f.only, id] }); }} />
+        <span class="grow">${p.name || 'Mitspieler'}</span></label>`)}</div><//>` : null}
     ${map.type === 'battle' ? html`
       <div class="grid two" style="gap:8px">
         <${Field} label="Spalten"><input class="input" type="number" min="5" max="120" value=${f.cols} onInput=${(e) => setF({ ...f, cols: Number(e.target.value) })} /><//>
@@ -273,7 +389,7 @@ function ScrawlHost(props) {
       openView('maps', {}, { replace: true });
       return;
     }
-    await db.update(col('maps'), map.id, { name: r.name, visibility: r.visibility });
+    await db.update(col('maps'), map.id, { name: r.name, ...visFields(r.visibility, r.only || []) });
     if (map.fileId && r.visibility !== map.visibility) await updateFileMeta(cid, map.fileId, { visibility: r.visibility }).catch(() => {});
   };
   return html`<${DungeonMapView} ...${props} settingsDialog=${settingsDialog} />`;
@@ -758,7 +874,7 @@ function LegacyMapView({ params, active, tabId }) {
       openView('maps', {}, { replace: true });
       return;
     }
-    const patch = { name: r.name, visibility: r.visibility };
+    const patch = { name: r.name, ...visFields(r.visibility, r.only || []) };
     if (battle) {
       patch.grid = r.grid;
       patch.terrainAlpha = r.terrainAlpha;

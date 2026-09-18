@@ -5,8 +5,9 @@ import { app, vault, noteById, col } from '../core/app.js';
 import { settings, updateSettings } from '../core/settings.js';
 import {
   ws, currentOf, openView, closeTab, setActive, newTab, toggleLeft, toggleRight, restoreTabs,
-  showLeftPanel, showRightPanel, closeOtherTabs, moveTab, isMobile,
+  showLeftPanel, closeOtherTabs, moveTab, isMobile, setSidebarWidth, resetSidebarWidth,
 } from '../core/workspace.js';
+import { panels, panelContent } from '../core/panels.js';
 import { useCol } from '../core/hooks.js';
 import { Icon, IconBtn, OverlayHost, ErrorBoundary, openMenu, useMedia, Spinner, Empty, Avatar } from './components.js';
 import { ViewFrame } from './frame.js';
@@ -90,7 +91,6 @@ function mapsOrBattle(e) {
 }
 const SEARCH = { action: () => openPalette('all'), icon: 'search', title: 'Suche & Befehle (Strg+K)', label: 'Suche' };
 const MAPS = { action: mapsOrBattle, icon: 'map', title: 'Karten oder Kampf', label: 'Karten', views: ['maps', 'map', 'combat'] };
-const CHAT = { action: () => showRightPanel('chat'), icon: 'message', title: 'Chat & Würfel (rechte Seitenleiste)', label: 'Chat', chat: true };
 
 const RIBBON_GM = [
   { view: 'home', icon: 'home', title: 'Start', label: 'Start' },
@@ -104,7 +104,6 @@ const RIBBON_GM = [
   MAPS,
   '|',
   { view: 'table', icon: 'image', title: 'Spieltisch: Szene, Gruppe, Play-by-Post', label: 'Spieltisch' },
-  CHAT,
   { view: 'sessions', icon: 'calendar', title: 'Sitzungen', label: 'Sitzungen' },
   { view: 'quests', icon: 'list-checks', title: 'Quests', label: 'Quests' },
   { view: 'characters', icon: 'users', title: 'Charaktere', label: 'Charaktere' },
@@ -125,7 +124,6 @@ const RIBBON_PLAYER = [
   { view: 'graph', icon: 'graph', title: 'Graph-Ansicht', label: 'Graph' },
   '|',
   { view: 'table', icon: 'image', title: 'Spieltisch: Szene, Gruppe, Play-by-Post', label: 'Spieltisch' },
-  CHAT,
   { view: 'characters', icon: 'user', title: 'Mein Charakter', label: 'Charakter' },
   { view: 'journal', icon: 'feather', title: 'Mein Tagebuch', label: 'Tagebuch' },
   MAPS,
@@ -175,6 +173,14 @@ function Workspace() {
     const m = /#\/(dice|table)$/.exec(h);
     if (m && cid) openView(m[1]);
   }, [cid]);
+  const mp = useStore(panels, (x) => `${x.owner || ''}|${x.has}|${x.ver}`);
+  const pOwner = panels.get().owner;
+  const sbw = useStore(ws, (x) => x.sbw);
+  const own = !!mp && pOwner === s.active;
+  const leftKey = own && panelContent.left ? 'mapLeft' : 'left';
+  const rightKey = own && panelContent.right ? 'mapRight' : 'right';
+  const leftBody = own && panelContent.left ? panelContent.left() : html`<${LeftSidebar} />`;
+  const rightBody = own && panelContent.right ? panelContent.right() : html`<${RightSidebar} />`;
   if (!cid) return html`<${Lobby} />`;
   const views = s.tabs.map((t) => html`<${ViewHost} key=${t.id} tab=${t} active=${t.id === s.active} />`);
   const main = html`<main class="main">
@@ -182,8 +188,32 @@ function Workspace() {
     ${views}
     ${!mobile ? html`<${StatusBar} />` : null}
   </main>`;
-  if (mobile) return html`<div class="app">${main}<${MobileDrawers} drawer=${s.drawer} /></div>`;
-  return html`<div class="app"><${Ribbon} />${s.leftOpen ? html`<${LeftSidebar} />` : null}${main}${s.rightOpen ? html`<${RightSidebar} />` : null}</div>`;
+  const style = { '--left-w': `${sbw[leftKey]}px`, '--right-w': `${sbw[rightKey]}px` };
+  if (mobile) return html`<div class="app" style=${style}>${main}<${MobileDrawers} drawer=${s.drawer} left=${leftBody} right=${rightBody} /></div>`;
+  return html`<div class="app" style=${style}><${Ribbon} />
+    ${s.leftOpen ? html`<div class="sb-host left">${leftBody}<${SbResize} side="left" wkey=${leftKey} /></div>` : null}
+    ${main}
+    ${s.rightOpen ? html`<div class="sb-host right">${rightBody}<${SbResize} side="right" wkey=${rightKey} /></div>` : null}
+  </div>`;
+}
+
+// Breite der Seitenleiste ziehen (Doppelklick = Grundbreite)
+function SbResize({ side, wkey }) {
+  const down = (e) => {
+    e.preventDefault();
+    const host = e.currentTarget.parentElement;
+    const rect = host.getBoundingClientRect();
+    const move = (ev) => setSidebarWidth(wkey, side === 'left' ? ev.clientX - rect.left : rect.right - ev.clientX);
+    const up = () => {
+      removeEventListener('pointermove', move);
+      removeEventListener('pointerup', up);
+      document.body.classList.remove('resizing');
+    };
+    document.body.classList.add('resizing');
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
+  };
+  return html`<div class=${`sb-resize ${side}`} title="Breite ziehen · Doppelklick = Standard" onPointerDown=${down} onDblClick=${() => resetSidebarWidth(wkey)} />`;
 }
 
 // Neue Chatnachrichten melden, solange der Chat nicht sichtbar ist (Punkt an Ribbon, Seitenleisten-Knopf und Chat-Reiter)
@@ -205,13 +235,13 @@ function useChatUnread(cid) {
 }
 
 // Schubladen (Handy): zum Schließen wegwischen, vom Bildschirmrand hereinziehen zum Öffnen
-function MobileDrawers({ drawer }) {
-  const left = useRef(null);
-  const right = useRef(null);
+function MobileDrawers({ drawer, left, right }) {
+  const leftEl = useRef(null);
+  const rightEl = useRef(null);
   const back = useRef(null);
   useEffect(() => {
     let st = null;
-    const els = () => ({ left: left.current, right: right.current });
+    const els = () => ({ left: leftEl.current, right: rightEl.current });
     // Kann ein Element unter dem Finger selbst waagerecht scrollen? Dann nicht die Schublade ziehen.
     const scrollsX = (node, mx) => {
       for (let n = node; n && n !== document.body; n = n.parentElement) {
@@ -287,8 +317,8 @@ function MobileDrawers({ drawer }) {
   }, []);
   return html`
     <div ref=${back} class=${`drawer-backdrop${drawer ? ' show' : ''}`} onClick=${() => ws.set({ drawer: null })} />
-    <div ref=${left} class=${`drawer left${drawer === 'left' ? ' open' : ''}`}><${Ribbon} /><${LeftSidebar} /></div>
-    <div ref=${right} class=${`drawer right${drawer === 'right' ? ' open' : ''}`}><${RightSidebar} /></div>`;
+    <div ref=${leftEl} class=${`drawer left${drawer === 'left' ? ' open' : ''}`}><${Ribbon} />${left}</div>
+    <div ref=${rightEl} class=${`drawer right${drawer === 'right' ? ' open' : ''}`}>${right}</div>`;
 }
 
 function Ribbon() {

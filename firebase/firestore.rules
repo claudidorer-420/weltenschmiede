@@ -20,6 +20,8 @@ service cloud.firestore {
     function campaignDoc(cid) { return get(/databases/$(database)/documents/campaigns/$(cid)).data; }
     function inviteDoc(code) { return get(/databases/$(database)/documents/invites/$(code)).data; }
     function playerVisible() { return resource.data.visibility == 'players'; }
+    // Freigabe nur für bestimmte Spieler: leeres/fehlendes 'only' = alle Spieler der Kampagne
+    function sharedWithMe() { return playerVisible() && (!('only' in resource.data) || resource.data.only.size() == 0 || me() in resource.data.only); }
 
     // ── Nutzer ──────────────────────────────────────────────────────────
     match /users/{userId} {
@@ -67,18 +69,18 @@ service cloud.firestore {
       }
 
       // Inhalte mit Sichtbarkeit
-      match /notes/{id}    { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
-      match /sessions/{id} { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
+      match /notes/{id}    { allow read: if isGM(cid) || (isMember(cid) && sharedWithMe()); allow write: if isGM(cid); }
+      match /sessions/{id} { allow read: if isGM(cid) || (isMember(cid) && sharedWithMe()); allow write: if isGM(cid); }
       // Quests: Spieler dürfen freigegebene Quests zwischen den Spalten verschieben (nur Status)
       match /quests/{id}   {
-        allow read: if isGM(cid) || (isMember(cid) && playerVisible());
+        allow read: if isGM(cid) || (isMember(cid) && sharedWithMe());
         allow write: if isGM(cid);
-        allow update: if isMember(cid) && playerVisible() && request.resource.data.visibility == 'players'
+        allow update: if isMember(cid) && sharedWithMe() && request.resource.data.visibility == 'players'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'movedBy']);
       }
-      match /maps/{id}     { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
-      match /pins/{id}     { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
-      match /handouts/{id} { allow read: if isGM(cid) || (isMember(cid) && playerVisible()); allow write: if isGM(cid); }
+      match /maps/{id}     { allow read: if isGM(cid) || (isMember(cid) && sharedWithMe()); allow write: if isGM(cid); }
+      match /pins/{id}     { allow read: if isGM(cid) || (isMember(cid) && sharedWithMe()); allow write: if isGM(cid); }
+      match /handouts/{id} { allow read: if isGM(cid) || (isMember(cid) && sharedWithMe()); allow write: if isGM(cid); }
 
       // Tokens: Spieler dürfen ihre eigenen Tokens verschieben (nur x/y).
       match /tokens/{id} {
@@ -91,7 +93,7 @@ service cloud.firestore {
 
       // Anhänge (Bilder), in Stücken gespeichert
       match /files/{fid} {
-        allow read: if isGM(cid) || (isMember(cid) && playerVisible());
+        allow read: if isGM(cid) || (isMember(cid) && sharedWithMe());
         allow create: if isGM(cid) || (isMember(cid) && request.resource.data.createdBy == me() && request.resource.data.visibility == 'players');
         allow update, delete: if isGM(cid) || (isMember(cid) && resource.data.createdBy == me());
         match /chunks/{n} {

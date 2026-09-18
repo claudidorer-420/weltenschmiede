@@ -1,7 +1,7 @@
 // Einstellungen: KI & Modelle (nur Spielleitung), Konto, Darstellung, Spiel, Daten, Über.
 import { html, useState, useEffect } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { app, renameLocalProfile, refreshCampaigns } from '../core/app.js';
+import { app, renameLocalProfile, refreshCampaigns, updateCampaign } from '../core/app.js';
 import { settings, updateSettings } from '../core/settings.js';
 import {
   PROVIDERS, TASKS, MODELS, modelsFor, recommendedRefs, resolveModel, modelLabel, providerReady, applyRecommendations, refreshModels,
@@ -229,6 +229,19 @@ function LookSection() {
   </div>`;
 }
 
+// Regelwerk wechseln (nur SL) – wirkt sofort für alle Mitglieder der Kampagne
+async function changeEdition(v, camp, ed) {
+  if (v === ed) return;
+  const ok = await confirmDialog(`Regelwerk von „${camp.name}“ auf D&D 5e (${v}) umstellen? Das gilt für alle Mitspieler – Charakterbögen bleiben erhalten, Zauberlisten und Klassenmerkmale richten sich danach.`, { ok: 'Umstellen' });
+  if (!ok) return;
+  try {
+    await updateCampaign({ settings: { ...(camp.settings || {}), rulesVersion: v } });
+    toast(`Regelwerk auf D&D 5e (${v}) umgestellt`, 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 function GameSection() {
   const s = useStore(settings, (x) => x);
   const mode = useStore(app, (x) => x.mode);
@@ -236,8 +249,8 @@ function GameSection() {
   const camp = useStore(app, (x) => x.campaign);
   const ed = camp?.settings?.rulesVersion === '2024' ? '2024' : '2014';
   return html`<div class="stack lg">
-    ${role === 'gm' && camp ? html`<div class="callout"><div class="callout-title">Regelwerk dieser Kampagne: D&D 5e (${ed})</div>
-      <div class="callout-content small">Festgelegt beim Anlegen von „${camp.name}“ – gilt für alle Mitglieder: Charaktere, Zauber, Würfel, Encounter und KI. Für ein anderes Regelwerk legst du eine neue Kampagne an.</div></div>` : null}
+    ${role === 'gm' && camp ? html`<${Field} label="Regelwerk dieser Kampagne" hint="Gilt für alle Mitglieder: Charaktere, Zauber, Würfel, Encounter und KI. Bestehende Bögen bleiben erhalten – prüfe nach dem Wechsel Zauber und Klassenmerkmale.">
+      <${Segmented} value=${ed} onChange=${(v) => changeEdition(v, camp, ed)} options=${[{ value: '2014', label: 'D&D 5e (2014)' }, { value: '2024', label: 'D&D 5e (2024)' }]} /><//>` : null}
     <${Field} label="Entfernungen"><${Segmented} value=${s.units} onChange=${(v) => updateSettings({ units: v })} options=${[{ value: 'm', label: 'Meter (dt. Regelwerk)' }, { value: 'ft', label: 'Fuß' }]} /><//>
     <${Toggle} checked=${s.diceAnim !== false} onChange=${(v) => updateSettings({ diceAnim: v })} label="Würfel-Animation (Würfel rollen über den Tisch)" />
     <${Toggle} checked=${s.shareRolls !== false} onChange=${(v) => updateSettings({ shareRolls: v })} label="Würfe automatisch im Spieltisch-Chat zeigen" />

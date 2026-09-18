@@ -1,0 +1,7 @@
+# Lokale Werkzeuge und Modelle, die nicht ins Repo gehören
+tools/sdxl/.venv/
+tools/sdxl/python/
+tools/sdxl/cache/
+tools/sdxl/models/
+tools/sdxl/out/
+tools/sdxl/uv.exe

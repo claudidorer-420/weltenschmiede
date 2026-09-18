@@ -6,7 +6,8 @@ import { html, useState, useEffect, useRef, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import { app, vault, col, myUid, noteById } from '../core/app.js';
 import { db } from '../core/db.js';
-import { openNote } from '../core/workspace.js';
+import { openNote, openView, ws, isMobile } from '../core/workspace.js';
+import { setPanels, clearPanels } from '../core/panels.js';
 import { settings } from '../core/settings.js';
 import { fileUrl, saveFile, deleteFile } from '../core/files.js';
 import { loadParty } from '../core/party.js';
@@ -22,18 +23,19 @@ import { useCol } from '../core/hooks.js';
 import { now, debounce, uid, colorFromString, download, randInt, clamp } from '../lib/util.js';
 import { uploadImage } from './codex.js';
 import { STAMPS, TEXTURES } from '../data/mapassets.js';
+import { TEX_MODS, splitTex } from '../data/texvars.js';
 import {
-  PROC, FLUIDS, assetInfo, assetThumb, texUrl, preloadMap, onAssets, assetsVersion,
+  PROC, FLUIDS, assetInfo, assetThumb, texUrl, texThumb, fluidOf, preloadMap, onAssets, assetsVersion,
   renderReal, renderObjects, drawObjects, renderLighting, drawStampPreview, texName, REAL_INK,
 } from './maprender.js';
-import { STYLES, isReal, MATS, SETS, SCRAWL_GENERATORS, r2, rnd, pick, stampAt } from './mapgen.js';
+import { STYLES, isReal, isImageMap, MATS, SETS, SCRAWL_GENERATORS, r2, rnd, pick, stampAt } from './mapgen.js';
 import { userAssets, userAssetInfo, userThumb, importAssetFiles, deleteUserAssets, updateUserAsset, ensureUserImages } from '../core/userassets.js';
 
 const PX = 40; // Bildschirm-Pixel pro Feld bei Zoom 1
 const MAX_CACHE_PX = 7e6;
 const REAL_CACHE_PX = 4.2e6;
 
-export { STYLES, isReal, SETS, SCRAWL_GENERATORS };
+export { STYLES, isReal, isImageMap, SETS, SCRAWL_GENERATORS };
 
 // ───────────────────────── Objekte (Vektorzeichnungen in Feld-Einheiten) ─────────────────────────
 const WOOD = '#9a6b3f';
@@ -157,6 +159,10 @@ function drawLabel(c, l, st) {
 function tracePath(c, s) {
   const p = s.pts || [];
   c.beginPath();
+  if (s.kind === 'cells') {
+    for (let i = 0; i < p.length; i += 2) c.rect(p[i], p[i + 1], 1, 1);
+    return;
+  }
   if (s.kind === 'rect' || s.kind === 'ellipse') {
     const [x1, y1, x2, y2] = p;
     const x = Math.min(x1, x2);
@@ -378,8 +384,34 @@ function renderVector(target, m, cs, st, img) {
 
 // Realistische Karte: Untergrund + Böden + Wände aus maprender.js
 function renderStatic(target, m, cs, st, img, bake, opts) {
-  if (st.real) renderReal(target, m, cs, { bg: img, bake, ...opts });
+  if (st.image) renderImageMap(target, m, cs, img, bake, opts);
+  else if (st.real) renderReal(target, m, cs, { bg: img, bake, ...opts });
   else renderVector(target, m, cs, st, img);
+}
+
+// Bildkarte: fertiges Kartenbild, am erkannten Raster ausgerichtet
+export function drawMapImage(ctx, m, src) {
+  const f = m.bgFit;
+  if (f && f.cell > 0) ctx.drawImage(src, -f.ox / f.cell, -f.oy / f.cell, src.width / f.cell, src.height / f.cell);
+  else ctx.drawImage(src, 0, 0, m.w, m.h);
+}
+function renderImageMap(target, m, cs, img, bake, opts) {
+  const pw = Math.max(1, Math.ceil(m.w * cs));
+  const ph = Math.max(1, Math.ceil(m.h * cs));
+  if (target.width !== pw || target.height !== ph) { target.width = pw; target.height = ph; }
+  const ctx = target.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, pw, ph);
+  ctx.fillStyle = '#0a0b0d';
+  ctx.fillRect(0, 0, pw, ph);
+  const src = bake || img;
+  if (src) {
+    ctx.setTransform(cs, 0, 0, cs, 0, 0);
+    ctx.imageSmoothingQuality = 'high';
+    drawMapImage(ctx, m, src);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  if (opts && opts.maskCv) { opts.maskCv.width = 1; opts.maskCv.height = 1; }
 }
 
 
@@ -398,10 +430,10 @@ export function renderMapImage(m, cs, img, { lighting = true, bake = null } = {}
   if (bake) return cv;
   const c = cv.getContext('2d');
   c.setTransform(cs, 0, 0, cs, 0, 0);
-  if (st.real) drawObjects(c, m, { legacyDefs: OBJ });
+  if (st.real || st.image) drawObjects(c, m, { legacyDefs: OBJ });
   else for (const o of m.objects || []) drawObject(c, o, st);
   c.setTransform(1, 0, 0, 1, 0, 0);
-  if (st.real && lighting) {
+  if ((st.real || st.image) && lighting) {
     const dk = document.createElement('canvas');
     const gl = document.createElement('canvas');
     const on = renderLighting(dk, gl, m, Math.max(6, Math.min(24, cs)), { legacyDefs: OBJ });
@@ -425,46 +457,6 @@ function thumbOf(m) {
   }
 }
 
-// ───────────────────────── Werkzeuge ─────────────────────────
-const BUILD_TOOLS = [
-  ['select', 'pointer', 'Auswählen & verschieben (V)', 'v'],
-  ['room', 'layout', 'Raum aufziehen (R)', 'r'],
-  ['ellipse', 'target', 'Runder Raum (E)', 'e'],
-  ['poly', 'pencil', 'Polygon – Punkte setzen (P)', 'p'],
-  ['path', 'footprints', 'Gang – Punkte setzen (C)', 'c'],
-  ['brush', 'brush', 'Pinsel für Höhlen (B)', 'b'],
-  ['wall', 'minus', 'Wand ziehen (W)', 'w'],
-  ['terrain', 'trees', 'Gelände & Wasser malen (T)', 't'],
-  ['door', 'door', 'Tür an eine Wand setzen (D)', 'd'],
-  ['object', 'gem', 'Objekte platzieren (O)', 'o'],
-  ['scatter', 'sparkles', 'Streuen: Bäume, Gras, Steine (S)', 's'],
-  ['light', 'sun', 'Licht setzen (L)', 'l'],
-  ['text', 'hash', 'Raumnummern & Text (X)', 'x'],
-  ['pan', 'hand', 'Ansicht verschieben (H)', 'h'],
-];
-const PLAY_TOOLS_GM = [['pan', 'hand', 'Bewegen & Tokens ziehen'], ['measure', 'ruler', 'Messen'], ['reveal', 'eye', 'Nebel aufdecken'], ['hide', 'eye-off', 'Nebel verdecken'], ['token', 'user-plus', 'Token setzen']];
-const PLAY_TOOLS = [['pan', 'hand', 'Bewegen & eigene Tokens ziehen'], ['measure', 'ruler', 'Messen']];
-const HINTS = {
-  select: 'Antippen = auswählen · ziehen = verschieben · Entf = löschen · R = drehen · F = spiegeln',
-  room: 'Ziehen = Raum aufziehen · Alt/Rechtsklick oder „Entfernen“ = ausschneiden · Umschalt = frei',
-  ellipse: 'Ziehen = runder Raum · „Entfernen“ schneidet aus',
-  poly: 'Punkte setzen · Doppelklick, Enter oder ersten Punkt antippen = schließen · Esc = abbrechen',
-  path: 'Punkte setzen (Feldmitten) · Doppelklick/Enter = fertig · Breite rechts einstellen',
-  brush: 'Frei malen für Höhlen und Ruinen · „Entfernen“ radiert',
-  wall: 'Punkte auf den Rasterlinien setzen = Zwischenwand · Doppelklick/Enter = fertig · Türen setzt du danach darauf',
-  terrain: 'Wasser, Lava, Gras, Wege … über den Boden malen · „Entfernen“ radiert · Strg+Ziehen = Rechteck',
-  door: 'Nahe einer Wand antippen – die Tür rastet an der Kante ein',
-  object: 'Objekt rechts wählen, dann auf die Karte tippen · Umschalt+Mausrad dreht das Objekt',
-  scatter: 'Über die Karte ziehen – Pflanzen, Steine und Trümmer werden zufällig verteilt',
-  light: 'Antippen = Lichtquelle setzen · danach rechts Farbe und Radius einstellen',
-  text: 'Antippen = nächste Raumnummer bzw. Text setzen',
-  pan: 'Ziehen = verschieben · Mausrad/zwei Finger = zoomen · im Spiel: Token antippen = Aktionen, lange drücken = Ping',
-  place: 'Antippen = Monster setzen · Esc = fertig',
-  measure: 'Ziehen = Entfernung messen',
-  reveal: 'Über die Karte wischen = Nebel aufdecken',
-  hide: 'Über die Karte wischen = Nebel verdecken',
-  token: 'Antippen = Token setzen',
-};
 function simplify(pts, eps) {
   if (pts.length <= 4) return pts;
   const P = [];
@@ -550,11 +542,12 @@ export function buildGrid(d) {
   const cover = new Uint8Array(W * H); // Säulen, Statuen …: halbe Deckung
   const wallE = new Uint8Array(W * H); // dünne Wand zwischen (x,y) und (x+1,y)
   const wallS = new Uint8Array(W * H); // dünne Wand zwischen (x,y) und (x,y+1)
-  if ((d.shapes || []).some((s) => s.op !== 'sub')) {
+  const baseShapes = d.style === 'bild' ? [{ id: 'bg', op: 'add', kind: 'rect', pts: [0, 0, W, H] }, ...(d.shapes || [])] : (d.shapes || []);
+  if (baseShapes.some((s) => s.op !== 'sub')) {
     const cv = canvasOf('gridmask', W * R, H * R);
     const g = cv.getContext('2d');
     g.setTransform(R, 0, 0, R, 0, 0);
-    for (const s of d.shapes) paintShape(g, s, '#fff');
+    for (const s of baseShapes) paintShape(g, s, '#fff');
     const data = g.getImageData(0, 0, W * R, H * R).data;
     const at = (px, py) => data[(py * W * R + px) * 4 + 3] > 127;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) walk[y * W + x] = at(x * R + half, y * R + half) ? 1 : 0;
@@ -581,6 +574,7 @@ export function buildGrid(d) {
   }
   for (let i = 0; i < mat.length; i++) { if (mat[i] === 'pit') walk[i] = 0; else if (roughMat(mat[i])) cost[i] = 2; }
   for (const o of d.objects || []) {
+    if (o.hidden) continue;
     const m = objMeta(o);
     if (!m) continue;
     if (m.door) {
@@ -694,20 +688,23 @@ function ImportAssets({ close }) {
 // Texturwahl
 function TexPick({ close, value, cats }) {
   const [cat, setCat] = useState('alle');
+  const [mod, setMod] = useState(() => splitTex(value || '')[1] || '');
+  const withMod = (id) => (mod ? id + '~' + mod : id);
   const list = TEXTURES.filter((t) => cats.includes(t.cat) && (cat === 'alle' || t.cat === cat));
   const labels = { boden: 'Böden', pflaster: 'Pflaster & Wege', gelaende: 'Gelände', wand: 'Wände', dach: 'Dächer' };
   return html`<div class="modal-body stack">
     <div class="chips">${['alle', ...cats].map((c) => html`<button key=${c} type="button" class=${`chip${cat === c ? ' selected' : ''}`} onClick=${() => setCat(c)}>${c === 'alle' ? 'Alle' : labels[c] || c}</button>`)}</div>
-    <div class="tex-grid">${list.map((t) => html`<button key=${t.id} type="button" class=${value === t.id ? 'active' : ''} onClick=${() => close(t.id)} title=${t.name}>
-      <img src=${texUrl(t.id, true)} alt="" loading="lazy" /><span>${t.name}</span>
+    <div class="chips">${[['', 'Original'], ...Object.entries(TEX_MODS).map(([k, m2]) => [k, m2.name])].map(([k, label]) => html`<button key=${k || 'orig'} type="button" class=${'chip' + (mod === k ? ' selected' : '')} onClick=${() => setMod(k)}>${label}</button>`)}</div>
+    <div class="tex-grid">${list.map((t) => html`<button key=${t.id} type="button" class=${value === withMod(t.id) ? 'active' : ''} onClick=${() => close(withMod(t.id))} title=${t.name}>
+      <img src=${texThumb(withMod(t.id))} alt="" loading="lazy" /><span>${t.name}</span>
     </button>`)}</div>
-    <div class="tiny faint">Texturen von Poly Haven (CC0)</div>
+    <div class="tiny faint">Texturen von Poly Haven (CC0) · Spielarten werden beim Zeichnen berechnet und kosten keinen Speicher</div>
   </div>`;
 }
 const pickTexture = (cats, value) => openModal(({ close }) => html`<${TexPick} close=${close} value=${value} cats=${cats} />`, { title: 'Textur wählen', icon: 'image', size: 'lg' });
 function TexBtn({ label, value, cats, onPick }) {
   return html`<button type="button" class="tex-btn" onClick=${async () => { const v = await pickTexture(cats, value); if (v) onPick(v); }}>
-    <span class="tex-sw" style=${value ? { backgroundImage: `url(${texUrl(value, true)})` } : {}}></span>
+    <span class="tex-sw" style=${value ? { backgroundImage: 'url(' + texThumb(value) + ')' } : {}}></span>
     <span class="grow"><b>${label}</b><span class="tiny faint">${value ? texName(value) : 'wählen'}</span></span>
   </button>`;
 }
@@ -716,8 +713,7 @@ function snapTo(v, mode, center) {
   if (mode === 'half') return Math.round(v * 2) / 2;
   return center ? Math.floor(v) + 0.5 : Math.round(v);
 }
-
-// ───────────────────────── Gelände-Auswahl ─────────────────────────
+// ───────────────────────── Werkzeugleiste & Bausteine der Seitenleiste ─────────────────────────
 const LIGHT_COLORS = [
   ['warm', 'Fackel', 'rgba(255,170,80,.5)'],
   ['kerze', 'Kerze', 'rgba(255,200,120,.38)'],
@@ -726,48 +722,133 @@ const LIGHT_COLORS = [
   ['gift', 'Grünes Leuchten', 'rgba(120,255,140,.4)'],
   ['glut', 'Lava', 'rgba(255,110,40,.5)'],
 ];
-const terrainGroups = () => [
-  { label: 'Wasser, Lava & Gruben', items: Object.entries(FLUIDS).map(([k, f]) => ({ key: k, label: f.label, color: f.shallow })).concat([{ key: 'difficult', label: 'Schwieriges Gelände', color: 'repeating-linear-gradient(135deg,#7a5a2a 0 3px,transparent 3px 7px)' }]) },
-  { label: 'Untergrund', items: TEXTURES.filter((t) => t.cat === 'gelaende').map((t) => ({ key: `tex:${t.id}`, label: t.name, tex: t.id })) },
-  { label: 'Wege & Pflaster', items: TEXTURES.filter((t) => t.cat === 'pflaster' || t.cat === 'boden').map((t) => ({ key: `tex:${t.id}`, label: t.name, tex: t.id })) },
+const terrainGroups = (mod = '') => {
+  const v = (id) => (mod ? id + '~' + mod : id);
+  return [
+    { label: 'Wasser, Lava & Gruben', items: Object.keys(FLUIDS).map((k) => { const o = fluidOf(v(k)); return { key: v(k), label: o.label, color: o.shallow }; }).concat([{ key: 'difficult', label: 'Schwieriges Gelände', color: 'repeating-linear-gradient(135deg,#7a5a2a 0 3px,transparent 3px 7px)' }]) },
+    { label: 'Untergrund', items: TEXTURES.filter((t) => t.cat === 'gelaende').map((t) => ({ key: 'tex:' + v(t.id), label: t.name, tex: v(t.id) })) },
+    { label: 'Wege & Pflaster', items: TEXTURES.filter((t) => t.cat === 'pflaster' || t.cat === 'boden').map((t) => ({ key: 'tex:' + v(t.id), label: t.name, tex: v(t.id) })) },
+  ];
+};
+// Spielart in einem Belag-Schlüssel austauschen (tex:gras~dunkel → tex:gras~hell)
+const reMod = (key, mod) => {
+  const s = String(key);
+  const pre = s.startsWith('tex:') ? 'tex:' : '';
+  const base = splitTex(pre ? s.slice(4) : s)[0];
+  if (base === 'difficult') return s;
+  return pre + (mod ? base + '~' + mod : base);
+};
+const matLabel = (m) => (String(m).startsWith('tex:') ? texName(String(m).slice(4)) : fluidOf(m)?.label || MATS[m]?.label || m);
+
+const BUILD_TOOLS = [
+  ['select', 'pointer', 'Auswählen, bewegen, drehen, skalieren (V)', 'v'],
+  ['land', 'layout', 'Land & Räume aufziehen (R)', 'r'],
+  ['terrain', 'brush', 'Belag: Wasser, Gras, Wege … (T)', 't'],
+  ['wall', 'minus', 'Zwischenwand ziehen (W)', 'w'],
+  ['door', 'door', 'Tür an eine Wand setzen (D)', 'd'],
+  ['object', 'gem', 'Objekte platzieren (O)', 'o'],
+  ['scatter', 'sparkles', 'Streuen: Pflanzen, Steine, Trümmer (S)', 's'],
+  ['light', 'sun', 'Licht setzen (L)', 'l'],
+  ['text', 'hash', 'Raumnummern & Text (X)', 'x'],
+  ['pan', 'hand', 'Ansicht verschieben (H)', 'h'],
 ];
-const matLabel = (m) => (String(m).startsWith('tex:') ? texName(String(m).slice(4)) : FLUIDS[m]?.label || MATS[m]?.label || m);
+const PLAY_TOOLS_GM = [['pan', 'hand', 'Bewegen & Tokens ziehen'], ['measure', 'ruler', 'Messen'], ['reveal', 'eye', 'Nebel aufdecken'], ['hide', 'eye-off', 'Nebel verdecken'], ['token', 'user-plus', 'Token setzen']];
+const PLAY_TOOLS = [['pan', 'hand', 'Bewegen & eigene Tokens ziehen'], ['measure', 'ruler', 'Messen']];
+// Formen für Land- und Belag-Werkzeug
+const SHAPE_MODES = [
+  ['rect', 'Rechteck', 'Ziehen = Rechteck aufziehen'],
+  ['ellipse', 'Ellipse', 'Ziehen = Ellipse aufziehen'],
+  ['circle', 'Kreis', 'Von der Mitte nach außen ziehen'],
+  ['blob', 'Unregelmäßig', 'Von der Mitte ziehen – sternförmig mit unebenen Kanten'],
+  ['poly', 'Polygon', 'Punkte setzen · Doppelklick/Enter = schließen'],
+  ['path', 'Gang', 'Punkte setzen · Breite einstellbar'],
+  ['brush', 'Pinsel', 'Frei malen'],
+  ['cells', 'Felder', 'Feld für Feld malen (rastergenau)'],
+  ['fill', 'Füllen', 'In eine Fläche tippen = ganzen Bereich füllen'],
+];
+const HINTS = {
+  select: 'Tippen = auswählen · Umschalt/Strg = mehrere · Rahmen ziehen = Mehrfachauswahl · Ecken = skalieren, Griff oben = drehen · Entf = löschen',
+  land: 'Form links wählen · Alt/Rechtsklick oder „Entfernen“ = ausschneiden · Umschalt = frei zeichnen',
+  terrain: 'Belag wählen und malen · „Entfernen“ radiert · „Füllen“ füllt die ganze zusammenhängende Fläche',
+  wall: 'Punkte auf den Rasterlinien setzen · Doppelklick/Enter = fertig · Türen darauf machen sie passierbar',
+  door: 'Nahe einer Wand antippen – die Tür rastet an der Kante ein',
+  object: 'Objekt links wählen, dann auf die Karte tippen · Umschalt+Mausrad dreht',
+  scatter: 'Über die Karte ziehen – Pflanzen, Steine und Trümmer werden zufällig verteilt',
+  light: 'Antippen = Lichtquelle setzen · Farbe und Radius links einstellen',
+  text: 'Antippen = nächste Raumnummer bzw. Text setzen',
+  pan: 'Ziehen = verschieben · Mausrad/zwei Finger = zoomen',
+  place: 'Antippen = Monster setzen · Esc = fertig',
+  measure: 'Ziehen = Entfernung messen',
+  reveal: 'Über die Karte wischen = Nebel aufdecken',
+  hide: 'Über die Karte wischen = Nebel verdecken',
+  token: 'Antippen = Token setzen',
+};
+
+// Kleine Bausteine für die Werkstatt-Seitenleiste
+function Sec({ title, icon, open = false, children }) {
+  return html`<details class="mw-sec" open=${open}>
+    <summary><${Icon} name=${icon} size=${14} />${title}</summary>
+    <div class="mw-sec-body">${children}</div>
+  </details>`;
+}
+function Slider({ label, value, min, max, step = 0.05, onInput, fmt }) {
+  return html`<label class="mw-slider">
+    <span class="mw-lbl">${label}<b>${fmt ? fmt(value) : value}</b></span>
+    <input type="range" min=${min} max=${max} step=${step} value=${value} onInput=${(e) => onInput(Number(e.target.value))} />
+  </label>`;
+}
+function Chips({ options, value, onPick }) {
+  return html`<div class="chips">${options.map(([k, label, title]) => html`<button key=${k} type="button" title=${title || label} class=${`chip${value === k ? ' selected' : ' suggest'}`} onClick=${() => onPick(k)}>${label}</button>`)}</div>`;
+}
+function ToolGrid({ tools, tool, onPick }) {
+  return html`<div class="mw-tools">${tools.map(([id, icon, label]) => html`<button key=${id} type="button" class=${`mw-tool${tool === id ? ' active' : ''}`} title=${label} onClick=${() => onPick(id)}>
+    <${Icon} name=${icon} size=${17} /><span>${label.replace(/[:,].*$/, '').replace(/ \(.\)$/, '')}</span>
+  </button>`)}</div>`;
+}
 
 // ───────────────────────── Ansicht ─────────────────────────
 export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
   const cid = useStore(app, (s) => s.cid);
   const role = useStore(app, (s) => s.role);
+  const sidebarOpen = useStore(ws, (s) => s.leftOpen && !isMobile());
   const me = myUid();
   const tokOpts = role === 'gm' ? { where: [['mapId', '==', params.id]] } : { where: [['mapId', '==', params.id], ['visibility', '==', 'players']] };
   const tokensRaw = useCol(cid ? col('tokens') : null, tokOpts);
   const tokens = (tokensRaw || []).filter((t) => gm || t.visibility === 'players');
   const [mode, setMode] = useState(gm && !params.play ? 'build' : 'play');
-  const [tool, setTool] = useState(gm && !params.play ? 'room' : 'pan');
+  const [tool, setTool] = useState(gm && !params.play ? 'land' : 'pan');
+  const [shape, setShape] = useState('rect');
+  const [matShape, setMatShape] = useState('brush');
   const [op, setOp] = useState('add');
   const [snap, setSnap] = useState('grid');
   const [width, setWidth] = useState(1);
   const [brushW, setBrushW] = useState(2);
   const [wallThick, setWallThick] = useState(0.3);
   const [mat, setMat] = useState('water');
+  const [matCat, setMatCat] = useState(0);
+  const [matMod, setMatMod] = useState('');
   const [shapeTex, setShapeTex] = useState('');
   const [doorKey, setDoorKey] = useState('p:door');
   const [objKey, setObjKey] = useState('ph:treasure_chest');
   const [objScale, setObjScale] = useState(1);
   const [objRandom, setObjRandom] = useState(false);
+  const [objAlpha, setObjAlpha] = useState(1);
+  const [objBlur, setObjBlur] = useState(0);
+  const [objShadow, setObjShadow] = useState(true);
+  const [objLayer, setObjLayer] = useState('');
   const [scatterSet, setScatterSet] = useState('gras');
   const [scatterR, setScatterR] = useState(1.5);
   const [scatterN, setScatterN] = useState(3);
   const [lightKind, setLightKind] = useState('warm');
   const [lightR, setLightR] = useState(5);
   const [textKind, setTextKind] = useState('room');
-  const [matCat, setMatCat] = useState(0);
   const [fogBrush, setFogBrush] = useState(2);
-  const [sel, setSel] = useState(null);
-  const [side, setSide] = useState(() => !matchMedia('(max-width: 899px)').matches);
+  const [sel, setSel] = useState([]);
+  const [showLight, setShowLight] = useState(true);
+  const [layerQ, setLayerQ] = useState('');
   const [measureText, setMeasureText] = useState('');
   const [busy, setBusy] = useState('');
-  const [showLight, setShowLight] = useState(true);
   const [, setTick] = useState(0);
   const rerender = () => setTick((x) => x + 1);
   const wrapRef = useRef();
@@ -778,50 +859,32 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       t: { x: 0, y: 0, k: 1 }, w: 0, h: 0, dpr: 1, pointers: new Map(), fitted: false, userMoved: false, dirty: true,
       cache: document.createElement('canvas'), cacheKey: '', objCache: document.createElement('canvas'), objKeyC: '',
       darkCv: document.createElement('canvas'), glowCv: document.createElement('canvas'), lightKey: '', lightOn: null,
-      geom: 0, ver: 0, img: null, bakeImg: null, undo: [], redo: [], localDirty: false, placeRot: 0,
+      geom: 0, ver: 0, img: null, bakeImg: null, undo: [], redo: [], localDirty: false, placeRot: 0, skipIds: null,
       doc: null, draft: null, fog: null,
     };
   }
   const s = S.current;
-  s.gm = gm;
-  s.me = me;
-  s.mode = mode;
-  s.tool = tool;
-  s.op = op;
-  s.snap = snap;
-  s.width = width;
-  s.brushW = brushW;
-  s.wallThick = wallThick;
-  s.mat = mat;
-  s.shapeTex = shapeTex;
-  s.doorKey = doorKey;
-  s.objKey = objKey;
-  s.objScale = objScale;
-  s.objRandom = objRandom;
-  s.scatterSet = scatterSet;
-  s.scatterR = scatterR;
-  s.scatterN = scatterN;
-  s.lightKind = lightKind;
-  s.lightR = lightR;
-  s.textKind = textKind;
-  s.fogBrush = fogBrush;
-  s.showLight = showLight;
-  s.sel = sel;
-  s.tokens = tokens;
+  Object.assign(s, {
+    gm, me, mode, tool, shape, matShape, op, snap, width, brushW, wallThick, mat, shapeTex, doorKey, objKey,
+    objScale, objRandom, objAlpha, objBlur, objShadow, objLayer, scatterSet, scatterR, scatterN, lightKind, lightR,
+    textKind, fogBrush, sel, showLight, tokens,
+  });
 
   const pickDoc = (m) => ({
     w: m.w || 36, h: m.h || 26, style: m.style || 'klassisch', gridOn: m.gridOn !== false, hatch: m.hatch ?? 1, bgAlpha: m.bgAlpha ?? 0.5,
     outdoor: !!m.outdoor, ground: m.ground || (m.outdoor ? 'leafy_grass' : 'dark_rock'), floorTex: m.floorTex || 'stone_tiles', wallTex: m.wallTex || 'castle_brick_01',
     wallW: m.wallW || 0, dark: m.dark || 0, soft: m.soft ?? 0.3, roofs: m.roofs !== false,
     shapes: m.shapes || [], terrain: m.terrain || [], objects: m.objects || [], labels: m.labels || [], lights: m.lights || [],
+    ...(m.bgFit ? { bgFit: m.bgFit } : {}),
   });
   if (!s.doc) s.doc = pickDoc(map);
   s.fogOn = !!map.fog?.enabled;
   const real = isReal(s.doc);
+  const imageMap = isImageMap(s.doc);
+  const rich = real || imageMap;
   const grid = useMemo(() => buildGrid(s.doc), [s.geom, s.doc.w, s.doc.h]);
   const B = useBattle({ cid, mapId: params.id, gm, me, tokens, grid, gridKey: s.geom, redraw: () => { s.dirty = true; }, rerender });
   s.B = B;
-  // Änderungen anderer übernehmen, solange hier nichts ungespeichert ist
   useEffect(() => {
     if (!s.localDirty) {
       s.doc = pickDoc(map);
@@ -834,16 +897,18 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.dirty = true;
   }, [map]);
   useEffect(() => { s.dirty = true; }, [tokensRaw, gm, mode, sel]);
-  // Spieleransicht: nie im Baumodus bleiben
+  // Bildkarten kennen kein Land/Belag – dann auf Auswählen wechseln
+  useEffect(() => {
+    if (isImageMap(s.doc) && (tool === 'land' || tool === 'terrain')) setTool('select');
+  }, [tool, s.geom]);
   useEffect(() => {
     if (gm || mode === 'play') return;
     setMode('play');
     setTool('pan');
-    setSel(null);
+    setSel([]);
     s.draft = null;
     s.dirty = true;
   }, [gm]);
-  // Texturen und Stempel dieser Karte laden, dann neu zeichnen
   useEffect(() => {
     if (!real) return undefined;
     let stop = false;
@@ -851,7 +916,6 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     return () => { stop = true; };
   }, [s.geom, s.ver, real]);
   useEffect(() => onAssets(() => { s.dirty = true; }), []);
-
   useEffect(() => {
     s.img = null;
     s.geom++;
@@ -864,7 +928,6 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       im.src = u;
     });
   }, [map.fileId]);
-  // Spielerbild (gebackene Karte mit eigenen Objekten)
   useEffect(() => {
     s.bakeImg = null;
     s.geom++;
@@ -910,29 +973,20 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     save();
     rerender();
   };
-  const undo = () => {
-    if (!s.undo.length) return;
-    s.redo.push(JSON.stringify(s.doc));
-    s.doc = JSON.parse(s.undo.pop());
+  const jump = (from, to) => {
+    if (!from.length) return;
+    to.push(JSON.stringify(s.doc));
+    s.doc = JSON.parse(from.pop());
     s.geom++;
     s.ver++;
     s.localDirty = true;
     s.dirty = true;
-    setSel(null);
+    setSel([]);
     save();
     rerender();
   };
-  const redo = () => {
-    if (!s.redo.length) return;
-    s.undo.push(JSON.stringify(s.doc));
-    s.doc = JSON.parse(s.redo.pop());
-    s.geom++;
-    s.ver++;
-    s.localDirty = true;
-    s.dirty = true;
-    save();
-    rerender();
-  };
+  const undo = () => jump(s.undo, s.redo);
+  const redo = () => jump(s.redo, s.undo);
 
   const fit = () => {
     if (s.w < 10) return;
@@ -945,8 +999,6 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.userMoved = false;
     s.dirty = true;
   };
-
-  // Die Karte bleibt immer teilweise im Bild: nur so weit verschieben, dass noch Karte zu sehen ist
   s.clampView = () => {
     const d = s.doc;
     if (!d || s.w < 10) return;
@@ -957,8 +1009,6 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.t.x = clamp(s.t.x, kx - mw, s.w - kx);
     s.t.y = clamp(s.t.y, ky - mh, s.h - ky);
   };
-
-  // Ansicht auf einen Token schwenken (nur falls er außerhalb liegt, wenn onlyIfHidden)
   s.focusToken = (t, onlyIfHidden) => {
     const n = t.size || 1;
     const k = s.t.k * PX;
@@ -971,8 +1021,15 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.userMoved = true;
     s.dirty = true;
   };
+  const focusOn = (x, y) => {
+    const k = s.t.k * PX;
+    s.t.x = s.w / 2 - x * k;
+    s.t.y = s.h / 2 - y * k;
+    s.clampView();
+    s.userMoved = true;
+    s.dirty = true;
+  };
 
-  // Größe
   useEffect(() => {
     const el = wrapRef.current;
     const cv = cvRef.current;
@@ -994,7 +1051,130 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     return () => ro.disconnect();
   }, []);
 
-  // Zeichenschleife
+  // ── Auswahl & Verwandlung ──
+  const listOf = (kind) => ({ obj: 'objects', label: 'labels', shape: 'shapes', terrain: 'terrain', light: 'lights' }[kind]);
+  const itemsOf = (kind) => (s.doc[listOf(kind)] || []);
+  const selOf = (kind) => sel.filter((x) => x.kind === kind).map((x) => itemsOf(kind).find((o) => o.id === x.id)).filter(Boolean);
+  const selObjs = () => selOf('obj');
+  const isSel = (id) => sel.some((x) => x.id === id);
+  const only = sel.length === 1 ? sel[0] : null;
+  const onlyItem = only ? itemsOf(only.kind).find((x) => x.id === only.id) : null;
+  s.selBox = () => {
+    let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
+    const add = (x, y) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); };
+    for (const o of selObjs()) {
+      const m = objMeta(o);
+      if (!m) continue;
+      const a = ((o.r || 0) * Math.PI) / 180;
+      const c = Math.cos(a);
+      const si = Math.sin(a);
+      for (const [dx, dy] of [[-m.w / 2, -m.h / 2], [m.w / 2, -m.h / 2], [m.w / 2, m.h / 2], [-m.w / 2, m.h / 2]]) add(o.x + dx * c - dy * si, o.y + dx * si + dy * c);
+    }
+    for (const l of selOf('light')) add(l.x, l.y);
+    if (x0 > x1) return null;
+    return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+  };
+  const applyTransform = (orig, t) => {
+    const ids = new Set(sel.filter((x) => x.kind === 'obj').map((x) => x.id));
+    const lids = new Set(sel.filter((x) => x.kind === 'light').map((x) => x.id));
+    const tf = (x, y) => {
+      let px = x - (t.cx || 0);
+      let py = y - (t.cy || 0);
+      if (t.scale) { px *= t.scale; py *= t.scale; }
+      if (t.rot) {
+        const a = (t.rot * Math.PI) / 180;
+        const c = Math.cos(a);
+        const si = Math.sin(a);
+        [px, py] = [px * c - py * si, px * si + py * c];
+      }
+      return [r2(px + (t.cx || 0) + (t.dx || 0)), r2(py + (t.cy || 0) + (t.dy || 0))];
+    };
+    const objects = orig.objects.map((o) => {
+      if (!ids.has(o.id)) return o;
+      const [x, y] = tf(o.x, o.y);
+      const n = { ...o, x, y };
+      if (t.scale) n.s = r2(clamp((o.s || 1) * t.scale, 0.05, 12));
+      if (t.rot) n.r = Math.round(((((o.r || 0) + t.rot) % 360) + 360) % 360);
+      return n;
+    });
+    const lights = (orig.lights || []).map((l) => {
+      if (!lids.has(l.id)) return l;
+      const [x, y] = tf(l.x, l.y);
+      return { ...l, x, y, ...(t.scale ? { r: r2(clamp((l.r || 4) * t.scale, 0.5, 40)) } : {}) };
+    });
+    const labels = (orig.labels || []).map((l) => {
+      if (!sel.some((x) => x.kind === 'label' && x.id === l.id)) return l;
+      const [x, y] = tf(l.x, l.y);
+      return { ...l, x, y };
+    });
+    s.doc = { ...s.doc, objects, lights, labels };
+    s.ver++;
+    s.dirty = true;
+  };
+  const updSel = (patch, geom = false) => {
+    if (!sel.length) return;
+    const byKind = {};
+    for (const x of sel) (byKind[x.kind] ||= new Set()).add(x.id);
+    const next = {};
+    for (const kind of Object.keys(byKind)) {
+      const key = listOf(kind);
+      next[key] = (s.doc[key] || []).map((x) => (byKind[kind].has(x.id) ? { ...x, ...patch } : x));
+    }
+    commit(next, { geom: geom || !!byKind.shape || !!byKind.terrain });
+  };
+  function deleteSel() {
+    if (!s.sel.length) return;
+    const byKind = {};
+    for (const x of s.sel) (byKind[x.kind] ||= new Set()).add(x.id);
+    const next = {};
+    for (const kind of Object.keys(byKind)) {
+      const key = listOf(kind);
+      next[key] = (s.doc[key] || []).filter((x) => !byKind[kind].has(x.id));
+    }
+    commit(next, { geom: !!byKind.shape || !!byKind.terrain });
+    setSel([]);
+  }
+  function rotateSel(deg) {
+    const box = s.selBox();
+    if (!box) return;
+    s.undo.push(JSON.stringify(s.doc));
+    s.redo = [];
+    applyTransform(JSON.parse(JSON.stringify(s.doc)), { rot: deg, cx: box.cx, cy: box.cy });
+    s.editSeq = (s.editSeq || 0) + 1;
+    s.localDirty = true;
+    save();
+    rerender();
+  }
+  function scaleSel(f) {
+    const box = s.selBox();
+    if (!box) return;
+    s.undo.push(JSON.stringify(s.doc));
+    s.redo = [];
+    applyTransform(JSON.parse(JSON.stringify(s.doc)), { scale: f, cx: box.cx, cy: box.cy });
+    s.editSeq = (s.editSeq || 0) + 1;
+    s.localDirty = true;
+    save();
+    rerender();
+  }
+  const flipSel = () => updSel({ fx: selObjs()[0]?.fx ? 0 : 1 });
+  function duplicateSel() {
+    if (!sel.length) return;
+    const add = { objects: [...s.doc.objects], lights: [...(s.doc.lights || [])], labels: [...s.doc.labels], shapes: [...s.doc.shapes], terrain: [...s.doc.terrain] };
+    const next = [];
+    for (const x of sel) {
+      const it = itemsOf(x.kind).find((o) => o.id === x.id);
+      if (!it) continue;
+      const copy = { ...JSON.parse(JSON.stringify(it)), id: uid(6) };
+      if (copy.pts) copy.pts = copy.pts.map((v, i) => r2(v + (copy.kind === 'cells' ? (i % 2 ? 1 : 1) : 1)));
+      else { copy.x = r2(copy.x + 1); copy.y = r2(copy.y + 1); }
+      add[listOf(x.kind)].push(copy);
+      next.push({ kind: x.kind, id: copy.id });
+    }
+    commit(add, { geom: sel.some((x) => x.kind === 'shape' || x.kind === 'terrain') });
+    setSel(next);
+  }
+
+  // ── Zeichenschleife ──
   useEffect(() => {
     if (!active) return undefined;
     let raf;
@@ -1003,13 +1183,14 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       const d = s.doc;
       const st = STYLES[d.style] || STYLES.klassisch;
       s.real = !!st.real;
+      s.imageMap = !!st.image;
+      s.rich = s.real || s.imageMap;
       s.useBake = !s.gm && !!s.bakeImg && usesOwnAssets(d);
       const aver = assetsVersion();
       const want = clamp(2 ** Math.ceil(Math.log2(Math.max(8, s.t.k * PX * s.dpr))), 12, s.real ? 96 : 64);
       const maxCs = Math.sqrt((s.real ? REAL_CACHE_PX : MAX_CACHE_PX) / Math.max(1, d.w * d.h));
       const cs = Math.max(6, Math.min(want, maxCs));
-      const busyDraw = s.act && (s.act.kind === 'move' || s.act.kind === 'brush' || s.act.kind === 'drag' || s.act.kind === 'scatter');
-      // Beim Ziehen grob rendern (flüssig), nach dem Loslassen wieder scharf
+      const busyDraw = s.act && ['move', 'brush', 'drag', 'scatter', 'scale', 'rotate', 'cells'].includes(s.act.kind);
       const csStatic = busyDraw ? Math.min(cs, 26) : cs;
       const key = `${s.geom}|${csStatic}|${d.style}|${aver}|${s.useBake ? 'b' : ''}`;
       if (key !== s.cacheKey && (t - settleT > 120 || !s.cacheKey.startsWith(`${s.geom}|`)) && (!busyDraw || t - (s.lastStatic || 0) > 140)) {
@@ -1019,10 +1200,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         s.lastStatic = t;
         s.dirty = true;
       }
-      if (s.real && !s.useBake) {
+      if (s.rich && !s.useBake) {
         s.live = s.t.k * PX * s.dpr > cs * 1.45;
-        // Beim Hineinzoomen den sichtbaren Ausschnitt scharf nachzeichnen
-        if (s.live && !busyDraw && t - (s.lastDetail || 0) > 120) {
+        if (s.live && s.real && !busyDraw && t - (s.lastDetail || 0) > 120) {
           const kpx = s.t.k * PX;
           const vw = Math.min(d.w, s.w / kpx);
           const vh = Math.min(d.h, s.h / kpx);
@@ -1048,9 +1228,10 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           if (s.detailCv) { s.detailCv.width = 1; s.detailCv.height = 1; }
           s.dirty = true;
         }
-        const ok = `${s.ver}|${cs}|${aver}|${s.skipObj || ''}`;
+        const skipKey = s.skipIds ? [...s.skipIds].join(',') : '';
+        const ok = `${s.ver}|${cs}|${aver}|${skipKey}`;
         if (!s.live && ok !== s.objKeyC && (t - settleT > 120 || !s.objKeyC.startsWith(`${s.ver}|`)) && (!busyDraw || t - (s.lastObj || 0) > 150)) {
-          renderObjects(s.objCache, d, cs, { legacyDefs: OBJ, skip: s.skipObj });
+          renderObjects(s.objCache, d, cs, { legacyDefs: OBJ, skip: s.skipIds });
           s.objKeyC = ok;
           s.lastObj = t;
           s.dirty = true;
@@ -1075,6 +1256,43 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     return () => cancelAnimationFrame(raf);
   }, [active]);
 
+  function drawGrid(ctx, st2, d, k) {
+    const gw = Math.max(1, Math.round(st2.w * st2.dpr));
+    const gh = Math.max(1, Math.round(st2.h * st2.dpr));
+    const cv = st2.gridCv || (st2.gridCv = document.createElement('canvas'));
+    if (cv.width !== gw || cv.height !== gh) { cv.width = gw; cv.height = gh; }
+    const g = cv.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, gw, gh);
+    g.setTransform(st2.dpr, 0, 0, st2.dpr, 0, 0);
+    g.translate(st2.t.x, st2.t.y);
+    g.scale(k, k);
+    const x0 = Math.max(0, Math.floor(-st2.t.x / k));
+    const x1 = Math.min(d.w, Math.ceil((st2.w - st2.t.x) / k));
+    const y0 = Math.max(0, Math.floor(-st2.t.y / k));
+    const y1 = Math.min(d.h, Math.ceil((st2.h - st2.t.y) / k));
+    if (x1 <= x0 || y1 <= y0) return;
+    const lw = Math.max(0.9, k / 36) / k;
+    for (const [off, colr] of [[lw, 'rgba(255,255,255,.16)'], [0, d.outdoor ? 'rgba(0,0,0,.32)' : 'rgba(0,0,0,.45)']]) {
+      g.strokeStyle = colr;
+      g.lineWidth = lw;
+      g.beginPath();
+      for (let x = x0; x <= x1; x++) { g.moveTo(x + off, y0); g.lineTo(x + off, y1); }
+      for (let y = y0; y <= y1; y++) { g.moveTo(x0, y + off); g.lineTo(x1, y + off); }
+      g.stroke();
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (st2.maskCv && st2.maskCv.width > 1) {
+      g.globalCompositeOperation = 'destination-in';
+      g.drawImage(st2.maskCv, st2.t.x * st2.dpr, st2.t.y * st2.dpr, d.w * k * st2.dpr, d.h * k * st2.dpr);
+      g.globalCompositeOperation = 'source-over';
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(cv, 0, 0);
+    ctx.restore();
+  }
+
   function draw() {
     const cv = cvRef.current;
     if (!cv) return;
@@ -1092,7 +1310,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(s.cache, 0, 0, d.w, d.h);
     if (s.real && s.live && s.detail) ctx.drawImage(s.detail.cv, s.detail.x, s.detail.y, s.detail.w, s.detail.h);
-    if (s.real && !s.useBake && d.gridOn !== false) drawGrid(ctx, s, d, k);
+    // Bildkarte: das Bild immer in voller Auflösung zeichnen (scharf in jeder Zoomstufe)
+    if (s.imageMap && !s.useBake && s.img) drawMapImage(ctx, d, s.img);
+    if (s.rich && !s.useBake && d.gridOn !== false) drawGrid(ctx, s, d, k);
     if (s.mode === 'build') {
       ctx.strokeStyle = 'rgba(120,120,120,.5)';
       ctx.lineWidth = 1 / k;
@@ -1100,15 +1320,12 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       ctx.strokeRect(0, 0, d.w, d.h);
       ctx.setLineDash([]);
     }
-    if (s.real && !s.useBake) {
+    if (s.rich && !s.useBake) {
       if (s.live) {
         const view = { x0: -s.t.x / k, y0: -s.t.y / k, x1: (s.w - s.t.x) / k, y1: (s.h - s.t.y) / k };
-        drawObjects(ctx, d, { legacyDefs: OBJ, skip: s.skipObj, view });
+        drawObjects(ctx, d, { legacyDefs: OBJ, skip: s.skipIds, view });
       } else ctx.drawImage(s.objCache, 0, 0, d.w, d.h);
-      if (s.skipObj) {
-        const o = d.objects.find((x) => x.id === s.skipObj);
-        if (o) drawStampPreview(ctx, o, OBJ, 1);
-      }
+      if (s.skipIds) for (const o of d.objects) if (s.skipIds.has(o.id)) drawStampPreview(ctx, o, OBJ, 1);
       const lightOn = s.mode === 'play' || s.showLight;
       if (s.lightOn?.dark && lightOn) ctx.drawImage(s.darkCv, 0, 0, d.w, d.h);
       if (s.lightOn?.glow && lightOn) {
@@ -1117,21 +1334,19 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         ctx.globalCompositeOperation = 'source-over';
       }
     } else if (!s.useBake) {
-      for (const o of d.objects) drawObject(ctx, o, st);
+      for (const o of d.objects) if (!o.hidden) drawObject(ctx, o, st);
     }
     for (const l of d.labels) drawLabel(ctx, l, st);
-    // Lichter im Baumodus als kleine Marken
-    if (s.mode === 'build' && s.real) {
+    if (s.mode === 'build' && s.rich) {
       for (const l of d.lights || []) {
         circ(ctx, l.x, l.y, 0.16, 'rgba(255,225,170,.95)', 'rgba(0,0,0,.65)', 0.04);
-        if (s.sel?.kind === 'light' && s.sel.id === l.id) {
+        if (isSel(l.id)) {
           ctx.setLineDash([0.2, 0.15]);
           circ(ctx, l.x, l.y, l.r || 4, null, '#f5c542', 0.05);
           ctx.setLineDash([]);
         }
       }
     }
-    // Kampf-Ebene: Schablonen, Bewegung, Reichweiten, Tokens, Pings
     if (s.mode === 'play') {
       drawBattle(ctx, s, k);
       if (map.fog?.enabled && s.fog) {
@@ -1142,37 +1357,62 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         }
       }
     }
-    // Auswahl
-    const sl = s.sel;
-    if (sl && s.mode === 'build') {
+    // Bildkarte: unsichtbare Wände beim Bauen zeigen
+    if (s.imageMap && s.mode === 'build') {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(229,72,77,.8)';
+      ctx.fillStyle = 'rgba(229,72,77,.22)';
+      for (const sh of d.shapes || []) {
+        if (sh.op !== 'sub') continue;
+        tracePath(ctx, sh);
+        if (sh.kind === 'path' || sh.kind === 'brush') {
+          ctx.lineWidth = sh.w || 0.3;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+        } else ctx.fill();
+      }
+      ctx.restore();
+    }
+    // Auswahl: Umrisse, Rahmen mit Griffen
+    if (s.mode === 'build' && s.sel.length) {
       ctx.strokeStyle = '#8a5cf5';
-      ctx.lineWidth = 2.5 / k;
+      ctx.lineWidth = 2 / k;
       ctx.setLineDash([5 / k, 4 / k]);
-      if (sl.kind === 'obj') {
-        const o = d.objects.find((x) => x.id === sl.id);
-        const m = o && objMeta(o);
-        if (m) {
+      for (const x of s.sel) {
+        const it = (d[listOf(x.kind)] || []).find((o) => o.id === x.id);
+        if (!it) continue;
+        if (x.kind === 'obj') {
+          const m = objMeta(it);
+          if (!m) continue;
           ctx.save();
-          ctx.translate(o.x, o.y);
-          ctx.rotate(((o.r || 0) * Math.PI) / 180);
-          ctx.strokeRect(-m.w / 2 - 0.08, -m.h / 2 - 0.08, m.w + 0.16, m.h + 0.16);
+          ctx.translate(it.x, it.y);
+          ctx.rotate(((it.r || 0) * Math.PI) / 180);
+          ctx.strokeRect(-m.w / 2 - 0.05, -m.h / 2 - 0.05, m.w + 0.1, m.h + 0.1);
           ctx.restore();
-        }
-      } else if (sl.kind === 'label') {
-        const l = d.labels.find((x) => x.id === sl.id);
-        if (l) ctx.strokeRect(l.x - (l.size || 0.7), l.y - (l.size || 0.7) * 0.7, (l.size || 0.7) * 2, (l.size || 0.7) * 1.4);
-      } else if (sl.kind === 'light') {
-        const l = (d.lights || []).find((x) => x.id === sl.id);
-        if (l) ctx.strokeRect(l.x - 0.3, l.y - 0.3, 0.6, 0.6);
-      } else if (sl.kind === 'shape' || sl.kind === 'terrain') {
-        const sh = (sl.kind === 'shape' ? d.shapes : d.terrain).find((x) => x.id === sl.id);
-        if (sh) {
-          tracePath(ctx, sh);
-          if (sh.kind === 'path' || sh.kind === 'brush') ctx.lineWidth = 2.5 / k;
+        } else if (x.kind === 'label') ctx.strokeRect(it.x - (it.size || 0.7), it.y - (it.size || 0.7) * 0.7, (it.size || 0.7) * 2, (it.size || 0.7) * 1.4);
+        else if (x.kind === 'light') ctx.strokeRect(it.x - 0.3, it.y - 0.3, 0.6, 0.6);
+        else {
+          tracePath(ctx, it);
           ctx.stroke();
         }
       }
       ctx.setLineDash([]);
+      const box = s.selBox();
+      if (box) {
+        const pad = 0.12;
+        ctx.strokeStyle = 'rgba(138,92,245,.95)';
+        ctx.lineWidth = 1.5 / k;
+        ctx.strokeRect(box.x0 - pad, box.y0 - pad, box.x1 - box.x0 + pad * 2, box.y1 - box.y0 + pad * 2);
+        const rh = 22 / k;
+        ctx.beginPath();
+        ctx.moveTo(box.cx, box.y0 - pad);
+        ctx.lineTo(box.cx, box.y0 - pad - rh);
+        ctx.stroke();
+        for (const [hx, hy] of [[box.x0 - pad, box.y0 - pad], [box.x1 + pad, box.y0 - pad], [box.x1 + pad, box.y1 + pad], [box.x0 - pad, box.y1 + pad]]) {
+          circ(ctx, hx, hy, 5 / k, '#fff', '#8a5cf5', 2 / k);
+        }
+        circ(ctx, box.cx, box.y0 - pad - rh, 6 / k, '#8a5cf5', '#fff', 2 / k);
+      }
     }
     // Vorschau des aktuellen Werkzeugs
     const dr = s.draft;
@@ -1181,12 +1421,16 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       ctx.fillStyle = sub ? 'rgba(229,72,77,.25)' : 'rgba(138,92,245,.22)';
       ctx.strokeStyle = sub ? '#e5484d' : '#8a5cf5';
       ctx.lineWidth = 2 / k;
-      if (dr.kind === 'rect' || dr.kind === 'ellipse') {
+      if (dr.kind === 'cells') {
+        tracePath(ctx, dr);
+        ctx.fill();
+        ctx.stroke();
+      } else if (dr.kind === 'rect' || dr.kind === 'ellipse') {
         tracePath(ctx, dr);
         ctx.fill();
         ctx.stroke();
         const [x1, y1, x2, y2] = dr.pts;
-        utext(ctx, `${Math.abs(x2 - x1)} × ${Math.abs(y2 - y1)}`, (x1 + x2) / 2, Math.min(y1, y2) - 0.4, 0.45, '#8a5cf5', '#fff');
+        utext(ctx, `${r2(Math.abs(x2 - x1))} × ${r2(Math.abs(y2 - y1))}`, (x1 + x2) / 2, Math.min(y1, y2) - 0.4, 0.45, '#8a5cf5', '#fff');
       } else if (dr.kind === 'poly' || dr.kind === 'path' || dr.kind === 'brush') {
         const pts = dr.hover ? [...dr.pts, dr.hover.x, dr.hover.y] : dr.pts;
         tracePath(ctx, { kind: dr.kind === 'poly' ? 'line' : dr.kind, pts });
@@ -1200,6 +1444,16 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         }
         for (let i = 0; i < dr.pts.length; i += 2) circ(ctx, dr.pts[i], dr.pts[i + 1], 0.09, '#8a5cf5');
       }
+    }
+    if (s.marquee) {
+      const { a, b } = s.marquee;
+      ctx.fillStyle = 'rgba(138,92,245,.15)';
+      ctx.strokeStyle = '#8a5cf5';
+      ctx.lineWidth = 1.5 / k;
+      ctx.setLineDash([5 / k, 4 / k]);
+      ctx.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+      ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+      ctx.setLineDash([]);
     }
     if (s.hover && s.mode === 'build' && (s.tool === 'door' || s.tool === 'object')) {
       if (s.real || s.hover.t === 'stamp') drawStampPreview(ctx, s.hover, OBJ, 0.6);
@@ -1228,44 +1482,6 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     ctx.restore();
   }
 
-  // Raster in Bildschirmauflösung, innerhalb der Räume (außen nur bei Außenkarten)
-  function drawGrid(ctx, st2, d, k) {
-    const gw = Math.max(1, Math.round(st2.w * st2.dpr));
-    const gh = Math.max(1, Math.round(st2.h * st2.dpr));
-    const cv = st2.gridCv || (st2.gridCv = document.createElement('canvas'));
-    if (cv.width !== gw || cv.height !== gh) { cv.width = gw; cv.height = gh; }
-    const g = cv.getContext('2d');
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.clearRect(0, 0, gw, gh);
-    g.setTransform(st2.dpr, 0, 0, st2.dpr, 0, 0);
-    g.translate(st2.t.x, st2.t.y);
-    g.scale(k, k);
-    const x0 = Math.max(0, Math.floor(-st2.t.x / k));
-    const x1 = Math.min(d.w, Math.ceil((st2.w - st2.t.x) / k));
-    const y0 = Math.max(0, Math.floor(-st2.t.y / k));
-    const y1 = Math.min(d.h, Math.ceil((st2.h - st2.t.y) / k));
-    if (x1 <= x0 || y1 <= y0) return;
-    const lw = Math.max(0.9, k / 36) / k;
-    for (const [off, col] of [[lw, 'rgba(255,255,255,.16)'], [0, d.outdoor ? 'rgba(0,0,0,.32)' : 'rgba(0,0,0,.45)']]) {
-      g.strokeStyle = col;
-      g.lineWidth = lw;
-      g.beginPath();
-      for (let x = x0; x <= x1; x++) { g.moveTo(x + off, y0); g.lineTo(x + off, y1); }
-      for (let y = y0; y <= y1; y++) { g.moveTo(x0, y + off); g.lineTo(x1, y + off); }
-      g.stroke();
-    }
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    if (st2.maskCv && st2.maskCv.width > 1) {
-      g.globalCompositeOperation = 'destination-in';
-      g.drawImage(st2.maskCv, st2.t.x * st2.dpr, st2.t.y * st2.dpr, d.w * k * st2.dpr, d.h * k * st2.dpr);
-      g.globalCompositeOperation = 'source-over';
-    }
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(cv, 0, 0);
-    ctx.restore();
-  }
-
   // ── Eingabe ──
   useEffect(() => {
     const cv = cvRef.current;
@@ -1277,9 +1493,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     const toW = (p) => ({ x: (p.x - s.t.x) / (s.t.k * PX), y: (p.y - s.t.y) / (s.t.k * PX) });
     const zoomAt = (p, f) => {
       const k = clamp(s.t.k * f, 0.05, 8);
-      const real2 = k / s.t.k;
-      s.t.x = p.x - (p.x - s.t.x) * real2;
-      s.t.y = p.y - (p.y - s.t.y) * real2;
+      const rel = k / s.t.k;
+      s.t.x = p.x - (p.x - s.t.x) * rel;
+      s.t.y = p.y - (p.y - s.t.y) * rel;
       s.t.k = k;
       s.clampView();
       s.userMoved = true;
@@ -1304,17 +1520,22 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     const placeObj = (w, key, e) => {
       const sc = s.objScale;
       const { w: ow, h: oh } = sizeOf(key, sc);
-      const r = s.objRandom ? randInt(0, 359) : s.placeRot;
+      const rr = s.objRandom ? randInt(0, 359) : s.placeRot;
       const m = snapMode(e);
-      if (m === 'free' || ow < 0.9 || oh < 0.9 || s.objRandom) return { id: 'hover', t: 'stamp', a: key, x: r2(w.x), y: r2(w.y), r, s: sc };
+      const base2 = { id: 'hover', t: 'stamp', a: key, r: rr, s: sc };
+      if (s.objAlpha < 1) base2.o = r2(s.objAlpha);
+      if (s.objBlur > 0) base2.b = r2(s.objBlur);
+      if (!s.objShadow) base2.sh = false;
+      if (s.objLayer) base2.layer = s.objLayer;
+      if (m === 'free' || ow < 0.9 || oh < 0.9 || s.objRandom) return { ...base2, x: r2(w.x), y: r2(w.y) };
       const near = (v, size) => (Math.round(size) % 2 ? Math.floor(v) + 0.5 : Math.round(v));
-      return { id: 'hover', t: 'stamp', a: key, x: near(w.x, ow), y: near(w.y, oh), r, s: sc };
+      return { ...base2, x: near(w.x, ow), y: near(w.y, oh) };
     };
     const hitAny = (w) => {
       const d = s.doc;
       for (let i = d.labels.length - 1; i >= 0; i--) if (Math.hypot(d.labels[i].x - w.x, d.labels[i].y - w.y) < (d.labels[i].size || 0.7)) return { kind: 'label', id: d.labels[i].id };
       for (let i = (d.lights || []).length - 1; i >= 0; i--) if (Math.hypot(d.lights[i].x - w.x, d.lights[i].y - w.y) < 0.35) return { kind: 'light', id: d.lights[i].id };
-      for (let i = d.objects.length - 1; i >= 0; i--) if (objHit(d.objects[i], w.x, w.y)) return { kind: 'obj', id: d.objects[i].id };
+      for (let i = d.objects.length - 1; i >= 0; i--) if (!d.objects[i].hidden && objHit(d.objects[i], w.x, w.y)) return { kind: 'obj', id: d.objects[i].id };
       for (let i = d.terrain.length - 1; i >= 0; i--) if (d.terrain[i].op !== 'sub' && shapeHit(d.terrain[i], w.x, w.y)) return { kind: 'terrain', id: d.terrain[i].id };
       for (let i = d.shapes.length - 1; i >= 0; i--) if (d.shapes[i].op !== 'sub' && shapeHit(d.shapes[i], w.x, w.y)) return { kind: 'shape', id: d.shapes[i].id };
       return null;
@@ -1336,14 +1557,13 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       s.dirty = true;
       saveFog();
     };
-    // Streu-Pinsel: zufällige Stempel im Kreis
     const scatterPaint = (w, first) => {
       const set = SETS[s.scatterSet];
       if (!set?.keys.length) return;
-      const now2 = performance.now();
-      if (!first && now2 - (s.lastScatter || 0) < 90) return;
+      const tn = performance.now();
+      if (!first && tn - (s.lastScatter || 0) < 90) return;
       if (!first && Math.hypot(w.x - (s.lastScatterAt?.x ?? -99), w.y - (s.lastScatterAt?.y ?? -99)) < s.scatterR * 0.6) return;
-      s.lastScatter = now2;
+      s.lastScatter = tn;
       s.lastScatterAt = { x: w.x, y: w.y };
       const add = [];
       for (let i = 0; i < s.scatterN; i++) {
@@ -1352,7 +1572,10 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         const x = w.x + Math.cos(a) * rr;
         const y = w.y + Math.sin(a) * rr;
         if (x < 0 || y < 0 || x > s.doc.w || y > s.doc.h) continue;
-        add.push(stampAt(pick(set.keys), x, y, { r: randInt(0, 359), s: rnd(set.s[0], set.s[1]) * s.objScale, fx: Math.random() < 0.5 }));
+        const o = stampAt(pick(set.keys), x, y, { r: randInt(0, 359), s: rnd(set.s[0], set.s[1]) * s.objScale, fx: Math.random() < 0.5 });
+        if (s.objAlpha < 1) o.o = r2(s.objAlpha);
+        if (!s.objShadow) o.sh = false;
+        add.push(o);
       }
       if (!add.length) return;
       s.doc = { ...s.doc, objects: [...s.doc.objects, ...add] };
@@ -1360,13 +1583,54 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       s.localDirty = true;
       s.dirty = true;
     };
+    // Eimer: zusammenhängende Felder ab dem angetippten Feld (Wände halten auf)
+    const flood = (sx, sy, want) => {
+      const d = s.doc;
+      const W = d.w;
+      const H = d.h;
+      const g = grid;
+      if (sx < 0 || sy < 0 || sx >= W || sy >= H) return [];
+      const at = (i) => (g.walk[i] ? 1 : 0);
+      if (at(sy * W + sx) !== want) return [];
+      const seen = new Uint8Array(W * H);
+      const out = [];
+      const st2 = [[sx, sy]];
+      while (st2.length && out.length < 12000) {
+        const [x, y] = st2.pop();
+        const i = y * W + x;
+        if (seen[i] || at(i) !== want) continue;
+        seen[i] = 1;
+        out.push(x, y);
+        if (x > 0 && !g.wallE[y * W + x - 1]) st2.push([x - 1, y]);
+        if (x < W - 1 && !g.wallE[i]) st2.push([x + 1, y]);
+        if (y > 0 && !g.wallS[(y - 1) * W + x]) st2.push([x, y - 1]);
+        if (y < H - 1 && !g.wallS[i]) st2.push([x, y + 1]);
+      }
+      return out;
+    };
+    const blobPts = (cx, cy, rx, ry) => {
+      const out = [];
+      const n = 16;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const f = (i % 2 ? 0.7 : 1) * (0.86 + Math.random() * 0.28);
+        out.push(r2(cx + Math.cos(a) * rx * f), r2(cy + Math.sin(a) * ry * f));
+      }
+      return out;
+    };
     const finishDraft = () => {
       const dr = s.draft;
       s.draft = null;
       if (!dr) return;
-      if ((dr.kind === 'poly' && dr.pts.length < 6) || ((dr.kind === 'path' || dr.kind === 'brush') && dr.pts.length < 2)) { s.dirty = true; return; }
-      const item = { id: uid(6), op: dr.op, kind: dr.kind, pts: dr.kind === 'brush' ? simplify(dr.pts, 0.06) : dr.pts.map(r2) };
-      if (dr.kind === 'path' || dr.kind === 'brush') item.w = dr.w;
+      if ((dr.kind === 'poly' && dr.pts.length < 6) || ((dr.kind === 'path' || dr.kind === 'brush') && dr.pts.length < 2) || (dr.kind === 'cells' && !dr.pts.length)) { s.dirty = true; return; }
+      let item;
+      if (dr.mode === 'blob') {
+        const [x1, y1, x2, y2] = dr.pts;
+        item = { id: uid(6), op: dr.op, kind: 'poly', pts: blobPts((x1 + x2) / 2, (y1 + y2) / 2, Math.abs(x2 - x1) / 2, Math.abs(y2 - y1) / 2) };
+      } else {
+        item = { id: uid(6), op: dr.op, kind: dr.kind, pts: dr.kind === 'brush' ? simplify(dr.pts, 0.06) : dr.pts.map(r2) };
+        if (dr.kind === 'path' || dr.kind === 'brush') item.w = dr.w;
+      }
       if (dr.wall) item.wall = 1;
       if (dr.terrain) commit({ terrain: [...s.doc.terrain, { ...item, mat: dr.mat }] });
       else {
@@ -1375,6 +1639,20 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       }
     };
     s.finishDraft = finishDraft;
+
+    // Griffe der Auswahl (drehen/skalieren) treffen?
+    const handleHit = (w, k) => {
+      const box = s.selBox();
+      if (!box || !s.sel.length) return null;
+      const pad = 0.12;
+      const tol = 10 / k;
+      const rh = 22 / k;
+      if (Math.hypot(w.x - box.cx, w.y - (box.y0 - pad - rh)) < tol) return { kind: 'rotate', box };
+      const corners = [[box.x0 - pad, box.y0 - pad], [box.x1 + pad, box.y0 - pad], [box.x1 + pad, box.y1 + pad], [box.x0 - pad, box.y1 + pad]];
+      for (const [hx, hy] of corners) if (Math.hypot(w.x - hx, w.y - hy) < tol) return { kind: 'scale', box };
+      if (s.sel.length > 1 && w.x > box.x0 - pad && w.x < box.x1 + pad && w.y > box.y0 - pad && w.y < box.y1 + pad) return { kind: 'boxmove', box };
+      return null;
+    };
 
     const down = async (e) => {
       cv.setPointerCapture(e.pointerId);
@@ -1388,9 +1666,10 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         return;
       }
       const w = toW(p);
+      const k = s.t.k * PX;
       const tl = s.tool;
       const sub = s.op === 'sub' || e.altKey || e.button === 2;
-      if (e.button === 1 || (e.button === 2 && !['room', 'ellipse', 'brush', 'terrain'].includes(tl)) || (tl === 'pan' && s.mode === 'build')) {
+      if (e.button === 1 || (e.button === 2 && !['land', 'terrain'].includes(tl)) || (tl === 'pan' && s.mode === 'build')) {
         s.act = { kind: 'pan', sx: p.x, sy: p.y, tx: s.t.x, ty: s.t.y };
         return;
       }
@@ -1418,32 +1697,106 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         s.lp = setTimeout(() => { if (s.act?.kind === 'pan' && s.act.play && !s.act.far && s.pointers.size === 1) { ping(s.B, w); s.act = null; } }, 650);
         return;
       }
-      // Bauen
+      // ── Bauen ──
       if (tl === 'select') {
-        const h = hitAny(w);
-        setSel(h);
-        s.sel = h;
-        if (h) {
+        const h2 = handleHit(w, k);
+        if (h2) {
           s.undo.push(JSON.stringify(s.doc));
-          if (h.kind === 'obj') s.skipObj = h.id;
+          s.redo = [];
+          const orig = JSON.parse(JSON.stringify(s.doc));
+          s.skipIds = new Set(s.sel.filter((x) => x.kind === 'obj').map((x) => x.id));
+          if (h2.kind === 'rotate') s.act = { kind: 'rotate', box: h2.box, orig, a0: Math.atan2(w.y - h2.box.cy, w.x - h2.box.cx), moved: false };
+          else if (h2.kind === 'scale') s.act = { kind: 'scale', box: h2.box, orig, d0: Math.max(0.1, Math.hypot(w.x - h2.box.cx, w.y - h2.box.cy)), moved: false };
+          else s.act = { kind: 'move', h: null, start: w, orig, moved: false };
+          s.dirty = true;
+          return;
+        }
+        const h = hitAny(w);
+        const multi = e.shiftKey || e.ctrlKey || e.metaKey;
+        if (h) {
+          let next = s.sel;
+          if (multi) next = isSel(h.id) ? s.sel.filter((x) => x.id !== h.id) : [...s.sel, h];
+          else if (!isSel(h.id)) next = [h];
+          setSel(next);
+          s.sel = next;
+          s.undo.push(JSON.stringify(s.doc));
+          s.skipIds = new Set(next.filter((x) => x.kind === 'obj').map((x) => x.id));
           s.act = { kind: 'move', h, start: w, orig: JSON.parse(JSON.stringify(s.doc)), moved: false };
-        } else s.act = { kind: 'pan', sx: p.x, sy: p.y, tx: s.t.x, ty: s.t.y };
+        } else if (multi) {
+          s.act = { kind: 'marquee', a: w, add: true };
+          s.marquee = { a: w, b: w };
+        } else {
+          s.act = { kind: 'marquee', a: w, add: false };
+          s.marquee = { a: w, b: w };
+        }
         s.dirty = true;
         return;
       }
-      if (tl === 'room' || tl === 'ellipse' || (tl === 'terrain' && e.ctrlKey)) {
+      if (tl === 'land' || tl === 'terrain') {
+        const terrain = tl === 'terrain';
+        const sm = terrain ? s.matShape : s.shape;
+        const common = { op: sub ? 'sub' : 'add', terrain, mat: s.mat, tex: s.shapeTex };
+        if (sm === 'fill') {
+          const cells = flood(Math.floor(w.x), Math.floor(w.y), terrain ? 1 : 0);
+          if (!cells.length) { toast(terrain ? 'Hier ist kein Boden zum Füllen.' : 'Hier ist schon Land.', 'error'); return; }
+          const item = { id: uid(6), op: sub ? 'sub' : 'add', kind: 'cells', pts: cells };
+          if (terrain) commit({ terrain: [...s.doc.terrain, { ...item, mat: s.mat }] });
+          else commit({ shapes: [...s.doc.shapes, { ...item, ...(s.shapeTex ? { tex: s.shapeTex } : {}) }] });
+          return;
+        }
+        if (sm === 'cells') {
+          s.draft = { ...common, kind: 'cells', pts: [], seen: new Set() };
+          s.act = { kind: 'cells' };
+          const x = Math.floor(w.x);
+          const y = Math.floor(w.y);
+          s.draft.seen.add(`${x},${y}`);
+          s.draft.pts.push(x, y);
+          s.dirty = true;
+          return;
+        }
+        if (sm === 'rect' || sm === 'ellipse' || sm === 'circle' || sm === 'blob') {
+          const m = snapMode(e);
+          const x = snapTo(w.x, m);
+          const y = snapTo(w.y, m);
+          s.draft = { ...common, kind: sm === 'rect' ? 'rect' : 'ellipse', mode: sm, pts: [x, y, x, y], center: sm === 'circle' || sm === 'blob' };
+          s.act = { kind: 'drag' };
+          s.dirty = true;
+          return;
+        }
+        if (sm === 'brush') {
+          s.draft = { ...common, kind: 'brush', pts: [r2(w.x), r2(w.y)], w: s.brushW };
+          s.act = { kind: 'brush' };
+          s.dirty = true;
+          return;
+        }
+        // poly / path
+        const m = snapMode(e);
+        const center = sm === 'path';
+        const x = snapTo(w.x, m, center);
+        const y = snapTo(w.y, m, center);
+        const dr = s.draft;
+        if (dr && dr.kind === sm) {
+          const n = dr.pts.length;
+          if (sm === 'poly' && n >= 6 && Math.hypot(dr.pts[0] - x, dr.pts[1] - y) < 0.3) { finishDraft(); return; }
+          if (Math.hypot(dr.pts[n - 2] - x, dr.pts[n - 1] - y) < 0.05) { finishDraft(); return; }
+          dr.pts.push(x, y);
+        } else s.draft = { ...common, kind: sm, pts: [x, y], w: s.width };
+        s.dirty = true;
+        rerender();
+        return;
+      }
+      if (tl === 'wall') {
         const m = snapMode(e);
         const x = snapTo(w.x, m);
         const y = snapTo(w.y, m);
-        s.draft = { kind: tl === 'ellipse' ? 'ellipse' : 'rect', op: sub ? 'sub' : 'add', pts: [x, y, x, y], terrain: tl === 'terrain', mat: s.mat, tex: s.shapeTex };
-        s.act = { kind: 'drag' };
+        const dr = s.draft;
+        if (dr && dr.wall) {
+          const n = dr.pts.length;
+          if (Math.hypot(dr.pts[n - 2] - x, dr.pts[n - 1] - y) < 0.05) { finishDraft(); return; }
+          dr.pts.push(x, y);
+        } else s.draft = { kind: 'path', op: 'sub', pts: [x, y], w: s.wallThick, wall: 1 };
         s.dirty = true;
-        return;
-      }
-      if (tl === 'brush' || tl === 'terrain') {
-        s.draft = { kind: 'brush', op: sub ? 'sub' : 'add', pts: [r2(w.x), r2(w.y)], w: s.brushW, terrain: tl === 'terrain', mat: s.mat, tex: s.shapeTex };
-        s.act = { kind: 'brush' };
-        s.dirty = true;
+        rerender();
         return;
       }
       if (tl === 'scatter') {
@@ -1453,30 +1806,11 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         scatterPaint(w, true);
         return;
       }
-      if (tl === 'poly' || tl === 'path' || tl === 'wall') {
-        const m = snapMode(e);
-        const center = tl === 'path';
-        const x = snapTo(w.x, m, center);
-        const y = snapTo(w.y, m, center);
-        const dr = s.draft;
-        if (dr && dr.kind === (tl === 'poly' ? 'poly' : 'path') && !!dr.wall === (tl === 'wall')) {
-          const n = dr.pts.length;
-          if (tl === 'poly' && n >= 6 && Math.hypot(dr.pts[0] - x, dr.pts[1] - y) < 0.3) { finishDraft(); return; }
-          if (Math.hypot(dr.pts[n - 2] - x, dr.pts[n - 1] - y) < 0.05) { finishDraft(); return; }
-          dr.pts.push(x, y);
-        } else if (tl === 'wall') s.draft = { kind: 'path', op: 'sub', pts: [x, y], w: s.wallThick, wall: 1 };
-        else s.draft = { kind: tl, op: sub ? 'sub' : 'add', pts: [x, y], w: s.width, tex: s.shapeTex };
-        s.dirty = true;
-        rerender();
-        return;
-      }
       if (tl === 'door') {
         commit({ objects: [...s.doc.objects, { ...placeDoor(w, s.doorKey), id: uid(6) }] }, { geom: false });
         return;
       }
       if (tl === 'object') {
-        const h = hitAny(w);
-        if (h?.kind === 'obj' && e.detail > 1) return;
         commit({ objects: [...s.doc.objects, { ...placeObj(w, s.objKey, e), id: uid(6) }] }, { geom: false });
         return;
       }
@@ -1515,7 +1849,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         if (s.mode === 'build' && s.tool === 'scatter') { s.hoverPt = w; s.dirty = true; } else if (s.hoverPt) { s.hoverPt = null; s.dirty = true; }
         if (s.draft && (s.draft.kind === 'poly' || s.draft.kind === 'path')) {
           const m = snapMode(e);
-          s.draft.hover = { x: snapTo(w.x, m, s.tool === 'path'), y: snapTo(w.y, m, s.tool === 'path') };
+          s.draft.hover = { x: snapTo(w.x, m, s.draft.kind === 'path'), y: snapTo(w.y, m, s.draft.kind === 'path') };
           s.dirty = true;
         }
         return;
@@ -1538,6 +1872,21 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       }
       if (a.kind === 'fog') { fogPaint(w); return; }
       if (a.kind === 'scatter') { s.hoverPt = w; scatterPaint(w, false); return; }
+      if (a.kind === 'marquee') { s.marquee = { a: a.a, b: w }; s.dirty = true; return; }
+      if (a.kind === 'rotate') {
+        const ang = Math.atan2(w.y - a.box.cy, w.x - a.box.cx);
+        let deg = ((ang - a.a0) * 180) / Math.PI;
+        if (!e.shiftKey) deg = Math.round(deg / 15) * 15;
+        a.moved = true;
+        applyTransform(a.orig, { rot: deg, cx: a.box.cx, cy: a.box.cy });
+        return;
+      }
+      if (a.kind === 'scale') {
+        const f = clamp(Math.hypot(w.x - a.box.cx, w.y - a.box.cy) / a.d0, 0.05, 12);
+        a.moved = true;
+        applyTransform(a.orig, { scale: f, cx: a.box.cx, cy: a.box.cy });
+        return;
+      }
       if (a.kind === 'token') {
         if (Math.hypot(p.x - a.sx, p.y - a.sy) > 4) a.moved = true;
         a.t.dragX = w.x - a.off.x;
@@ -1549,9 +1898,29 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       }
       if (a.kind === 'drag' && s.draft) {
         const m = snapMode(e);
-        s.draft.pts[2] = snapTo(w.x, m);
-        s.draft.pts[3] = snapTo(w.y, m);
+        const x = snapTo(w.x, m);
+        const y = snapTo(w.y, m);
+        if (s.draft.center) {
+          const cx = s.draft.pts[0];
+          const cy = s.draft.pts[1];
+          const rr = Math.max(Math.abs(x - cx), Math.abs(y - cy));
+          s.draft.pts = [r2(cx - rr), r2(cy - rr), r2(cx + rr), r2(cy + rr)];
+        } else {
+          s.draft.pts[2] = x;
+          s.draft.pts[3] = y;
+        }
         s.dirty = true;
+        return;
+      }
+      if (a.kind === 'cells' && s.draft) {
+        const x = Math.floor(w.x);
+        const y = Math.floor(w.y);
+        const key = `${x},${y}`;
+        if (x >= 0 && y >= 0 && x < s.doc.w && y < s.doc.h && !s.draft.seen.has(key)) {
+          s.draft.seen.add(key);
+          s.draft.pts.push(x, y);
+          s.dirty = true;
+        }
         return;
       }
       if (a.kind === 'brush' && s.draft) {
@@ -1564,21 +1933,22 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         const m = snapMode(e);
         let dx = w.x - a.start.x;
         let dy = w.y - a.start.y;
-        const fine = a.h.kind === 'obj' && (objMeta(s.doc.objects.find((x) => x.id === a.h.id) || {})?.w || 1) < 0.9;
+        const objs = s.sel.filter((x) => x.kind === 'obj');
+        const fine = objs.length === 1 && (objMeta(a.orig.objects.find((x) => x.id === objs[0].id) || {})?.w || 1) < 0.9;
         if (m === 'grid' && !fine) { dx = Math.round(dx); dy = Math.round(dy); } else if (m === 'half' && !fine) { dx = Math.round(dx * 2) / 2; dy = Math.round(dy * 2) / 2; }
         if (dx || dy) a.moved = true;
         const o = a.orig;
         const d = { ...s.doc };
-        if (a.h.kind === 'obj') d.objects = o.objects.map((x) => (x.id === a.h.id ? { ...x, x: r2(x.x + dx), y: r2(x.y + dy) } : x));
-        if (a.h.kind === 'label') d.labels = o.labels.map((x) => (x.id === a.h.id ? { ...x, x: r2(x.x + dx), y: r2(x.y + dy) } : x));
-        if (a.h.kind === 'light') d.lights = (o.lights || []).map((x) => (x.id === a.h.id ? { ...x, x: r2(x.x + dx), y: r2(x.y + dy) } : x));
-        if (a.h.kind === 'shape' || a.h.kind === 'terrain') {
-          const key = a.h.kind === 'shape' ? 'shapes' : 'terrain';
-          d[key] = o[key].map((x) => (x.id === a.h.id ? { ...x, pts: x.pts.map((v, i) => r2(v + (i % 2 ? dy : dx))) } : x));
-          s.geom++;
+        const ids = new Set(s.sel.map((x) => x.id));
+        d.objects = o.objects.map((x) => (ids.has(x.id) ? { ...x, x: r2(x.x + dx), y: r2(x.y + dy) } : x));
+        d.labels = o.labels.map((x) => (ids.has(x.id) ? { ...x, x: r2(x.x + dx), y: r2(x.y + dy) } : x));
+        d.lights = (o.lights || []).map((x) => (ids.has(x.id) ? { ...x, x: r2(x.x + dx), y: r2(x.y + dy) } : x));
+        for (const key of ['shapes', 'terrain']) {
+          d[key] = o[key].map((x) => (ids.has(x.id) ? { ...x, pts: x.pts.map((v, i) => r2(v + (i % 2 ? dy : dx))) } : x));
         }
+        if (s.sel.some((x) => x.kind === 'shape' || x.kind === 'terrain')) s.geom++;
         s.doc = d;
-        if (a.h.kind === 'light') s.ver++;
+        s.ver++;
         s.dirty = true;
       }
     };
@@ -1597,24 +1967,55 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         finishDraft();
         return;
       }
-      if (a.kind === 'brush') { finishDraft(); return; }
+      if (a.kind === 'brush' || a.kind === 'cells') { finishDraft(); return; }
+      if (a.kind === 'marquee') {
+        const { a: p0, b: p1 } = s.marquee || { a: a.a, b: a.a };
+        s.marquee = null;
+        const x0 = Math.min(p0.x, p1.x);
+        const x1 = Math.max(p0.x, p1.x);
+        const y0 = Math.min(p0.y, p1.y);
+        const y1 = Math.max(p0.y, p1.y);
+        if (Math.abs(x1 - x0) < 0.15 && Math.abs(y1 - y0) < 0.15) {
+          if (!a.add) { setSel([]); s.sel = []; }
+          s.dirty = true;
+          return;
+        }
+        const inBox = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+        const found = [];
+        for (const o of s.doc.objects) if (!o.hidden && inBox(o.x, o.y)) found.push({ kind: 'obj', id: o.id });
+        for (const l of s.doc.lights || []) if (inBox(l.x, l.y)) found.push({ kind: 'light', id: l.id });
+        for (const l of s.doc.labels) if (inBox(l.x, l.y)) found.push({ kind: 'label', id: l.id });
+        const next = a.add ? [...s.sel, ...found.filter((f) => !s.sel.some((x) => x.id === f.id))] : found;
+        setSel(next);
+        s.sel = next;
+        s.dirty = true;
+        return;
+      }
       if (a.kind === 'scatter') {
         s.editSeq = (s.editSeq || 0) + 1;
-        s.ver++;
         s.dirty = true;
         save();
         rerender();
         return;
       }
+      if (a.kind === 'rotate' || a.kind === 'scale') {
+        s.skipIds = null;
+        s.objKeyC = '';
+        if (a.moved) {
+          s.editSeq = (s.editSeq || 0) + 1;
+          s.localDirty = true;
+          save();
+        } else s.undo.pop();
+        rerender();
+        return;
+      }
       if (a.kind === 'move') {
-        s.skipObj = null;
+        s.skipIds = null;
         s.objKeyC = '';
         if (a.moved) {
           s.redo = [];
           s.editSeq = (s.editSeq || 0) + 1;
           s.localDirty = true;
-          s.ver++;
-          if (a.h.kind === 'shape' || a.h.kind === 'terrain') s.geom++;
           save();
         } else s.undo.pop();
         rerender();
@@ -1644,7 +2045,6 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     };
     const wheel = (e) => {
       e.preventDefault();
-      // Umschalt + Mausrad dreht das Objekt unter dem Zeiger
       if (e.shiftKey && s.mode === 'build' && (s.tool === 'object' || s.tool === 'door')) {
         s.placeRot = (((s.placeRot + (e.deltaY < 0 ? 15 : -15)) % 360) + 360) % 360;
         if (s.hover) { s.hover = { ...s.hover, r: s.placeRot }; s.dirty = true; }
@@ -1672,7 +2072,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       cv.removeEventListener('wheel', wheel);
       cv.removeEventListener('contextmenu', ctxmenu);
     };
-  }, []);
+  }, [grid]);
 
   // Tastenkürzel
   useEffect(() => {
@@ -1689,79 +2089,35 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         return;
       }
       if (s.mode !== 'build' || !s.gm) return;
-      if (e.key === 'Escape') { s.draft = null; setSel(null); s.dirty = true; return; }
+      if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); const all = s.doc.objects.filter((o) => !o.hidden).map((o) => ({ kind: 'obj', id: o.id })); setSel(all); s.sel = all; s.dirty = true; return; }
+      if (e.key === 'Escape') { s.draft = null; setSel([]); s.sel = []; s.dirty = true; return; }
       if (e.key === 'Enter' && s.draft) { s.finishDraft?.(); return; }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && s.sel) { e.preventDefault(); deleteSel(); return; }
-      if (e.key.toLowerCase() === 'r' && s.sel?.kind === 'obj' && !mod) { rotateSel(e.shiftKey ? 15 : 90); return; }
-      if (e.key.toLowerCase() === 'f' && s.sel?.kind === 'obj' && !mod) { flipSel(); return; }
-      if ((e.key === '+' || e.key === '-') && s.sel?.kind === 'obj' && !mod) { scaleSel(e.key === '+' ? 1.1 : 1 / 1.1); return; }
-      if (mod && e.key.toLowerCase() === 'd' && s.sel) { e.preventDefault(); duplicateSel(); return; }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && s.sel.length) { e.preventDefault(); deleteSel(); return; }
+      if (mod && e.key.toLowerCase() === 'd' && s.sel.length) { e.preventDefault(); duplicateSel(); return; }
+      if (e.key.toLowerCase() === 'r' && s.sel.length && !mod) { rotateSel(e.shiftKey ? 15 : 90); return; }
+      if (e.key.toLowerCase() === 'f' && s.sel.length && !mod) { flipSel(); return; }
+      if ((e.key === '+' || e.key === '-') && s.sel.length && !mod) { scaleSel(e.key === '+' ? 1.1 : 1 / 1.1); return; }
       if (mod || e.altKey) return;
       const t = BUILD_TOOLS.find((x) => x[3] === e.key.toLowerCase());
       if (t) { setTool(t[0]); s.draft = null; s.dirty = true; }
     };
     addEventListener('keydown', key);
     return () => removeEventListener('keydown', key);
-  }, [active]);
+  }, [active, sel]);
 
-  const selItem = () => {
-    if (!sel) return null;
-    const d = s.doc;
-    if (sel.kind === 'obj') return d.objects.find((x) => x.id === sel.id);
-    if (sel.kind === 'label') return d.labels.find((x) => x.id === sel.id);
-    if (sel.kind === 'light') return (d.lights || []).find((x) => x.id === sel.id);
-    if (sel.kind === 'shape') return d.shapes.find((x) => x.id === sel.id);
-    if (sel.kind === 'terrain') return d.terrain.find((x) => x.id === sel.id);
-    return null;
-  };
-  const listKey = (k) => ({ obj: 'objects', label: 'labels', shape: 'shapes', terrain: 'terrain', light: 'lights' }[k]);
-  const updSel = (patch, geom = false) => {
-    if (!sel) return;
-    const key = listKey(sel.kind);
-    commit({ [key]: (s.doc[key] || []).map((x) => (x.id === sel.id ? { ...x, ...patch } : x)) }, { geom: geom || sel.kind === 'shape' || sel.kind === 'terrain' });
-  };
-  function deleteSel() {
-    if (!s.sel) return;
-    const key = listKey(s.sel.kind);
-    commit({ [key]: (s.doc[key] || []).filter((x) => x.id !== s.sel.id) }, { geom: s.sel.kind === 'shape' || s.sel.kind === 'terrain' });
-    setSel(null);
-  }
-  function rotateSel(deg) {
-    const o = s.doc.objects.find((x) => x.id === s.sel?.id);
-    if (o) commit({ objects: s.doc.objects.map((x) => (x.id === o.id ? { ...x, r: ((((x.r || 0) + deg) % 360) + 360) % 360 } : x)) }, { geom: false });
-  }
-  function flipSel() {
-    const o = s.doc.objects.find((x) => x.id === s.sel?.id);
-    if (o) commit({ objects: s.doc.objects.map((x) => (x.id === o.id ? { ...x, fx: x.fx ? 0 : 1 } : x)) }, { geom: false });
-  }
-  function scaleSel(f) {
-    const o = s.doc.objects.find((x) => x.id === s.sel?.id);
-    if (o) commit({ objects: s.doc.objects.map((x) => (x.id === o.id ? { ...x, s: r2(clamp((x.s || 1) * f, 0.1, 8)) } : x)) }, { geom: false });
-  }
-  function duplicateSel() {
-    const it = selItem();
-    if (!it) return;
-    const key = listKey(s.sel.kind);
-    const copy = { ...JSON.parse(JSON.stringify(it)), id: uid(6) };
-    if (copy.pts) copy.pts = copy.pts.map((v) => r2(v + 1));
-    else { copy.x = r2(copy.x + 1); copy.y = r2(copy.y + 1); }
-    commit({ [key]: [...s.doc[key], copy] }, { geom: !!copy.pts });
-    setSel({ kind: s.sel.kind, id: copy.id });
-  }
-
+  // ── Aktionen ──
   const regenerate = async (k) => {
     if ((s.doc.shapes.length || s.doc.objects.length) && !(await confirmDialog(`Karte durch „${SCRAWL_GENERATORS[k].label}“ ersetzen? (Rückgängig mit Strg+Z)`, { ok: 'Ersetzen' }))) return;
-    const g = SCRAWL_GENERATORS[k].fn(s.doc.w, s.doc.h);
-    commit(g);
-    setSel(null);
+    commit(SCRAWL_GENERATORS[k].fn(s.doc.w, s.doc.h));
+    setSel([]);
     fit();
   };
   const resize = async () => {
     const v = await promptDialog('Neue Größe (Spalten × Zeilen)', `${s.doc.w} × ${s.doc.h}`, { title: 'Kartengröße', hint: 'Felder à 1,5 m / 5 ft. Inhalte bleiben erhalten.' });
     const m = /(\d+)\s*[x×*]\s*(\d+)/i.exec(v || '');
     if (!m) return;
-    const w = clamp(Number(m[1]), 8, 150);
-    const h = clamp(Number(m[2]), 8, 150);
+    const w = clamp(Number(m[1]), 8, 200);
+    const h = clamp(Number(m[2]), 8, 200);
     commit({ w, h });
     s.fog = '0'.repeat(w * h).split('');
     await db.update(col('maps'), params.id, { fog: { ...(map.fog || {}), revealed: s.fog.join('') } }).catch(() => {});
@@ -1775,7 +2131,6 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     const cv = renderMapImage(d, cs, s.img);
     cv.toBlob((b) => { if (b) download(`${map.name || 'Karte'}.png`, b, 'image/png'); setBusy(''); }, 'image/png');
   };
-  // Karte mit eigenen Objekten als Bild für die Mitspieler ablegen
   const bakeForPlayers = async (quiet) => {
     const d = s.doc;
     const own = [...new Set(d.objects.filter((o) => o.t === 'stamp' && String(o.a).startsWith('u:')).map((o) => String(o.a).slice(2)))];
@@ -1840,157 +2195,313 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     const r = await openModal(({ close }) => html`<${TokenForm} close=${close} token=${t} members=${Object.values(vault.get().members)} />`, { title: t.label, icon: 'user' });
     if (r?._delete) { await db.remove(col('tokens'), t.id); selectToken(B, null); } else if (r) await db.update(col('tokens'), t.id, { label: r.label, color: r.color, size: r.size, ownerUid: r.ownerUid || null, visibility: r.visibility });
   };
+  const pickTool = (id) => {
+    setTool(id);
+    s.draft = null;
+    if (id !== 'measure') { s.measure = null; setMeasureText(''); }
+    s.dirty = true;
+  };
   const switchMode = (v) => {
     setMode(v);
-    setTool(v === 'build' ? 'room' : 'pan');
+    setTool(v === 'build' ? 'select' : 'pan');
     s.draft = null;
     s.measure = null;
     setMeasureText('');
-    setSel(null);
+    setSel([]);
     if (v === 'play' && gm && real && usesOwnAssets(s.doc) && (map.updatedAt || 0) > (map.bake?.at || 0)) bakeForPlayers(true);
+  };
+  const updOne = (kind, id, patch) => commit({ [listOf(kind)]: (s.doc[listOf(kind)] || []).map((x) => (x.id === id ? { ...x, ...patch } : x)) }, { geom: kind === 'shape' || kind === 'terrain' });
+  const delOne = (kind, id) => {
+    commit({ [listOf(kind)]: (s.doc[listOf(kind)] || []).filter((x) => x.id !== id) }, { geom: kind === 'shape' || kind === 'terrain' });
+    setSel(sel.filter((x) => x.id !== id));
+  };
+  const pickFromList = (h, e) => {
+    const multi = e.shiftKey || e.ctrlKey || e.metaKey;
+    const next = multi ? (isSel(h.id) ? sel.filter((x) => x.id !== h.id) : [...sel, h]) : [h];
+    setSel(next);
+    s.sel = next;
+    s.dirty = true;
   };
 
   const d = s.doc;
   const st = STYLES[d.style] || STYLES.klassisch;
-  const tools = mode === 'build' ? BUILD_TOOLS : gm ? PLAY_TOOLS_GM : PLAY_TOOLS;
-  const it = selItem();
-  const itMeta = it && sel?.kind === 'obj' ? objMeta(it) : null;
-  const drawTool = ['room', 'ellipse', 'poly', 'path', 'brush', 'terrain'].includes(tool);
+  const tools = mode === 'build' ? (imageMap ? BUILD_TOOLS.filter((t) => !['land', 'terrain'].includes(t[0])) : BUILD_TOOLS) : gm ? PLAY_TOOLS_GM : PLAY_TOOLS;
+  const shapeMode = tool === 'land' ? shape : matShape;
+  const selObjList = selObjs();
+  const firstMeta = selObjList.length ? objMeta(selObjList[0]) : null;
+
+  // ── Linke Seitenleiste: alle Werkzeuge und Einstellungen ──
+  const toolSection = () => {
+    if (tool === 'land' || tool === 'terrain') {
+      const terrain = tool === 'terrain';
+      return html`<${Sec} title=${terrain ? 'Belag & Gelände' : 'Land & Räume'} icon=${terrain ? 'brush' : 'layout'} open=${true}>
+        <${Segmented} value=${op} onChange=${setOp} options=${[{ value: 'add', label: 'Hinzufügen', icon: 'plus' }, { value: 'sub', label: 'Entfernen', icon: 'eraser' }]} />
+        <div class="mw-lbl">Form</div>
+        <${Chips} options=${SHAPE_MODES} value=${shapeMode} onPick=${terrain ? setMatShape : setShape} />
+        ${!['brush', 'cells', 'fill'].includes(shapeMode) ? html`<div class="row small"><span class="muted grow">Einrasten</span><${Segmented} value=${snap} onChange=${setSnap} options=${[{ value: 'grid', label: 'Raster' }, { value: 'half', label: '½' }, { value: 'free', label: 'Frei' }]} /></div>` : null}
+        ${shapeMode === 'path' ? html`<div class="row small"><span class="muted grow">Gangbreite</span><${Segmented} value=${width} onChange=${setWidth} options=${[1, 2, 3].map((n) => ({ value: n, label: `${n}` }))} /></div>` : null}
+        ${shapeMode === 'brush' ? html`<${Slider} label="Pinsel" value=${brushW} min=${0.5} max=${8} step=${0.5} onInput=${setBrushW} />` : null}
+        ${terrain ? html`
+          <div class="mw-lbl">Belag</div>
+          ${real ? html`<div class="chips">${terrainGroups().map((g, gi) => html`<button key=${g.label} type="button" class=${'chip' + (matCat === gi ? ' selected' : '')} onClick=${() => setMatCat(gi)}>${g.label}</button>`)}</div>
+            <div class="chips">${[['', 'Original'], ...Object.entries(TEX_MODS).map(([k, m2]) => [k, m2.name])].map(([k, label]) => html`<button key=${k || 'orig'} type="button" class=${'chip' + (matMod === k ? ' selected' : '')} onClick=${() => { setMatMod(k); setMat(reMod(mat, k)); }}>${label}</button>`)}</div>
+            <div class="tex-grid mini">${(terrainGroups(matMod)[matCat] || terrainGroups(matMod)[0]).items.map((i2) => html`<button key=${i2.key} type="button" class=${mat === i2.key ? 'active' : ''} title=${i2.label} onClick=${() => setMat(i2.key)}>
+              ${i2.tex ? html`<img src=${texThumb(i2.tex)} alt="" loading="lazy" />` : html`<span class="sw" style=${{ background: i2.color }}></span>`}<span>${i2.label}</span></button>`)}</div>`
+            : html`<div class="mat-pick">${Object.entries(MATS).map(([k, m2]) => html`<button key=${k} type="button" class=${mat === k ? 'active' : ''} onClick=${() => setMat(k)} title=${m2.label}><span style=${{ background: k === 'difficult' ? 'repeating-linear-gradient(135deg,#7a5a2a 0 3px,transparent 3px 7px)' : m2.color }}></span>${m2.label}</button>`)}</div>`}
+          <${Slider} label="Übergang" value=${d.soft ?? 0.3} min=${0} max=${1} onInput=${(v) => commit({ soft: v }, { undo: false })} />
+        ` : real ? html`<${TexBtn} label="Bodenbelag" value=${shapeTex || d.floorTex} cats=${['boden', 'pflaster']} onPick=${setShapeTex} />
+          ${shapeTex ? html`<button type="button" class="ws-link tiny" onClick=${() => setShapeTex('')}>→ Standard der Karte benutzen</button>` : null}` : null}
+        <div class="tiny faint">${HINTS[tool]}</div>
+      <//>`;
+    }
+    if (tool === 'wall') {
+      return html`<${Sec} title="Zwischenwand" icon="minus" open=${true}>
+        <${Slider} label="Stärke" value=${wallThick} min=${0.15} max=${0.8} onInput=${setWallThick} />
+        <div class="row small"><span class="muted grow">Einrasten</span><${Segmented} value=${snap} onChange=${setSnap} options=${[{ value: 'grid', label: 'Raster' }, { value: 'half', label: '½' }, { value: 'free', label: 'Frei' }]} /></div>
+        <div class="tiny faint">${HINTS.wall}</div>
+      <//>`;
+    }
+    if (tool === 'door') {
+      return html`<${Sec} title="Türen" icon="door" open=${true}>
+        <${AssetGrid} value=${doorKey} onPick=${setDoorKey} items=${DOOR_KEYS.map((k) => { const i2 = assetInfo(k); return { key: k, name: i2?.name || k, w: i2?.w || 1, h: i2?.h || 1 }; })} />
+        <div class="tiny faint">${HINTS.door}</div>
+      <//>`;
+    }
+    if (tool === 'object' || tool === 'scatter') {
+      return html`
+        ${tool === 'object' ? html`<${Sec} title="Objektbibliothek" icon="gem" open=${true}>
+          <${AssetPicker} value=${objKey} onPick=${setObjKey} />
+        <//>` : html`<${Sec} title="Streuen" icon="sparkles" open=${true}>
+          <${Chips} options=${Object.entries(SETS).map(([k, v]) => [k, v.label])} value=${scatterSet} onPick=${setScatterSet} />
+          <${Slider} label="Radius" value=${scatterR} min=${0.5} max=${8} step=${0.5} onInput=${setScatterR} />
+          <${Slider} label="Dichte" value=${scatterN} min=${1} max=${14} step=${1} onInput=${setScatterN} />
+        <//>`}
+        <${Sec} title="Eigenschaften beim Setzen" icon="settings" open=${true}>
+          <${Slider} label="Größe" value=${objScale} min=${0.1} max=${5} onInput=${setObjScale} fmt=${(v) => `${Math.round(v * 100) / 100}×`} />
+          <${Slider} label="Deckkraft" value=${objAlpha} min=${0.1} max=${1} onInput=${setObjAlpha} fmt=${(v) => `${Math.round(v * 100)} %`} />
+          <${Slider} label="Weichzeichnen" value=${objBlur} min=${0} max=${6} step=${0.5} onInput=${setObjBlur} fmt=${(v) => (v ? `${v} px` : 'aus')} />
+          <${Toggle} checked=${objShadow} onChange=${setObjShadow} label="Schlagschatten" />
+          ${tool === 'object' ? html`<${Toggle} checked=${objRandom} onChange=${setObjRandom} label="Zufällig drehen" />` : null}
+          <div class="row small"><span class="muted grow">Ebene</span><${Segmented} value=${objLayer} onChange=${setObjLayer} options=${[{ value: '', label: 'Auto' }, { value: 'floor', label: 'Boden' }, { value: 'obj', label: 'Normal' }, { value: 'top', label: 'Oben' }]} /></div>
+          <div class="tiny faint">${HINTS[tool]}</div>
+        <//>`;
+    }
+    if (tool === 'light') {
+      return html`<${Sec} title="Licht" icon="sun" open=${true}>
+        <div class="mat-pick">${LIGHT_COLORS.map(([k, label, c]) => html`<button key=${k} type="button" class=${lightKind === k ? 'active' : ''} onClick=${() => setLightKind(k)}><span style=${{ background: c.replace(/[\d.]+\)$/, '1)') }}></span>${label}</button>`)}</div>
+        <${Slider} label="Radius" value=${lightR} min=${1} max=${24} step=${0.5} onInput=${setLightR} fmt=${(v) => `${v} Felder`} />
+        <div class="tiny faint">${HINTS.light}</div>
+      <//>`;
+    }
+    if (tool === 'text') {
+      return html`<${Sec} title="Beschriftung" icon="hash" open=${true}>
+        <${Segmented} value=${textKind} onChange=${setTextKind} options=${[{ value: 'room', label: 'Raumnummer', icon: 'hash' }, { value: 'text', label: 'Text', icon: 'quote' }]} />
+        <div class="tiny faint">${HINTS.text}</div>
+      <//>`;
+    }
+    return html`<${Sec} title=${tool === 'select' ? 'Auswählen' : 'Ansicht'} icon=${tool === 'select' ? 'pointer' : 'hand'} open=${true}>
+      <div class="tiny faint">${HINTS[tool]}</div>
+      ${tool === 'select' ? html`<div class="row small"><span class="muted grow">Einrasten</span><${Segmented} value=${snap} onChange=${setSnap} options=${[{ value: 'grid', label: 'Raster' }, { value: 'half', label: '½' }, { value: 'free', label: 'Frei' }]} /></div>` : null}
+    <//>`;
+  };
+
+  const selectionSection = () => {
+    if (!sel.length) return null;
+    const many = sel.length > 1;
+    const it = onlyItem;
+    const kind = only?.kind;
+    return html`<${Sec} title=${many ? `Auswahl (${sel.length})` : 'Auswahl'} icon="pointer" open=${true}>
+      ${many ? html`<div class="small"><b>${sel.length} Elemente</b></div>` : null}
+      ${selObjList.length ? html`
+        <div class="btn-row"><${Btn} size="sm" icon="refresh" onClick=${() => rotateSel(90)}>90°<//><${Btn} size="sm" kind="ghost" onClick=${() => rotateSel(15)}>15°<//><${Btn} size="sm" kind="ghost" onClick=${flipSel}>Spiegeln<//></div>
+        <div class="btn-row"><${Btn} size="sm" kind="ghost" onClick=${() => scaleSel(1.1)}>Größer<//><${Btn} size="sm" kind="ghost" onClick=${() => scaleSel(1 / 1.1)}>Kleiner<//></div>
+        ${!many && it ? html`<${Slider} label="Größe" value=${it.s || 1} min=${0.05} max=${6} onInput=${(v) => updSel({ s: v })} fmt=${(v) => `${Math.round(v * 100) / 100}×`} />
+          <${Slider} label="Drehung" value=${it.r || 0} min=${0} max=${359} step=${1} onInput=${(v) => updSel({ r: v })} fmt=${(v) => `${Math.round(v)}°`} />` : null}
+        <${Slider} label="Deckkraft" value=${(it?.o ?? 1)} min=${0.05} max=${1} onInput=${(v) => updSel({ o: v >= 1 ? null : r2(v) })} fmt=${(v) => `${Math.round(v * 100)} %`} />
+        <${Slider} label="Weichzeichnen" value=${(it?.b ?? 0)} min=${0} max=${8} step=${0.5} onInput=${(v) => updSel({ b: v || null })} fmt=${(v) => (v ? `${v} px` : 'aus')} />
+        <${Toggle} checked=${it ? it.sh !== false : true} onChange=${(v) => updSel({ sh: v })} label="Schlagschatten" />
+        <div class="row small"><span class="muted grow">Ebene</span><${Segmented} value=${(it?.layer || firstMeta?.layer || 'obj')} onChange=${(v) => updSel({ layer: v })} options=${[{ value: 'floor', label: 'Boden' }, { value: 'obj', label: 'Normal' }, { value: 'top', label: 'Oben' }]} /></div>
+        ${!many && it && String(it.a || '').startsWith('u:') ? html`<div class="tiny faint">Eigenes Objekt – gilt für alle Vorkommen:</div>
+          <${Toggle} checked=${!!userAssetInfo(String(it.a).slice(2))?.block} onChange=${(v) => { updateUserAsset(String(it.a).slice(2), { block: v, ...(v ? { rough: false } : {}) }); s.geom++; }} label="Blockiert (undurchdringlich)" />
+          <${Toggle} checked=${!!userAssetInfo(String(it.a).slice(2))?.rough} onChange=${(v) => { updateUserAsset(String(it.a).slice(2), { rough: v }); s.geom++; }} label="Schwieriges Gelände" />` : null}
+      ` : null}
+      ${!many && kind === 'light' && it ? html`
+        <div class="mat-pick">${LIGHT_COLORS.map(([k, label, c]) => html`<button key=${k} type="button" class=${it.color === c ? 'active' : ''} onClick=${() => updSel({ color: c })}><span style=${{ background: c.replace(/[\d.]+\)$/, '1)') }}></span>${label}</button>`)}</div>
+        <${Slider} label="Radius" value=${it.r || 4} min=${1} max=${24} step=${0.5} onInput=${(v) => updSel({ r: v })} />
+        <${Slider} label="Stärke" value=${it.i ?? 1} min=${0.2} max=${1.6} onInput=${(v) => updSel({ i: v })} />` : null}
+      ${!many && kind === 'label' && it ? html`
+        <${Field} label="Text"><input class="input" value=${it.text} onInput=${(e) => updSel({ text: e.target.value })} /><//>
+        <${Slider} label="Größe" value=${it.size || 0.7} min=${0.3} max=${3} step=${0.1} onInput=${(v) => updSel({ size: v })} />
+        <${Field} label="Notiz verknüpfen (im Spielmodus antippbar)">${it.noteId && noteById(it.noteId) ? html`<span class="chip accent">${noteById(it.noteId).title}<span class="x" onClick=${() => updSel({ noteId: null })}><${Icon} name="x" size=${12} /></span></span>` : html`<${NotePicker} onPick=${(n) => updSel({ noteId: n.id })} />`}<//>` : null}
+      ${!many && (kind === 'shape' || kind === 'terrain') && it ? html`
+        <div class="small"><b>${kind === 'terrain' ? `Belag: ${matLabel(it.mat)}` : it.wall ? 'Zwischenwand' : { rect: 'Raum', ellipse: 'Runder Raum', poly: 'Polygon', path: 'Gang', brush: 'Pinselstrich', cells: 'Felder' }[it.kind]}</b></div>
+        ${it.kind === 'path' || it.kind === 'brush' ? html`<${Slider} label="Breite" value=${it.w || 1} min=${0.15} max=${8} onInput=${(v) => updSel({ w: v }, true)} />` : null}
+        ${kind === 'shape' && real && !it.wall ? html`<${TexBtn} label="Bodenbelag" value=${it.tex || d.floorTex} cats=${['boden', 'pflaster']} onPick=${(v) => updSel({ tex: v }, true)} />
+          <${Toggle} checked=${!it.nowall} onChange=${(v) => updSel({ nowall: v ? 0 : 1 }, true)} label="Mit Wand umranden" />
+          <${TexBtn} label=${it.roof ? 'Dach' : 'Dach hinzufügen'} value=${it.roof || 'clay_roof_tiles'} cats=${['dach']} onPick=${(v) => updSel({ roof: v }, true)} />
+          ${it.roof ? html`<button type="button" class="ws-link tiny" onClick=${() => updSel({ roof: '' }, true)}>→ Dach entfernen</button>` : null}` : null}
+        ${kind === 'terrain' && real ? html`<div class="tex-grid mini">${terrainGroups(matMod).flatMap((g) => g.items).map((i2) => html`<button key=${i2.key} type="button" class=${it.mat === i2.key ? 'active' : ''} title=${i2.label} onClick=${() => updSel({ mat: i2.key }, true)}>
+          ${i2.tex ? html`<img src=${texThumb(i2.tex)} alt="" loading="lazy" />` : html`<span class="sw" style=${{ background: i2.color }}></span>`}<span>${i2.label}</span></button>`)}</div>` : null}` : null}
+      <div class="btn-row"><${Btn} size="sm" icon="copy" onClick=${duplicateSel}>Duplizieren<//><${Btn} size="sm" kind="danger" icon="trash" onClick=${deleteSel}>Löschen<//></div>
+    <//>`;
+  };
+
+  const leftPanel = () => html`<aside class="sidebar left mw">
+    <div class="sidebar-head">
+      <button type="button" class="panel-select" onClick=${() => openView('maps')}><${Icon} name="map" size=${17} /><span class="t">${mode === 'build' ? 'Kartenwerkstatt' : 'Spielmodus'}</span></button>
+      ${isMobile() ? html`<${IconBtn} icon="x" title="Schließen" onClick=${() => ws.set({ drawer: null })} />` : null}
+    </div>
+    <div class="sidebar-body mw-body">
+      ${gm ? html`<${Segmented} value=${mode} onChange=${switchMode} options=${[{ value: 'build', label: 'Bauen', icon: 'hammer' }, { value: 'play', label: 'Spielen', icon: 'play' }]} />` : null}
+      ${mode === 'build' ? html`
+        <${Sec} title="Werkzeuge" icon="wand" open=${true}><${ToolGrid} tools=${tools} tool=${tool} onPick=${pickTool} /><//>
+        ${toolSection()}
+        ${selectionSection()}
+        ${imageMap ? html`<${Sec} title="Bild & Raster" icon="image" open=${true}>
+          <div class="tiny faint">Die roten Linien des Bildes sollen auf dem Raster liegen. Feinjustieren, bis Felder und Bild zusammenpassen.</div>
+          <${Slider} label="Feldgröße im Bild" value=${d.bgFit?.cell || 70} min=${8} max=${400} step=${0.5} onInput=${(v) => commit({ bgFit: { ...(d.bgFit || { ox: 0, oy: 0 }), cell: v } }, { undo: false })} fmt=${(v) => `${Math.round(v * 10) / 10} px`} />
+          <${Slider} label="Versatz waagerecht" value=${d.bgFit?.ox || 0} min=${0} max=${d.bgFit?.cell || 70} step=${0.5} onInput=${(v) => commit({ bgFit: { ...(d.bgFit || { cell: 70, oy: 0 }), ox: v } }, { undo: false })} fmt=${(v) => `${Math.round(v * 10) / 10} px`} />
+          <${Slider} label="Versatz senkrecht" value=${d.bgFit?.oy || 0} min=${0} max=${d.bgFit?.cell || 70} step=${0.5} onInput=${(v) => commit({ bgFit: { ...(d.bgFit || { cell: 70, ox: 0 }), oy: v } }, { undo: false })} fmt=${(v) => `${Math.round(v * 10) / 10} px`} />
+          <div class="row small"><span class="muted grow">Größe: ${d.w} × ${d.h} Felder</span><${Btn} size="sm" kind="ghost" onClick=${resize}>Ändern<//></div>
+          <${Btn} size="sm" icon="image" onClick=${traceImage}>Anderes Bild<//>
+          <${Toggle} checked=${d.gridOn !== false} onChange=${(v) => commit({ gridOn: v })} label="Raster zeigen" />
+        <//>` : null}
+        <${Sec} title="Karte & Stil" icon="palette">
+          <div class="style-pick">${Object.entries(STYLES).filter(([k]) => k !== 'bild' || imageMap).map(([k, sv]) => html`<button key=${k} type="button" class=${d.style === k ? 'active' : ''} onClick=${() => commit({ style: k })}>
+            <span class="sw" style=${{ background: sv.real ? 'linear-gradient(135deg,#3f5a2c 0 45%,#9b8d79 45% 70%,#3a332c 70%)' : `linear-gradient(135deg, ${sv.bg} 0 45%, ${sv.floor} 45% 70%, ${sv.wall} 70%)` }}></span>${sv.label}</button>`)}</div>
+          ${real ? html`
+            <${Toggle} checked=${!!d.outdoor} onChange=${(v) => commit({ outdoor: v, ground: v ? 'leafy_grass' : 'dark_rock' })} label="Außenkarte (Untergrund sichtbar)" />
+            <${TexBtn} label="Untergrund" value=${d.ground} cats=${['gelaende', 'pflaster', 'boden']} onPick=${(v) => commit({ ground: v })} />
+            <${TexBtn} label="Standard-Boden" value=${d.floorTex} cats=${['boden', 'pflaster']} onPick=${(v) => commit({ floorTex: v })} />
+            <${TexBtn} label="Wände" value=${d.wallTex} cats=${['wand']} onPick=${(v) => commit({ wallTex: v })} />
+            <${Slider} label="Wandstärke" value=${d.wallW || (d.outdoor ? 0.32 : 0.42)} min=${0.15} max=${0.8} onInput=${(v) => commit({ wallW: v }, { undo: false })} />
+          ` : html`<${Slider} label="Schraffur" value=${d.hatch ?? 1} min=${0} max=${2.5} step=${0.25} onInput=${(v) => commit({ hatch: v }, { undo: false })} />`}
+          <${Toggle} checked=${d.gridOn !== false} onChange=${(v) => commit({ gridOn: v })} label="Raster zeigen" />
+          <div class="row small"><span class="muted grow">Größe: ${d.w} × ${d.h} Felder</span><${Btn} size="sm" kind="ghost" onClick=${resize}>Ändern<//></div>
+          <div class="row small"><${Btn} size="sm" icon="image" onClick=${traceImage}>${map.fileId ? 'Andere Vorlage' : 'Bild als Vorlage'}<//></div>
+          ${map.fileId ? html`<${Slider} label="Vorlage sichtbar" value=${d.bgAlpha ?? 0.5} min=${0} max=${1} onInput=${(v) => commit({ bgAlpha: v }, { undo: false })} fmt=${(v) => `${Math.round(v * 100)} %`} />` : null}
+        <//>
+        ${real ? html`<${Sec} title="Licht & Stimmung" icon="sun">
+          <${Slider} label="Dunkelheit" value=${d.dark || 0} min=${0} max=${0.9} onInput=${(v) => commit({ dark: v }, { undo: false, geom: false })} fmt=${(v) => `${Math.round(v * 100)} %`} />
+          <${Toggle} checked=${showLight} onChange=${setShowLight} label="Licht beim Bauen zeigen" />
+          <div class="tiny faint">Fackeln, Feuer und Zauberkreise leuchten von selbst. Im Spielmodus wird das Licht immer gezeigt.</div>
+        <//>` : null}
+        <${Sec} title="Generieren" icon="dices">
+          <div class="chips">${Object.entries(SCRAWL_GENERATORS).map(([k, g]) => html`<button key=${k} type="button" class="chip suggest" onClick=${() => regenerate(k)}>${g.label}</button>`)}</div>
+          <div class="tiny faint">Ersetzt die Karte – mit Strg+Z zurückholbar.</div>
+        <//>
+        <${Sec} title="Export & Spieler" icon="download">
+          <div class="btn-row"><${Btn} size="sm" icon="download" loading=${busy === 'png'} onClick=${exportPng}>PNG<//>
+            ${real && usesOwnAssets(d) ? html`<${Btn} size="sm" icon="users" loading=${busy === 'bake'} onClick=${() => bakeForPlayers(false)}>Für Spieler backen<//>` : null}</div>
+          <div class="btn-row"><${Btn} size="sm" kind="ghost" icon="undo" disabled=${!s.undo.length} onClick=${undo}>Rückgängig<//><${Btn} size="sm" kind="ghost" icon="refresh" disabled=${!s.redo.length} onClick=${redo}>Wiederholen<//></div>
+          ${real && usesOwnAssets(d) ? html`<div class="tiny faint">Diese Karte nutzt eigene Objekte. Sie liegen nur auf diesem Gerät – für die Mitspieler wird ein Kartenbild gespeichert (beim Wechsel in den Spielmodus automatisch).</div>` : null}
+        <//>
+      ` : html`
+        <${Sec} title="Werkzeuge" icon="wand" open=${true}><${ToolGrid} tools=${tools} tool=${tool} onPick=${pickTool} /><//>
+        ${gm ? html`<${Sec} title="Nebel des Krieges" icon="eye-off" open=${true}>
+          <${Toggle} checked=${!!map.fog?.enabled} onChange=${(v) => db.update(col('maps'), params.id, { fog: { ...(map.fog || {}), revealed: s.fog.join(''), enabled: v } })} label="Nebel aktiv" />
+          <div class="row small"><span class="muted grow">Pinsel</span><${Segmented} value=${fogBrush} onChange=${setFogBrush} options=${[{ value: 1, label: '1' }, { value: 2, label: '3' }, { value: 3, label: '5' }]} /></div>
+          <div class="btn-row"><${Btn} size="sm" icon="eye" onClick=${() => fogAll('1')}>Alles aufdecken<//><${Btn} size="sm" icon="eye-off" onClick=${() => fogAll('0')}>Alles verdecken<//></div>
+        <//>
+        <${Sec} title="Tokens" icon="users" open=${true}>
+          <div class="btn-row"><${Btn} size="sm" icon="users" onClick=${addPartyTokens}>Gruppe<//><${Btn} size="sm" icon="sword" onClick=${addCombatTokens}>Gegner aus Kampf<//></div>
+          <${Toggle} checked=${!!B.showNames} onChange=${(v) => { B.showNames = v; s.dirty = true; rerender(); }} label="Namen auf der Karte zeigen" />
+          <div class="tiny faint">Token antippen = Aktionen, Reichweiten & Bewegung · ziehen = bewegen · lange drücken oder Alt-Klick = Ping.</div>
+        <//>
+        <${Sec} title="Monster platzieren" icon="ghost">
+          <${MonsterPlacer} B=${B} active=${tool === 'place'} onPick=${(m) => { B.placing = m; setTool('place'); s.dirty = true; }} onStop=${() => { B.placing = null; setTool('pan'); }} />
+        <//>
+        <${Sec} title="Kampf" icon="swords" open=${true}>
+          <div class="btn-row">${!B.combat.active ? html`<${Btn} size="sm" kind="primary" icon="swords" onClick=${() => startCombat(B)}>Kampf starten<//>` : null}<${Btn} size="sm" kind="ghost" icon="eraser" onClick=${() => clearTemplates(B)}>Schablonen entfernen<//></div>
+        <//>` : null}
+      `}
+    </div>
+  </aside>`;
+
+  // ── Rechte Seitenleiste: Ebenen ──
+  const layersPanel = () => {
+    const q = layerQ.trim().toLowerCase();
+    const rows = [];
+    const LAYERS = [['top', 'Oben (Kronen, Dächer)'], ['obj', 'Objekte'], ['floor', 'Boden (Teppiche, Spuren)']];
+    const objRow = (o) => {
+      const m = objMeta(o);
+      const name = m?.name || 'Objekt';
+      return html`<div key=${o.id} class=${`mw-lrow${isSel(o.id) ? ' sel' : ''}${o.hidden ? ' off' : ''}`} title=${`${name} · ${r2(o.x)} / ${r2(o.y)}`}
+          onClick=${(e) => pickFromList({ kind: 'obj', id: o.id }, e)} onDblClick=${() => focusOn(o.x, o.y)}>
+        ${o.t === 'stamp' ? html`<img src=${thumbFor(o.a)} alt="" loading="lazy" />` : html`<span class="mw-lico"><${Icon} name="gem" size=${13} /></span>`}
+        <span class="grow ellipsis">${name}</span>
+        <button type="button" class="mw-ico" title=${o.hidden ? 'Einblenden' : 'Ausblenden'} onClick=${(e) => { e.stopPropagation(); updOne('obj', o.id, { hidden: o.hidden ? null : 1 }); }}><${Icon} name=${o.hidden ? 'eye-off' : 'eye'} size=${13} /></button>
+        <button type="button" class="mw-ico" title="Löschen" onClick=${(e) => { e.stopPropagation(); delOne('obj', o.id); }}><${Icon} name="trash" size=${13} /></button>
+      </div>`;
+    };
+    const simpleRow = (kind, it, icon, name) => html`<div key=${it.id} class=${`mw-lrow${isSel(it.id) ? ' sel' : ''}`} onClick=${(e) => pickFromList({ kind, id: it.id }, e)} onDblClick=${() => focusOn(it.x ?? (it.pts?.[0] || 0), it.y ?? (it.pts?.[1] || 0))}>
+      <span class="mw-lico"><${Icon} name=${icon} size=${13} /></span>
+      <span class="grow ellipsis">${name}</span>
+      <button type="button" class="mw-ico" title="Löschen" onClick=${(e) => { e.stopPropagation(); delOne(kind, it.id); }}><${Icon} name="trash" size=${13} /></button>
+    </div>`;
+    const match = (n) => !q || String(n).toLowerCase().includes(q);
+    for (const [lay, label] of LAYERS) {
+      const list = d.objects.filter((o) => (o.layer || objMeta(o)?.layer || 'obj') === lay && match(objMeta(o)?.name || ''));
+      if (!list.length) continue;
+      rows.push(html`<div class="mw-lgroup" key=${lay}><div class="mw-lgroup-t"><${Icon} name="layers" size=${12} />${label}<span class="badge">${list.length}</span></div>
+        ${list.slice(0, 400).map(objRow)}${list.length > 400 ? html`<div class="tiny faint">… und ${list.length - 400} weitere (filtern)</div>` : null}</div>`);
+    }
+    const lights = (d.lights || []).filter(() => match('licht'));
+    if (lights.length) rows.push(html`<div class="mw-lgroup" key="li"><div class="mw-lgroup-t"><${Icon} name="sun" size=${12} />Lichter<span class="badge">${lights.length}</span></div>${lights.map((l) => simpleRow('light', l, 'sun', `Licht ${r2(l.r || 4)} Felder`))}</div>`);
+    const labels = d.labels.filter((l) => match(l.text));
+    if (labels.length) rows.push(html`<div class="mw-lgroup" key="la"><div class="mw-lgroup-t"><${Icon} name="hash" size=${12} />Beschriftung<span class="badge">${labels.length}</span></div>${labels.map((l) => simpleRow('label', l, l.kind === 'room' ? 'hash' : 'quote', l.text))}</div>`);
+    const terr = d.terrain.filter((x) => match(matLabel(x.mat)));
+    if (terr.length) rows.push(html`<div class="mw-lgroup" key="te"><div class="mw-lgroup-t"><${Icon} name="brush" size=${12} />Belag & Gelände<span class="badge">${terr.length}</span></div>${terr.slice(0, 200).map((x) => simpleRow('terrain', x, 'brush', `${matLabel(x.mat)}${x.op === 'sub' ? ' (abgezogen)' : ''}`))}</div>`);
+    const shapes = d.shapes.filter((x) => match(x.wall ? 'wand' : 'raum'));
+    if (shapes.length) rows.push(html`<div class="mw-lgroup" key="sh"><div class="mw-lgroup-t"><${Icon} name="layout" size=${12} />Land & Wände<span class="badge">${shapes.length}</span></div>${shapes.slice(0, 200).map((x) => simpleRow('shape', x, x.wall ? 'minus' : 'layout', x.wall ? 'Zwischenwand' : { rect: 'Raum', ellipse: 'Runder Raum', poly: 'Polygon', path: 'Gang', brush: 'Pinselstrich', cells: 'Felder' }[x.kind] || 'Form'))}</div>`);
+    return html`<aside class="sidebar right mw">
+      <div class="sidebar-head"><button type="button" class="panel-select" onClick=${() => setSel([])}><${Icon} name="layers" size=${17} /><span class="t">Ebenen</span></button>
+        ${isMobile() ? html`<${IconBtn} icon="x" title="Schließen" onClick=${() => ws.set({ drawer: null })} />` : null}</div>
+      <div class="tree-filter"><${Icon} name="filter" size=${14} /><input class="input" value=${layerQ} onInput=${(e) => setLayerQ(e.target.value)} placeholder="Objekte filtern …" />${layerQ ? html`<${IconBtn} icon="x" size=${14} title="Filter löschen" onClick=${() => setLayerQ('')} />` : null}</div>
+      <div class="sidebar-body mw-layers">
+        ${sel.length ? html`<div class="mw-selinfo"><b>${sel.length}</b> ausgewählt <button type="button" class="ws-link tiny" onClick=${() => setSel([])}>aufheben</button></div>` : null}
+        ${rows.length ? rows : html`<div class="tree-empty">Noch nichts auf der Karte.</div>`}
+      </div>
+    </aside>`;
+  };
+
+  // Seitenleisten der App mit den Werkstatt-Inhalten füllen
+  // Signatur: nur wenn sich hieran etwas ändert, zeichnet die Hülle die Seitenleisten neu
+  const panelSig = [
+    mode, tool, shape, matShape, op, snap, width, brushW, wallThick, mat, matCat, shapeTex, doorKey, objKey,
+    objScale, objRandom, objAlpha, objBlur, objShadow, objLayer, scatterSet, scatterR, scatterN, lightKind, lightR,
+    textKind, fogBrush, showLight, layerQ, busy, gm, real, matMod, sidebarOpen, s.ver, s.geom, s.undo.length, s.redo.length,
+    sel.map((x) => `${x.kind}:${x.id}`).join(','), map.fileId || '', map.bake?.fileId || '', map.fog?.enabled ? 1 : 0, B.combat?.active ? 1 : 0, B.showNames ? 1 : 0,
+  ].join('|');
+  useEffect(() => {
+    if (!active) { clearPanels(tabId); return; }
+    setPanels(tabId, { left: leftPanel, right: gm && mode === 'build' ? layersPanel : null, sig: panelSig });
+  });
+  useEffect(() => () => clearPanels(tabId), []);
+
   const actions = html`<div class="row nowrap" style="gap:2px">
     ${gm ? html`<${Segmented} value=${mode} onChange=${switchMode} options=${[{ value: 'build', label: 'Bauen', icon: 'hammer' }, { value: 'play', label: 'Spielen', icon: 'play' }]} />` : null}
     ${mode === 'build' ? html`<${IconBtn} icon="undo" title="Rückgängig (Strg+Z)" disabled=${!s.undo.length} onClick=${undo} />` : null}
     <${IconBtn} icon="maximize" title="Einpassen" onClick=${fit} />
-    ${gm ? html`<${IconBtn} icon="panel-right" title="Seitenleiste" active=${side} onClick=${() => setSide(!side)} /><${IconBtn} icon="settings" title="Karteneinstellungen" onClick=${settingsDialog} />` : null}
+    ${gm ? html`<${IconBtn} icon="settings" title="Karteneinstellungen" onClick=${settingsDialog} />` : null}
   </div>`;
 
   return html`<${ViewFrame} tabId=${tabId} title=${map.name} noScroll actions=${actions}>
     <div class="map-stage scrawl" ref=${wrapRef} style=${{ background: st.bg }}>
       <canvas ref=${cvRef} class=${`tool-${tool}`}></canvas>
-      <div class="map-toolbar">
-        ${tools.map(([id, icon, label]) => html`<${IconBtn} key=${id} icon=${icon} title=${label} active=${tool === id} onClick=${() => { setTool(id); s.draft = null; if (id !== 'measure') { s.measure = null; setMeasureText(''); } s.dirty = true; }} />`)}
-        ${mode === 'build' && drawTool ? html`<div class="sep"></div>
+      ${!sidebarOpen ? html`<div class="map-toolbar">
+        ${tools.map(([id, icon, label]) => html`<${IconBtn} key=${id} icon=${icon} title=${label} active=${tool === id} onClick=${() => pickTool(id)} />`)}
+        ${mode === 'build' && (tool === 'land' || tool === 'terrain') ? html`<div class="sep"></div>
           <${IconBtn} icon="plus" title="Hinzufügen" active=${op === 'add'} onClick=${() => setOp('add')} />
           <${IconBtn} icon="eraser" title="Entfernen / ausschneiden" active=${op === 'sub'} onClick=${() => setOp('sub')} />` : null}
-      </div>
-      ${mode === 'play' && (B.sel || B.pending) ? null : html`<div class="map-hint">${s.draft && (s.draft.kind === 'poly' || s.draft.kind === 'path') ? html`<span>${HINTS[tool]}</span> <${Btn} size="sm" kind="primary" onClick=${() => s.finishDraft?.()}>Fertig<//> <${Btn} size="sm" kind="ghost" onClick=${() => { s.draft = null; s.dirty = true; rerender(); }}>Abbrechen<//>` : HINTS[tool]}</div>`}
+      </div>` : null}
+      ${(sidebarOpen && mode === 'build') || (mode === 'play' && (B.sel || B.pending)) ? null : html`<div class="map-hint">${s.draft && (s.draft.kind === 'poly' || s.draft.kind === 'path') ? html`<span>${HINTS[tool]}</span> <${Btn} size="sm" kind="primary" onClick=${() => s.finishDraft?.()}>Fertig<//> <${Btn} size="sm" kind="ghost" onClick=${() => { s.draft = null; s.dirty = true; rerender(); }}>Abbrechen<//>` : HINTS[tool]}</div>`}
       ${mode === 'play' ? html`<${BattleHud} B=${B} s=${s} editToken=${gm ? editToken : null} />` : null}
       ${measureText ? html`<div class="map-pop" style="left:60px;top:10px;width:auto"><${Icon} name="ruler" size=${14} /> <b>${measureText}</b></div>` : null}
-      ${side && gm ? html`<div class="map-side stack scrawl-side">
-        ${mode === 'build' ? html`
-          ${drawTool ? html`<div class="stack sm">
-            <b>${BUILD_TOOLS.find((x) => x[0] === tool)?.[2].replace(/ \(.\)$/, '')}</b>
-            <${Segmented} value=${op} onChange=${setOp} options=${[{ value: 'add', label: 'Hinzufügen', icon: 'plus' }, { value: 'sub', label: 'Entfernen', icon: 'eraser' }]} />
-            ${tool !== 'brush' && tool !== 'terrain' ? html`<div class="row small"><span class="muted">Einrasten</span><${Segmented} value=${snap} onChange=${setSnap} options=${[{ value: 'grid', label: 'Raster' }, { value: 'half', label: '½' }, { value: 'free', label: 'Frei' }]} /></div>` : null}
-            ${tool === 'path' ? html`<div class="row small"><span class="muted">Gangbreite</span><${Segmented} value=${width} onChange=${setWidth} options=${[1, 2, 3].map((n) => ({ value: n, label: `${n}` }))} /></div>` : null}
-            ${tool === 'brush' || tool === 'terrain' ? html`<div class="row small"><span class="muted" style="width:80px">Pinsel ${brushW}</span><input type="range" min="0.5" max="6" step="0.5" value=${brushW} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setBrushW(Number(e.target.value))} /></div>` : null}
-            ${real && tool !== 'terrain' ? html`<${TexBtn} label="Bodenbelag" value=${shapeTex || d.floorTex} cats=${['boden', 'pflaster']} onPick=${(v) => setShapeTex(v)} />
-              ${shapeTex ? html`<button type="button" class="ws-link tiny" onClick=${() => setShapeTex('')}>→ Standard der Karte benutzen</button>` : null}` : null}
-            ${tool === 'terrain' ? (real ? html`<div class="stack sm">
-              <div class="chips">${terrainGroups().map((g, gi) => html`<button key=${g.label} type="button" class=${`chip${matCat === gi ? ' selected' : ''}`} onClick=${() => setMatCat(gi)}>${g.label}</button>`)}</div>
-              <div class="tex-grid mini">${(terrainGroups()[matCat] || terrainGroups()[0]).items.map((i2) => html`<button key=${i2.key} type="button" class=${mat === i2.key ? 'active' : ''} title=${i2.label} onClick=${() => setMat(i2.key)}>
-                ${i2.tex ? html`<img src=${texUrl(i2.tex, true)} alt="" loading="lazy" />` : html`<span class="sw" style=${{ background: i2.color }}></span>`}<span>${i2.label}</span></button>`)}</div></div>`
-              : html`<div class="mat-pick">${Object.entries(MATS).map(([k, m2]) => html`<button type="button" class=${mat === k ? 'active' : ''} onClick=${() => setMat(k)} title=${m2.label}><span style=${{ background: k === 'difficult' ? 'repeating-linear-gradient(135deg,#7a5a2a 0 3px,transparent 3px 7px)' : m2.color }}></span>${m2.label}</button>`)}</div>`) : null}
-            ${tool === 'terrain' ? html`<div class="row small"><span class="muted" style="width:80px">Übergang</span><input type="range" min="0" max="1" step="0.05" value=${d.soft ?? 0.3} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ soft: Number(e.target.value) }, { undo: false })} /></div>
-              <div class="tiny faint">Tipp: Mit Strg ziehen = rechteckige Fläche.</div>` : null}
-          </div>` : null}
-          ${tool === 'wall' ? html`<div class="stack sm"><b>Zwischenwand</b>
-            <div class="row small"><span class="muted" style="width:80px">Stärke</span><input type="range" min="0.15" max="0.8" step="0.05" value=${wallThick} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setWallThick(Number(e.target.value))} /></div>
-            <div class="tiny faint">Wände laufen auf den Rasterlinien und halten Bewegung, Sicht und Zauberflächen auf. Türen darauf setzen macht sie passierbar.</div>
-          </div>` : null}
-          ${tool === 'door' ? html`<div class="stack sm"><b>Türen</b><${AssetGrid} value=${doorKey} onPick=${setDoorKey} items=${DOOR_KEYS.map((k) => { const i2 = assetInfo(k); return { key: k, name: i2?.name || k, w: i2?.w || 1, h: i2?.h || 1 }; })} /></div>` : null}
-          ${tool === 'object' ? html`<div class="stack sm">
-            <${AssetPicker} value=${objKey} onPick=${setObjKey} />
-            <div class="row small"><span class="muted" style="width:80px">Größe ${Math.round(objScale * 100) / 100}×</span><input type="range" min="0.2" max="4" step="0.05" value=${objScale} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setObjScale(Number(e.target.value))} /></div>
-            <${Toggle} checked=${objRandom} onChange=${setObjRandom} label="Zufällig drehen" />
-          </div>` : null}
-          ${tool === 'scatter' ? html`<div class="stack sm"><b>Streuen</b>
-            <div class="chips">${Object.entries(SETS).map(([k, v]) => html`<button key=${k} type="button" class=${`chip${scatterSet === k ? ' selected' : ' suggest'}`} onClick=${() => setScatterSet(k)}>${v.label}</button>`)}</div>
-            <div class="row small"><span class="muted" style="width:80px">Radius ${scatterR}</span><input type="range" min="0.5" max="6" step="0.5" value=${scatterR} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setScatterR(Number(e.target.value))} /></div>
-            <div class="row small"><span class="muted" style="width:80px">Dichte ${scatterN}</span><input type="range" min="1" max="12" step="1" value=${scatterN} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setScatterN(Number(e.target.value))} /></div>
-            <div class="row small"><span class="muted" style="width:80px">Größe ${Math.round(objScale * 100) / 100}×</span><input type="range" min="0.3" max="3" step="0.05" value=${objScale} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setObjScale(Number(e.target.value))} /></div>
-          </div>` : null}
-          ${tool === 'light' ? html`<div class="stack sm"><b>Licht</b>
-            <div class="mat-pick">${LIGHT_COLORS.map(([k, label, c]) => html`<button key=${k} type="button" class=${lightKind === k ? 'active' : ''} onClick=${() => setLightKind(k)}><span style=${{ background: c.replace(/[\d.]+\)$/, '1)') }}></span>${label}</button>`)}</div>
-            <div class="row small"><span class="muted" style="width:80px">Radius ${lightR}</span><input type="range" min="1" max="20" step="0.5" value=${lightR} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setLightR(Number(e.target.value))} /></div>
-            <div class="row small"><span class="muted" style="width:80px">Dunkelheit</span><input type="range" min="0" max="0.9" step="0.05" value=${d.dark || 0} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ dark: Number(e.target.value) }, { undo: false, geom: false })} /></div>
-            <${Toggle} checked=${showLight} onChange=${setShowLight} label="Licht beim Bauen zeigen" />
-            <div class="tiny faint">Fackeln, Feuer und Zauberkreise leuchten von selbst. Im Spielmodus wird das Licht immer gezeigt.</div>
-          </div>` : null}
-          ${tool === 'text' ? html`<div class="stack sm"><b>Beschriftung</b><${Segmented} value=${textKind} onChange=${setTextKind} options=${[{ value: 'room', label: 'Raumnummer', icon: 'hash' }, { value: 'text', label: 'Text', icon: 'quote' }]} /></div>` : null}
-          ${tool === 'select' ? html`<div class="stack sm">
-            <b>Auswahl</b>
-            ${!it ? html`<div class="small faint">Tippe ein Objekt, ein Licht, einen Text oder einen Raum an.</div>` : null}
-            ${it && sel.kind === 'obj' ? html`<div class="small"><b>${itMeta?.name || 'Objekt'}</b> <span class="faint">${Math.round((itMeta?.w || 1) * 10) / 10} × ${Math.round((itMeta?.h || 1) * 10) / 10} Felder</span></div>
-              <div class="btn-row"><${Btn} size="sm" icon="refresh" onClick=${() => rotateSel(90)}>90°<//><${Btn} size="sm" kind="ghost" onClick=${() => rotateSel(15)}>15°<//><${Btn} size="sm" kind="ghost" onClick=${flipSel}>Spiegeln<//></div>
-              <div class="row small"><span class="muted" style="width:70px">Größe ${Math.round((it.s || 1) * 100) / 100}×</span><input type="range" min="0.1" max="4" step="0.05" value=${it.s || 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ s: Number(e.target.value) })} /></div>
-              <div class="row small"><span class="muted">Ebene</span><${Segmented} value=${it.layer || itMeta?.layer || 'obj'} onChange=${(v) => updSel({ layer: v })} options=${[{ value: 'floor', label: 'Boden' }, { value: 'obj', label: 'Normal' }, { value: 'top', label: 'Oben' }]} /></div>
-              <${Toggle} checked=${it.sh !== false} onChange=${(v) => updSel({ sh: v })} label="Schlagschatten" />
-              ${String(it.a || '').startsWith('u:') ? html`<div class="tiny faint">Eigenes Objekt – gilt für alle Vorkommen:</div>
-                <${Toggle} checked=${!!userAssetInfo(String(it.a).slice(2))?.block} onChange=${(v) => { updateUserAsset(String(it.a).slice(2), { block: v, ...(v ? { rough: false } : {}) }); s.geom++; }} label="Blockiert (undurchdringlich)" />
-                <${Toggle} checked=${!!userAssetInfo(String(it.a).slice(2))?.rough} onChange=${(v) => { updateUserAsset(String(it.a).slice(2), { rough: v }); s.geom++; }} label="Schwieriges Gelände" />` : null}` : null}
-            ${it && sel.kind === 'light' ? html`<div class="small"><b>Lichtquelle</b></div>
-              <div class="mat-pick">${LIGHT_COLORS.map(([k, label, c]) => html`<button key=${k} type="button" class=${it.color === c ? 'active' : ''} onClick=${() => updSel({ color: c })}><span style=${{ background: c.replace(/[\d.]+\)$/, '1)') }}></span>${label}</button>`)}</div>
-              <div class="row small"><span class="muted" style="width:70px">Radius ${it.r || 4}</span><input type="range" min="1" max="20" step="0.5" value=${it.r || 4} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ r: Number(e.target.value) })} /></div>
-              <div class="row small"><span class="muted" style="width:70px">Stärke</span><input type="range" min="0.2" max="1.6" step="0.05" value=${it.i ?? 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ i: Number(e.target.value) })} /></div>` : null}
-            ${it && sel.kind === 'label' ? html`<${Field} label="Text"><input class="input" value=${it.text} onInput=${(e) => updSel({ text: e.target.value })} /><//>
-              <div class="row small"><span class="muted" style="width:70px">Größe</span><input type="range" min="0.3" max="3" step="0.1" value=${it.size || 0.7} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ size: Number(e.target.value) })} /></div>
-              <${Field} label="Notiz verknüpfen (im Spielmodus antippbar)">${it.noteId && noteById(it.noteId) ? html`<span class="chip accent">${noteById(it.noteId).title}<span class="x" onClick=${() => updSel({ noteId: null })}><${Icon} name="x" size=${12} /></span></span>` : html`<${NotePicker} onPick=${(n) => updSel({ noteId: n.id })} />`}<//>` : null}
-            ${it && (sel.kind === 'shape' || sel.kind === 'terrain') ? html`<div class="small"><b>${sel.kind === 'terrain' ? `Gelände: ${matLabel(it.mat)}` : it.wall ? 'Zwischenwand' : { rect: 'Raum', ellipse: 'Runder Raum', poly: 'Polygon', path: 'Gang', brush: 'Pinselstrich' }[it.kind]}</b></div>
-              ${it.kind === 'path' || it.kind === 'brush' ? html`<div class="row small"><span class="muted" style="width:70px">Breite ${it.w}</span><input type="range" min="0.15" max="6" step="0.05" value=${it.w || 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => updSel({ w: Number(e.target.value) }, true)} /></div>` : null}
-              ${sel.kind === 'shape' && real && !it.wall ? html`<${TexBtn} label="Bodenbelag" value=${it.tex || d.floorTex} cats=${['boden', 'pflaster']} onPick=${(v) => updSel({ tex: v }, true)} />
-                <${Toggle} checked=${!it.nowall} onChange=${(v) => updSel({ nowall: v ? 0 : 1 }, true)} label="Mit Wand umranden" />
-                <${TexBtn} label=${it.roof ? 'Dach' : 'Dach hinzufügen'} value=${it.roof || 'clay_roof_tiles'} cats=${['dach']} onPick=${(v) => updSel({ roof: v }, true)} />
-                ${it.roof ? html`<button type="button" class="ws-link tiny" onClick=${() => updSel({ roof: '' }, true)}>→ Dach entfernen</button>` : null}` : null}
-              ${sel.kind === 'terrain' ? (real ? html`<div class="tex-grid mini">${terrainGroups().flatMap((g) => g.items).map((i2) => html`<button key=${i2.key} type="button" class=${it.mat === i2.key ? 'active' : ''} title=${i2.label} onClick=${() => updSel({ mat: i2.key }, true)}>
-                  ${i2.tex ? html`<img src=${texUrl(i2.tex, true)} alt="" loading="lazy" />` : html`<span class="sw" style=${{ background: i2.color }}></span>`}<span>${i2.label}</span></button>`)}</div>`
-                : html`<${Select} value=${it.mat} onChange=${(v) => updSel({ mat: v }, true)} options=${Object.entries(MATS).map(([k, m2]) => ({ value: k, label: m2.label }))} />`) : null}` : null}
-            ${it ? html`<div class="btn-row"><${Btn} size="sm" icon="copy" onClick=${duplicateSel}>Duplizieren<//><${Btn} size="sm" kind="danger" icon="trash" onClick=${deleteSel}>Löschen<//></div>` : null}
-          </div>` : null}
-          <details class="scrawl-sec" open=${tool === 'pan' || tool === 'select'}>
-            <summary>Karte & Stil</summary>
-            <div class="style-pick">${Object.entries(STYLES).map(([k, sv]) => html`<button type="button" class=${d.style === k ? 'active' : ''} onClick=${() => commit({ style: k })}>
-              <span class="sw" style=${{ background: sv.real ? 'linear-gradient(135deg,#3f5a2c 0 45%,#9b8d79 45% 70%,#3a332c 70%)' : `linear-gradient(135deg, ${sv.bg} 0 45%, ${sv.floor} 45% 70%, ${sv.wall} 70%)` }}></span>${sv.label}</button>`)}</div>
-            ${real ? html`
-              <${Toggle} checked=${!!d.outdoor} onChange=${(v) => commit({ outdoor: v, ground: v ? 'leafy_grass' : 'dark_rock' })} label="Außenkarte (Untergrund sichtbar)" />
-              <${TexBtn} label="Untergrund" value=${d.ground} cats=${['gelaende', 'pflaster', 'boden']} onPick=${(v) => commit({ ground: v })} />
-              <${TexBtn} label="Standard-Boden" value=${d.floorTex} cats=${['boden', 'pflaster']} onPick=${(v) => commit({ floorTex: v })} />
-              <${TexBtn} label="Wände" value=${d.wallTex} cats=${['wand']} onPick=${(v) => commit({ wallTex: v })} />
-              <div class="row small"><span class="muted" style="width:90px">Wandstärke</span><input type="range" min="0.15" max="0.8" step="0.05" value=${d.wallW || (d.outdoor ? 0.32 : 0.42)} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ wallW: Number(e.target.value) }, { undo: false })} /></div>
-              <div class="row small"><span class="muted" style="width:90px">Dunkelheit</span><input type="range" min="0" max="0.9" step="0.05" value=${d.dark || 0} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ dark: Number(e.target.value) }, { undo: false, geom: false })} /></div>
-            ` : html`<div class="row small"><span class="muted" style="width:90px">Schraffur</span><input type="range" min="0" max="2.5" step="0.25" value=${d.hatch ?? 1} style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ hatch: Number(e.target.value) }, { undo: false })} /></div>`}
-            <${Toggle} checked=${d.gridOn !== false} onChange=${(v) => commit({ gridOn: v })} label="Raster zeigen" />
-            <div class="row small"><span class="muted grow">Größe: ${d.w} × ${d.h} Felder</span><${Btn} size="sm" kind="ghost" onClick=${resize}>Ändern<//></div>
-            <div class="row small"><${Btn} size="sm" icon="image" onClick=${traceImage}>${map.fileId ? 'Andere Vorlage' : 'Bild als Vorlage'}<//>
-              ${map.fileId ? html`<input type="range" min="0" max="1" step="0.05" value=${d.bgAlpha ?? 0.5} title="Deckkraft der Vorlage" style="flex:1;accent-color:var(--accent)" onInput=${(e) => commit({ bgAlpha: Number(e.target.value) }, { undo: false })} />` : null}</div>
-          </details>
-          <details class="scrawl-sec">
-            <summary>Generieren</summary>
-            <div class="chips">${Object.entries(SCRAWL_GENERATORS).map(([k, g]) => html`<button type="button" class="chip suggest" onClick=${() => regenerate(k)}>${g.label}</button>`)}</div>
-            <div class="tiny faint">Ersetzt die Karte – mit Strg+Z zurückholbar. Danach frei weiterbauen.</div>
-          </details>
-          <div class="btn-row"><${Btn} size="sm" icon="download" loading=${busy === 'png'} onClick=${exportPng}>PNG<//>
-            ${real && usesOwnAssets(d) ? html`<${Btn} size="sm" icon="users" loading=${busy === 'bake'} onClick=${() => bakeForPlayers(false)}>Für Spieler backen<//>` : null}
-            <${Btn} size="sm" kind="ghost" icon="undo" disabled=${!s.redo.length} onClick=${redo}>Wiederholen<//></div>
-          ${real && usesOwnAssets(d) ? html`<div class="tiny faint">Diese Karte nutzt eigene Objekte. Sie liegen nur auf diesem Gerät – für die Mitspieler wird ein Kartenbild gespeichert (beim Wechsel in den Spielmodus automatisch).</div>` : null}
-        ` : html`
-          <b>Nebel des Krieges</b>
-          <${Toggle} checked=${!!map.fog?.enabled} onChange=${(v) => db.update(col('maps'), params.id, { fog: { ...(map.fog || {}), revealed: s.fog.join(''), enabled: v } })} label="Nebel aktiv" />
-          <div class="row small"><span class="muted">Pinsel</span><${Segmented} value=${fogBrush} onChange=${setFogBrush} options=${[{ value: 1, label: '1' }, { value: 2, label: '3' }, { value: 3, label: '5' }]} /></div>
-          <div class="btn-row"><${Btn} size="sm" icon="eye" onClick=${() => fogAll('1')}>Alles aufdecken<//><${Btn} size="sm" icon="eye-off" onClick=${() => fogAll('0')}>Alles verdecken<//></div>
-          <b>Tokens</b>
-          <div class="btn-row"><${Btn} size="sm" icon="users" onClick=${addPartyTokens}>Gruppe<//><${Btn} size="sm" icon="sword" onClick=${addCombatTokens}>Gegner aus Kampf<//></div>
-          <div class="tiny faint">Token antippen = Aktionen, Reichweiten & Bewegung · ziehen = bewegen · lange drücken oder Alt-Klick = Ping. Spieler bewegen ihre eigenen Tokens.</div>
-          <${MonsterPlacer} B=${B} active=${tool === 'place'} onPick=${(m) => { B.placing = m; setTool('place'); s.dirty = true; }} onStop=${() => { B.placing = null; setTool('pan'); }} />
-          <b>Kampf</b>
-          <div class="btn-row">${!B.combat.active ? html`<${Btn} size="sm" kind="primary" icon="swords" onClick=${() => startCombat(B)}>Kampf starten<//>` : null}<${Btn} size="sm" kind="ghost" icon="eraser" onClick=${() => clearTemplates(B)}>Schablonen entfernen<//></div>
-          <${Toggle} checked=${!!B.showNames} onChange=${(v) => { B.showNames = v; s.dirty = true; rerender(); }} label="Namen auf der Karte zeigen" />
-        `}
-      </div>` : null}
     </div>
   <//>`;
 }
 const usesOwnAssets = (d) => (d.objects || []).some((o) => o.t === 'stamp' && String(o.a).startsWith('u:'));
-
 
 // Token-Formular (auch von maps.js genutzt)
 export function TokenForm({ close, token, members }) {

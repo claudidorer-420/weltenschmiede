@@ -3,279 +3,3237 @@
   "maxPx": 1024,
   "minFoot": 0.18,
   "models": [
-    { "id": "ArmChair_01", "name": "Sessel (gotisch)", "cat": "moebel", "tags": "stuhl sitz", "rough": true },
-    { "id": "GreenChair_01", "name": "Polsterstuhl", "cat": "moebel", "tags": "stuhl sitz", "rough": true },
-    { "id": "Rockingchair_01", "name": "Schaukelstuhl", "cat": "moebel", "tags": "stuhl sitz", "rough": true },
-    { "id": "WoodenChair_01", "name": "Holzstuhl (hohe Lehne)", "cat": "moebel", "tags": "stuhl sitz", "rough": true },
-    { "id": "painted_wooden_chair_02", "name": "Bauernstuhl", "cat": "moebel", "tags": "stuhl sitz", "rough": true },
-    { "id": "gallinera_chair", "name": "Rustikaler Stuhl", "cat": "moebel", "tags": "stuhl sitz", "rough": true },
-    { "id": "chinese_armchair", "name": "Lehnstuhl (verziert)", "cat": "moebel", "tags": "stuhl sitz thron", "rough": true },
-    { "id": "Ottoman_01", "name": "Fußhocker", "cat": "moebel", "tags": "hocker sitz", "rough": true },
-    { "id": "bar_chair_round_01", "name": "Barhocker", "cat": "moebel", "tags": "hocker taverne", "rough": true },
-    { "id": "chinese_stool", "name": "Hocker (verziert)", "cat": "moebel", "tags": "hocker", "rough": true },
-    { "id": "folding_wooden_stool", "name": "Klapphocker", "cat": "moebel", "tags": "hocker lager", "rough": true },
-    { "id": "painted_wooden_stool", "name": "Schemel", "cat": "moebel", "tags": "hocker", "rough": true },
-    { "id": "wooden_stool_01", "name": "Holzschemel", "cat": "moebel", "tags": "hocker", "rough": true },
-    { "id": "painted_wooden_bench", "name": "Holzbank", "cat": "moebel", "tags": "bank sitz", "rough": true },
-    { "id": "chinese_sofa", "name": "Prunkbank", "cat": "moebel", "tags": "bank sofa", "rough": true },
-    { "id": "Sofa_01", "name": "Sofa (gotisch)", "cat": "moebel", "tags": "sofa", "rough": true },
-    { "id": "painted_wooden_sofa", "name": "Holzsofa", "cat": "moebel", "tags": "sofa bank", "rough": true },
-    { "id": "WoodenTable_01", "name": "Langer Holztisch", "cat": "moebel", "tags": "tisch tafel", "rough": true },
-    { "id": "WoodenTable_03", "name": "Holztisch", "cat": "moebel", "tags": "tisch", "rough": true },
-    { "id": "wooden_table_02", "name": "Dorftisch", "cat": "moebel", "tags": "tisch taverne", "rough": true },
-    { "id": "painted_wooden_table", "name": "Bauerntisch", "cat": "moebel", "tags": "tisch tafel", "rough": true },
-    { "id": "dining_table", "name": "Esstisch mit Tischtuch", "cat": "moebel", "tags": "tisch tafel", "rough": true },
-    { "id": "round_wooden_table_01", "name": "Runder Tisch (groß)", "cat": "moebel", "tags": "tisch taverne", "rough": true },
-    { "id": "round_wooden_table_02", "name": "Runder Tisch", "cat": "moebel", "tags": "tisch taverne", "rough": true },
-    { "id": "gothic_coffee_table", "name": "Quadratischer Tisch", "cat": "moebel", "tags": "tisch", "rough": true },
-    { "id": "CoffeeTable_01", "name": "Niedriger Tisch", "cat": "moebel", "tags": "tisch", "rough": true },
-    { "id": "small_wooden_table_01", "name": "Kleiner Holztisch", "cat": "moebel", "tags": "tisch", "rough": true },
-    { "id": "gallinera_table", "name": "Beistelltisch", "cat": "moebel", "tags": "tisch", "rough": true },
-    { "id": "side_table_tall_01", "name": "Stehtischchen", "cat": "moebel", "tags": "tisch", "rough": true },
-    { "id": "chinese_tea_table", "name": "Teetisch", "cat": "moebel", "tags": "tisch", "rough": true },
-    { "id": "ClassicConsole_01", "name": "Konsolentisch", "cat": "moebel", "tags": "tisch wand", "rough": true },
-    { "id": "chinese_console_table", "name": "Wandtisch (verziert)", "cat": "moebel", "tags": "tisch wand", "rough": true },
-    { "id": "wooden_picnic_table", "name": "Tisch mit Bänken", "cat": "moebel", "tags": "tisch bank lager", "rough": true },
-    { "id": "ClassicNightstand_01", "name": "Nachttisch", "cat": "moebel", "tags": "schrank", "rough": true },
-    { "id": "painted_wooden_nightstand", "name": "Nachtkästchen", "cat": "moebel", "tags": "schrank", "rough": true },
-    { "id": "GothicBed_01", "name": "Himmelbett", "cat": "moebel", "tags": "bett schlafzimmer", "rough": true },
-    { "id": "vintage_day_bed", "name": "Tagesbett", "cat": "moebel", "tags": "bett liege", "rough": true },
-    { "id": "old_bed_frame", "name": "Eisenbett", "cat": "moebel", "tags": "bett kerker gefängnis", "rough": true },
-    { "id": "GothicCabinet_01", "name": "Schrank (gotisch)", "cat": "moebel", "tags": "schrank", "block": true },
-    { "id": "GothicCommode_01", "name": "Kommode", "cat": "moebel", "tags": "schrank", "block": true },
-    { "id": "chinese_cabinet", "name": "Hoher Schrank (verziert)", "cat": "moebel", "tags": "schrank", "block": true },
-    { "id": "painted_wooden_cabinet", "name": "Anrichte", "cat": "moebel", "tags": "schrank küche", "block": true },
-    { "id": "painted_wooden_cabinet_02", "name": "Geschirrschrank", "cat": "moebel", "tags": "schrank küche", "block": true },
-    { "id": "vintage_cabinet_01", "name": "Vitrinenschrank", "cat": "moebel", "tags": "schrank", "block": true },
-    { "id": "Shelf_01", "name": "Wandregal", "cat": "moebel", "tags": "regal", "block": true },
-    { "id": "painted_wooden_shelves", "name": "Kleines Regal", "cat": "moebel", "tags": "regal", "block": true },
-    { "id": "wooden_bookshelf_worn", "name": "Holzregal (alt)", "cat": "moebel", "tags": "regal bücher bibliothek", "block": true },
-    { "id": "chinese_screen_panels", "name": "Paravent", "cat": "moebel", "tags": "wand sichtschutz", "rough": true },
-    { "id": "vintage_grandfather_clock_01", "name": "Standuhr", "cat": "moebel", "tags": "uhr", "block": true },
-    { "id": "spinning_wheel_01", "name": "Spinnrad", "cat": "moebel", "tags": "handwerk", "rough": true },
-    { "id": "planter_box_01", "name": "Pflanzkasten", "cat": "moebel", "tags": "garten", "rough": true },
-
-    { "id": "treasure_chest", "name": "Schatztruhe", "cat": "behaelter", "tags": "truhe schatz gold", "rough": true },
-    { "id": "wine_barrel_01", "name": "Weinfass", "cat": "behaelter", "tags": "fass keller taverne", "rough": true },
-    { "id": "wooden_barrels_01", "name": "Fässer", "cat": "behaelter", "tags": "fass keller lager", "rough": true },
-    { "id": "wooden_crate_01", "name": "Holzkiste", "cat": "behaelter", "tags": "kiste lager", "rough": true },
-    { "id": "wooden_crate_02", "name": "Lange Kiste", "cat": "behaelter", "tags": "kiste lager", "rough": true },
-    { "id": "wooden_military_crate", "name": "Transportkiste", "cat": "behaelter", "tags": "kiste lager", "rough": true },
-    { "id": "old_military_crate", "name": "Frachtkiste", "cat": "behaelter", "tags": "kiste lager hafen", "rough": true },
-    { "id": "wooden_bucket_01", "name": "Holzeimer", "cat": "behaelter", "tags": "eimer" },
-    { "id": "wooden_bucket_02", "name": "Holzbottich", "cat": "behaelter", "tags": "eimer wanne", "rough": true },
-    { "id": "wicker_basket_01", "name": "Weidenkorb (flach)", "cat": "behaelter", "tags": "korb" },
-    { "id": "wicker_basket_02", "name": "Weidenkorb", "cat": "behaelter", "tags": "korb" },
-    { "id": "ceramic_pot", "name": "Tonkrug", "cat": "behaelter", "tags": "krug topf" },
-    { "id": "antique_ceramic_vase_01", "name": "Keramikvase", "cat": "behaelter", "tags": "vase" },
-    { "id": "brass_vase_01", "name": "Messingvase", "cat": "behaelter", "tags": "vase" },
-    { "id": "brass_pot_01", "name": "Messingtopf", "cat": "behaelter", "tags": "topf" },
-    { "id": "jug_01", "name": "Krug", "cat": "behaelter", "tags": "krug" },
-    { "id": "metal_jug", "name": "Kanne", "cat": "behaelter", "tags": "krug kanne" },
-    { "id": "planter_pot_clay", "name": "Tontopf", "cat": "behaelter", "tags": "topf pflanze" },
-
-    { "id": "stone_fire_pit", "name": "Feuerstelle", "cat": "licht", "tags": "feuer lager", "rough": true },
-    { "id": "Chandelier_01", "name": "Kronleuchter", "cat": "licht", "tags": "leuchter decke", "layer": "top" },
-    { "id": "Chandelier_02", "name": "Kronleuchter (klein)", "cat": "licht", "tags": "leuchter decke", "layer": "top" },
-    { "id": "Chandelier_03", "name": "Kronleuchter (Kerzen)", "cat": "licht", "tags": "leuchter decke", "layer": "top" },
-    { "id": "lantern_chandelier_01", "name": "Laternenleuchter", "cat": "licht", "tags": "leuchter decke", "layer": "top" },
-    { "id": "chinese_chandelier", "name": "Hängelaterne", "cat": "licht", "tags": "laterne decke", "layer": "top" },
-    { "id": "brass_candleholders", "name": "Kerzenleuchter", "cat": "licht", "tags": "kerze" },
-    { "id": "wooden_candlestick", "name": "Kerzenständer", "cat": "licht", "tags": "kerze" },
-    { "id": "vintage_oil_lamp", "name": "Öllampe", "cat": "licht", "tags": "lampe" },
-    { "id": "brass_diya_lantern", "name": "Messinglampe", "cat": "licht", "tags": "lampe" },
-    { "id": "wooden_lantern_01", "name": "Holzlaterne", "cat": "licht", "tags": "laterne" },
-    { "id": "Lantern_01", "name": "Laterne", "cat": "licht", "tags": "laterne" },
-    { "id": "industrial_wall_sconce", "name": "Wandleuchter", "cat": "licht", "tags": "fackel wand" },
-
-    { "id": "gothic_statue", "name": "Statue (gotisch)", "cat": "deko", "tags": "statue figur", "block": true },
-    { "id": "marble_bust_01", "name": "Marmorbüste", "cat": "deko", "tags": "büste statue" },
-    { "id": "bull_head", "name": "Stierkopf", "cat": "deko", "tags": "trophäe" },
-    { "id": "lion_head", "name": "Löwenkopf", "cat": "deko", "tags": "trophäe" },
-    { "id": "horse_head", "name": "Pferdekopf", "cat": "deko", "tags": "trophäe" },
-    { "id": "decorative_book_set_01", "name": "Bücherreihe", "cat": "deko", "tags": "bücher bibliothek" },
-    { "id": "book_encyclopedia_set_01", "name": "Bücherstapel", "cat": "deko", "tags": "bücher bibliothek" },
-    { "id": "chess_set", "name": "Schachbrett", "cat": "deko", "tags": "spiel" },
-    { "id": "kite_shield", "name": "Wappenschild", "cat": "deko", "tags": "schild ritter waffe" },
-    { "id": "chemistry_set", "name": "Alchemistenset", "cat": "deko", "tags": "alchemie labor magier" },
-
-    { "id": "tea_set_01", "name": "Teeservice", "cat": "kueche", "tags": "geschirr tafel" },
-    { "id": "brass_goblets", "name": "Messingkelche", "cat": "kueche", "tags": "becher tafel" },
-    { "id": "wine_bottles_01", "name": "Weinflaschen", "cat": "kueche", "tags": "wein taverne" },
-    { "id": "carved_wooden_plate", "name": "Holzteller", "cat": "kueche", "tags": "teller tafel" },
-    { "id": "wooden_bowl_01", "name": "Holzschale", "cat": "kueche", "tags": "schale" },
-    { "id": "wooden_cutting_board", "name": "Schneidebrett", "cat": "kueche", "tags": "küche" },
-    { "id": "brass_pan_01", "name": "Messingpfanne", "cat": "kueche", "tags": "pfanne küche" },
-    { "id": "pot_enamel_01", "name": "Kochtopf", "cat": "kueche", "tags": "topf küche" },
-    { "id": "brass_pot_02", "name": "Messingschüssel", "cat": "kueche", "tags": "schüssel" },
-    { "id": "carrot_cake", "name": "Kuchen", "cat": "kueche", "tags": "essen" },
-    { "id": "hamburger_buns", "name": "Brötchen", "cat": "kueche", "tags": "brot essen" },
-    { "id": "bananas", "name": "Bananen", "cat": "kueche", "tags": "obst markt" },
-
-    { "id": "ornate_medieval_mace", "name": "Streitkolben", "cat": "werkzeug", "tags": "waffe" },
-    { "id": "ornate_war_hammer", "name": "Kriegshammer", "cat": "werkzeug", "tags": "waffe" },
-    { "id": "antique_estoc", "name": "Degen", "cat": "werkzeug", "tags": "waffe schwert" },
-    { "id": "wooden_handle_saber", "name": "Säbel", "cat": "werkzeug", "tags": "waffe schwert pirat" },
-    { "id": "wooden_axe", "name": "Axt", "cat": "werkzeug", "tags": "axt holz" },
-    { "id": "wooden_axe_02", "name": "Holzfälleraxt", "cat": "werkzeug", "tags": "axt holz" },
-    { "id": "hatchet", "name": "Beil", "cat": "werkzeug", "tags": "axt" },
-    { "id": "cross_pein_hammer", "name": "Hammer", "cat": "werkzeug", "tags": "schmiede" },
-    { "id": "handsaw_wood", "name": "Säge", "cat": "werkzeug", "tags": "werkstatt" },
-    { "id": "hand_plane_no4", "name": "Hobel", "cat": "werkzeug", "tags": "werkstatt" },
-    { "id": "picke_dirty_01", "name": "Spitzhacke", "cat": "werkzeug", "tags": "mine" },
-    { "id": "rusted_spade_01", "name": "Spaten", "cat": "werkzeug", "tags": "grab garten" },
-    { "id": "wooden_broom", "name": "Besen", "cat": "werkzeug", "tags": "hexe" },
-    { "id": "wooden_ladder", "name": "Leiter", "cat": "werkzeug", "tags": "leiter", "rough": true },
-    { "id": "wooden_ladder_02", "name": "Stehleiter", "cat": "werkzeug", "tags": "leiter", "rough": true },
-    { "id": "cannon_01", "name": "Kanone", "cat": "werkzeug", "tags": "schiff pirat hafen", "block": true },
-
-    { "id": "jacaranda_tree", "name": "Großer Laubbaum", "cat": "natur", "tags": "baum wald", "block": true, "layer": "top" },
-    { "id": "tree_small_02", "name": "Kleiner Laubbaum", "cat": "natur", "tags": "baum wald", "block": true, "layer": "top" },
-    { "id": "island_tree_01", "name": "Laubbaum", "cat": "natur", "tags": "baum wald", "block": true, "layer": "top" },
-    { "id": "island_tree_02", "name": "Laubbaum (schmal)", "cat": "natur", "tags": "baum wald", "block": true, "layer": "top" },
-    { "id": "island_tree_03", "name": "Junger Laubbaum", "cat": "natur", "tags": "baum wald", "block": true, "layer": "top" },
-    { "id": "fir_tree_01", "name": "Tanne", "cat": "natur", "tags": "baum nadel wald", "block": true, "layer": "top", "split": true },
-    { "id": "pine_tree_01", "name": "Kiefer", "cat": "natur", "tags": "baum nadel wald", "block": true, "layer": "top", "split": true },
-    { "id": "fir_sapling_medium", "name": "Junge Tanne", "cat": "natur", "tags": "baum nadel wald", "block": true, "layer": "top", "split": true },
-    { "id": "pine_sapling_medium", "name": "Junge Kiefer", "cat": "natur", "tags": "baum nadel wald", "block": true, "layer": "top", "split": true },
-    { "id": "fir_sapling", "name": "Tannensetzling", "cat": "natur", "tags": "baum nadel", "rough": true, "split": true },
-    { "id": "pine_sapling_small", "name": "Kiefernsetzling", "cat": "natur", "tags": "baum nadel", "rough": true, "split": true },
-    { "id": "searsia_burchellii", "name": "Dorngestrüpp (groß)", "cat": "natur", "tags": "busch trocken wüste", "rough": true },
-    { "id": "searsia_lucida", "name": "Dorngestrüpp", "cat": "natur", "tags": "busch trocken", "rough": true },
-    { "id": "othonna_cerarioides", "name": "Sukkulentenbusch", "cat": "natur", "tags": "busch wüste", "rough": true },
-    { "id": "didelta_spinosa", "name": "Strauch", "cat": "natur", "tags": "busch", "rough": true },
-    { "id": "quiver_tree_01", "name": "Köcherbaum", "cat": "natur", "tags": "baum wüste", "block": true },
-    { "id": "quiver_tree_02", "name": "Kleiner Köcherbaum", "cat": "natur", "tags": "baum wüste", "rough": true },
-    { "id": "dead_tree_trunk", "name": "Totholz", "cat": "natur", "tags": "stamm holz wald", "rough": true },
-    { "id": "dead_tree_trunk_02", "name": "Morscher Baumstamm", "cat": "natur", "tags": "stamm holz wald", "block": true },
-    { "id": "tree_stump_01", "name": "Baumstumpf", "cat": "natur", "tags": "stumpf wald", "rough": true },
-    { "id": "tree_stump_02", "name": "Baumstumpf (bemoost)", "cat": "natur", "tags": "stumpf wald", "rough": true },
-    { "id": "root_cluster_01", "name": "Wurzelgeflecht", "cat": "natur", "tags": "wurzel wald", "rough": true },
-    { "id": "root_cluster_02", "name": "Wurzeln", "cat": "natur", "tags": "wurzel wald", "rough": true },
-    { "id": "pine_roots", "name": "Kiefernwurzeln", "cat": "natur", "tags": "wurzel wald" },
-    { "id": "dry_branches_medium_01", "name": "Dürre Äste", "cat": "natur", "tags": "äste holz" },
-    { "id": "bark_debris_01", "name": "Rindenstücke", "cat": "natur", "tags": "holz boden" },
-    { "id": "fern_02", "name": "Farn", "cat": "natur", "tags": "pflanze wald", "split": true },
-    { "id": "shrub_01", "name": "Kraut", "cat": "natur", "tags": "pflanze", "split": true },
-    { "id": "shrub_02", "name": "Busch", "cat": "natur", "tags": "busch pflanze", "rough": true, "split": true },
-    { "id": "shrub_03", "name": "Grasbüschel", "cat": "natur", "tags": "pflanze gras", "split": true },
-    { "id": "shrub_04", "name": "Kleiner Busch", "cat": "natur", "tags": "busch pflanze", "split": true },
-    { "id": "celandine_01", "name": "Schöllkraut", "cat": "natur", "tags": "blume pflanze", "split": true },
-    { "id": "periwinkle_plant", "name": "Immergrün", "cat": "natur", "tags": "blume pflanze", "split": true },
-    { "id": "dandelion_01", "name": "Löwenzahn", "cat": "natur", "tags": "blume", "split": true },
-    { "id": "flower_ursinia", "name": "Wildblumen (gelb)", "cat": "natur", "tags": "blume", "split": true },
-    { "id": "flower_heliophila", "name": "Wildblumen (blau)", "cat": "natur", "tags": "blume", "split": true },
-    { "id": "nettle_plant", "name": "Brennnessel", "cat": "natur", "tags": "pflanze", "split": true },
-    { "id": "weed_plant_02", "name": "Unkraut", "cat": "natur", "tags": "pflanze", "split": true },
-    { "id": "grass_medium_01", "name": "Hohes Gras", "cat": "natur", "tags": "gras wiese", "split": true },
-    { "id": "grass_medium_02", "name": "Grasbüschel (dicht)", "cat": "natur", "tags": "gras wiese", "split": true },
-    { "id": "grass_bermuda_01", "name": "Gras", "cat": "natur", "tags": "gras wiese", "split": true },
-    { "id": "moss_01", "name": "Moospolster", "cat": "natur", "tags": "moos wald", "split": true },
-    { "id": "wild_rooibos_bush", "name": "Heidebusch", "cat": "natur", "tags": "busch trocken", "split": true },
-    { "id": "potted_plant_01", "name": "Topfpflanze (groß)", "cat": "natur", "tags": "pflanze topf" },
-    { "id": "potted_plant_02", "name": "Topfpflanze", "cat": "natur", "tags": "pflanze topf" },
-
-    { "id": "boulder_01", "name": "Findling", "cat": "fels", "tags": "fels stein", "block": true },
-    { "id": "namaqualand_boulder_02", "name": "Flacher Felsen", "cat": "fels", "tags": "fels stein", "block": true },
-    { "id": "namaqualand_boulder_03", "name": "Felsbrocken", "cat": "fels", "tags": "fels stein", "block": true },
-    { "id": "namaqualand_boulder_04", "name": "Großer Felsen", "cat": "fels", "tags": "fels stein", "block": true },
-    { "id": "namaqualand_boulder_05", "name": "Stein", "cat": "fels", "tags": "fels stein", "rough": true },
-    { "id": "namaqualand_boulder_06", "name": "Runder Stein", "cat": "fels", "tags": "fels stein", "rough": true },
-    { "id": "namaqualand_boulders_01", "name": "Steine", "cat": "fels", "tags": "fels stein", "rough": true },
-    { "id": "coast_rocks_05", "name": "Felsgruppe", "cat": "fels", "tags": "fels küste", "block": true },
-    { "id": "rock_moss_set_01", "name": "Bemooste Steine", "cat": "fels", "tags": "fels moos wald", "rough": true, "split": true },
-    { "id": "rock_moss_set_02", "name": "Bemooste Felsen", "cat": "fels", "tags": "fels moos wald", "rough": true, "split": true },
-    { "id": "sand_rocks_small_01", "name": "Kleine Steine", "cat": "fels", "tags": "fels sand", "rough": true, "split": true },
-    { "id": "rock_face_01", "name": "Felswand", "cat": "fels", "tags": "fels klippe höhle", "block": true },
-    { "id": "rock_face_02", "name": "Felsnase", "cat": "fels", "tags": "fels klippe höhle", "block": true },
-    { "id": "namaqualand_cliff_01", "name": "Felsformation", "cat": "fels", "tags": "fels klippe", "block": true },
-    { "id": "mountainside", "name": "Berghang", "cat": "fels", "tags": "fels klippe berg", "block": true },
-    { "id": "coast_land_rocks_02", "name": "Küstenfelsen", "cat": "fels", "tags": "fels küste", "block": true },
-
-    { "id": "modular_wooden_pier", "name": "Holzsteg", "cat": "bau", "tags": "steg hafen wasser", "layer": "floor" }
+    {
+      "id": "ArmChair_01",
+      "name": "Sessel (gotisch)",
+      "cat": "moebel",
+      "tags": "stuhl sitz",
+      "rough": true
+    },
+    {
+      "id": "GreenChair_01",
+      "name": "Polsterstuhl",
+      "cat": "moebel",
+      "tags": "stuhl sitz",
+      "rough": true
+    },
+    {
+      "id": "Rockingchair_01",
+      "name": "Schaukelstuhl",
+      "cat": "moebel",
+      "tags": "stuhl sitz",
+      "rough": true
+    },
+    {
+      "id": "WoodenChair_01",
+      "name": "Holzstuhl (hohe Lehne)",
+      "cat": "moebel",
+      "tags": "stuhl sitz",
+      "rough": true
+    },
+    {
+      "id": "painted_wooden_chair_02",
+      "name": "Bauernstuhl",
+      "cat": "moebel",
+      "tags": "stuhl sitz",
+      "rough": true
+    },
+    {
+      "id": "gallinera_chair",
+      "name": "Rustikaler Stuhl",
+      "cat": "moebel",
+      "tags": "stuhl sitz",
+      "rough": true
+    },
+    {
+      "id": "chinese_armchair",
+      "name": "Lehnstuhl (verziert)",
+      "cat": "moebel",
+      "tags": "stuhl sitz thron",
+      "rough": true
+    },
+    {
+      "id": "Ottoman_01",
+      "name": "Fußhocker",
+      "cat": "moebel",
+      "tags": "hocker sitz",
+      "rough": true
+    },
+    {
+      "id": "bar_chair_round_01",
+      "name": "Barhocker",
+      "cat": "moebel",
+      "tags": "hocker taverne",
+      "rough": true
+    },
+    {
+      "id": "chinese_stool",
+      "name": "Hocker (verziert)",
+      "cat": "moebel",
+      "tags": "hocker",
+      "rough": true
+    },
+    {
+      "id": "folding_wooden_stool",
+      "name": "Klapphocker",
+      "cat": "moebel",
+      "tags": "hocker lager",
+      "rough": true
+    },
+    {
+      "id": "painted_wooden_stool",
+      "name": "Schemel",
+      "cat": "moebel",
+      "tags": "hocker",
+      "rough": true
+    },
+    {
+      "id": "wooden_stool_01",
+      "name": "Holzschemel",
+      "cat": "moebel",
+      "tags": "hocker",
+      "rough": true
+    },
+    {
+      "id": "painted_wooden_bench",
+      "name": "Holzbank",
+      "cat": "moebel",
+      "tags": "bank sitz",
+      "rough": true
+    },
+    {
+      "id": "chinese_sofa",
+      "name": "Prunkbank",
+      "cat": "moebel",
+      "tags": "bank sofa",
+      "rough": true
+    },
+    {
+      "id": "Sofa_01",
+      "name": "Sofa (gotisch)",
+      "cat": "moebel",
+      "tags": "sofa",
+      "rough": true
+    },
+    {
+      "id": "painted_wooden_sofa",
+      "name": "Holzsofa",
+      "cat": "moebel",
+      "tags": "sofa bank",
+      "rough": true
+    },
+    {
+      "id": "WoodenTable_01",
+      "name": "Langer Holztisch",
+      "cat": "moebel",
+      "tags": "tisch tafel",
+      "rough": true
+    },
+    {
+      "id": "WoodenTable_03",
+      "name": "Holztisch",
+      "cat": "moebel",
+      "tags": "tisch",
+      "rough": true
+    },
+    {
+      "id": "wooden_table_02",
+      "name": "Dorftisch",
+      "cat": "moebel",
+      "tags": "tisch taverne",
+      "rough": true
+    },
+    {
+      "id": "painted_wooden_table",
+      "name": "Bauerntisch",
+      "cat": "moebel",
+      "tags": "tisch tafel",
+      "rough": true
+    },
+    {
+      "id": "dining_table",
+      "name": "Esstisch mit Tischtuch",
+      "cat": "moebel",
+      "tags": "tisch tafel",
+      "rough": true
+    },
+    {
+      "id": "round_wooden_table_01",
+      "name": "Runder Tisch (groß)",
+      "cat": "moebel",
+      "tags": "tisch taverne",
+      "rough": true
+    },
+    {
+      "id": "round_wooden_table_02",
+      "name": "Runder Tisch",
+      "cat": "moebel",
+      "tags": "tisch taverne",
+      "rough": true
+    },
+    {
+      "id": "gothic_coffee_table",
+      "name": "Quadratischer Tisch",
+      "cat": "moebel",
+      "tags": "tisch",
+      "rough": true
+    },
+    {
+      "id": "CoffeeTable_01",
+      "name": "Niedriger Tisch",
+      "cat": "moebel",
+      "tags": "tisch",
+      "rough": true
+    },
+    {
+      "id": "small_wooden_table_01",
+      "name": "Kleiner Holztisch",
+      "cat": "moebel",
+      "tags": "tisch",
+      "rough": true
+    },
+    {
+      "id": "gallinera_table",
+      "name": "Beistelltisch",
+      "cat": "moebel",
+      "tags": "tisch",
+      "rough": true
+    },
+    {
+      "id": "side_table_tall_01",
+      "name": "Stehtischchen",
+      "cat": "moebel",
+      "tags": "tisch",
+      "rough": true
+    },
+    {
+      "id": "chinese_tea_table",
+      "name": "Teetisch",
+      "cat": "moebel",
+      "tags": "tisch",
+      "rough": true
+    },
+    {
+      "id": "ClassicConsole_01",
+      "name": "Konsolentisch",
+      "cat": "moebel",
+      "tags": "tisch wand",
+      "rough": true
+    },
+    {
+      "id": "chinese_console_table",
+      "name": "Wandtisch (verziert)",
+      "cat": "moebel",
+      "tags": "tisch wand",
+      "rough": true
+    },
+    {
+      "id": "wooden_picnic_table",
+      "name": "Tisch mit Bänken",
+      "cat": "moebel",
+      "tags": "tisch bank lager",
+      "rough": true
+    },
+    {
+      "id": "ClassicNightstand_01",
+      "name": "Nachttisch",
+      "cat": "moebel",
+      "tags": "schrank",
+      "rough": true
+    },
+    {
+      "id": "painted_wooden_nightstand",
+      "name": "Nachtkästchen",
+      "cat": "moebel",
+      "tags": "schrank",
+      "rough": true
+    },
+    {
+      "id": "GothicBed_01",
+      "name": "Himmelbett",
+      "cat": "moebel",
+      "tags": "bett schlafzimmer",
+      "rough": true
+    },
+    {
+      "id": "vintage_day_bed",
+      "name": "Tagesbett",
+      "cat": "moebel",
+      "tags": "bett liege",
+      "rough": true
+    },
+    {
+      "id": "old_bed_frame",
+      "name": "Eisenbett",
+      "cat": "moebel",
+      "tags": "bett kerker gefängnis",
+      "rough": true
+    },
+    {
+      "id": "GothicCabinet_01",
+      "name": "Schrank (gotisch)",
+      "cat": "moebel",
+      "tags": "schrank",
+      "block": true
+    },
+    {
+      "id": "GothicCommode_01",
+      "name": "Kommode",
+      "cat": "moebel",
+      "tags": "schrank",
+      "block": true
+    },
+    {
+      "id": "chinese_cabinet",
+      "name": "Hoher Schrank (verziert)",
+      "cat": "moebel",
+      "tags": "schrank",
+      "block": true
+    },
+    {
+      "id": "painted_wooden_cabinet",
+      "name": "Anrichte",
+      "cat": "moebel",
+      "tags": "schrank küche",
+      "block": true
+    },
+    {
+      "id": "painted_wooden_cabinet_02",
+      "name": "Geschirrschrank",
+      "cat": "moebel",
+      "tags": "schrank küche",
+      "block": true
+    },
+    {
+      "id": "vintage_cabinet_01",
+      "name": "Vitrinenschrank",
+      "cat": "moebel",
+      "tags": "schrank",
+      "block": true
+    },
+    {
+      "id": "Shelf_01",
+      "name": "Wandregal",
+      "cat": "moebel",
+      "tags": "regal",
+      "block": true
+    },
+    {
+      "id": "painted_wooden_shelves",
+      "name": "Kleines Regal",
+      "cat": "moebel",
+      "tags": "regal",
+      "block": true
+    },
+    {
+      "id": "wooden_bookshelf_worn",
+      "name": "Holzregal (alt)",
+      "cat": "moebel",
+      "tags": "regal bücher bibliothek",
+      "block": true
+    },
+    {
+      "id": "chinese_screen_panels",
+      "name": "Paravent",
+      "cat": "moebel",
+      "tags": "wand sichtschutz",
+      "rough": true
+    },
+    {
+      "id": "vintage_grandfather_clock_01",
+      "name": "Standuhr",
+      "cat": "moebel",
+      "tags": "uhr",
+      "block": true
+    },
+    {
+      "id": "spinning_wheel_01",
+      "name": "Spinnrad",
+      "cat": "moebel",
+      "tags": "handwerk",
+      "rough": true
+    },
+    {
+      "id": "planter_box_01",
+      "name": "Pflanzkasten",
+      "cat": "moebel",
+      "tags": "garten",
+      "rough": true
+    },
+    {
+      "id": "treasure_chest",
+      "name": "Schatztruhe",
+      "cat": "behaelter",
+      "tags": "truhe schatz gold",
+      "rough": true
+    },
+    {
+      "id": "wine_barrel_01",
+      "name": "Weinfass",
+      "cat": "behaelter",
+      "tags": "fass keller taverne",
+      "rough": true
+    },
+    {
+      "id": "wooden_barrels_01",
+      "name": "Fässer",
+      "cat": "behaelter",
+      "tags": "fass keller lager",
+      "rough": true
+    },
+    {
+      "id": "wooden_crate_01",
+      "name": "Holzkiste",
+      "cat": "behaelter",
+      "tags": "kiste lager",
+      "rough": true
+    },
+    {
+      "id": "wooden_crate_02",
+      "name": "Lange Kiste",
+      "cat": "behaelter",
+      "tags": "kiste lager",
+      "rough": true
+    },
+    {
+      "id": "wooden_military_crate",
+      "name": "Transportkiste",
+      "cat": "behaelter",
+      "tags": "kiste lager",
+      "rough": true
+    },
+    {
+      "id": "old_military_crate",
+      "name": "Frachtkiste",
+      "cat": "behaelter",
+      "tags": "kiste lager hafen",
+      "rough": true
+    },
+    {
+      "id": "wooden_bucket_01",
+      "name": "Holzeimer",
+      "cat": "behaelter",
+      "tags": "eimer"
+    },
+    {
+      "id": "wooden_bucket_02",
+      "name": "Holzbottich",
+      "cat": "behaelter",
+      "tags": "eimer wanne",
+      "rough": true
+    },
+    {
+      "id": "wicker_basket_01",
+      "name": "Weidenkorb (flach)",
+      "cat": "behaelter",
+      "tags": "korb"
+    },
+    {
+      "id": "wicker_basket_02",
+      "name": "Weidenkorb",
+      "cat": "behaelter",
+      "tags": "korb"
+    },
+    {
+      "id": "ceramic_pot",
+      "name": "Tonkrug",
+      "cat": "behaelter",
+      "tags": "krug topf"
+    },
+    {
+      "id": "antique_ceramic_vase_01",
+      "name": "Keramikvase",
+      "cat": "behaelter",
+      "tags": "vase"
+    },
+    {
+      "id": "brass_vase_01",
+      "name": "Messingvase",
+      "cat": "behaelter",
+      "tags": "vase"
+    },
+    {
+      "id": "brass_pot_01",
+      "name": "Messingtopf",
+      "cat": "behaelter",
+      "tags": "topf"
+    },
+    {
+      "id": "jug_01",
+      "name": "Krug",
+      "cat": "behaelter",
+      "tags": "krug"
+    },
+    {
+      "id": "metal_jug",
+      "name": "Kanne",
+      "cat": "behaelter",
+      "tags": "krug kanne"
+    },
+    {
+      "id": "planter_pot_clay",
+      "name": "Tontopf",
+      "cat": "behaelter",
+      "tags": "topf pflanze"
+    },
+    {
+      "id": "stone_fire_pit",
+      "name": "Feuerstelle",
+      "cat": "licht",
+      "tags": "feuer lager",
+      "rough": true
+    },
+    {
+      "id": "Chandelier_01",
+      "name": "Kronleuchter",
+      "cat": "licht",
+      "tags": "leuchter decke",
+      "layer": "top"
+    },
+    {
+      "id": "Chandelier_02",
+      "name": "Kronleuchter (klein)",
+      "cat": "licht",
+      "tags": "leuchter decke",
+      "layer": "top"
+    },
+    {
+      "id": "Chandelier_03",
+      "name": "Kronleuchter (Kerzen)",
+      "cat": "licht",
+      "tags": "leuchter decke",
+      "layer": "top"
+    },
+    {
+      "id": "lantern_chandelier_01",
+      "name": "Laternenleuchter",
+      "cat": "licht",
+      "tags": "leuchter decke",
+      "layer": "top"
+    },
+    {
+      "id": "chinese_chandelier",
+      "name": "Hängelaterne",
+      "cat": "licht",
+      "tags": "laterne decke",
+      "layer": "top"
+    },
+    {
+      "id": "brass_candleholders",
+      "name": "Kerzenleuchter",
+      "cat": "licht",
+      "tags": "kerze"
+    },
+    {
+      "id": "wooden_candlestick",
+      "name": "Kerzenständer",
+      "cat": "licht",
+      "tags": "kerze"
+    },
+    {
+      "id": "vintage_oil_lamp",
+      "name": "Öllampe",
+      "cat": "licht",
+      "tags": "lampe"
+    },
+    {
+      "id": "brass_diya_lantern",
+      "name": "Messinglampe",
+      "cat": "licht",
+      "tags": "lampe"
+    },
+    {
+      "id": "wooden_lantern_01",
+      "name": "Holzlaterne",
+      "cat": "licht",
+      "tags": "laterne"
+    },
+    {
+      "id": "Lantern_01",
+      "name": "Laterne",
+      "cat": "licht",
+      "tags": "laterne"
+    },
+    {
+      "id": "industrial_wall_sconce",
+      "name": "Wandleuchter",
+      "cat": "licht",
+      "tags": "fackel wand"
+    },
+    {
+      "id": "gothic_statue",
+      "name": "Statue (gotisch)",
+      "cat": "deko",
+      "tags": "statue figur",
+      "block": true
+    },
+    {
+      "id": "marble_bust_01",
+      "name": "Marmorbüste",
+      "cat": "deko",
+      "tags": "büste statue"
+    },
+    {
+      "id": "bull_head",
+      "name": "Stierkopf",
+      "cat": "deko",
+      "tags": "trophäe"
+    },
+    {
+      "id": "lion_head",
+      "name": "Löwenkopf",
+      "cat": "deko",
+      "tags": "trophäe"
+    },
+    {
+      "id": "horse_head",
+      "name": "Pferdekopf",
+      "cat": "deko",
+      "tags": "trophäe"
+    },
+    {
+      "id": "decorative_book_set_01",
+      "name": "Bücherreihe",
+      "cat": "deko",
+      "tags": "bücher bibliothek"
+    },
+    {
+      "id": "book_encyclopedia_set_01",
+      "name": "Bücherstapel",
+      "cat": "deko",
+      "tags": "bücher bibliothek"
+    },
+    {
+      "id": "chess_set",
+      "name": "Schachbrett",
+      "cat": "deko",
+      "tags": "spiel"
+    },
+    {
+      "id": "kite_shield",
+      "name": "Wappenschild",
+      "cat": "deko",
+      "tags": "schild ritter waffe"
+    },
+    {
+      "id": "chemistry_set",
+      "name": "Alchemistenset",
+      "cat": "deko",
+      "tags": "alchemie labor magier"
+    },
+    {
+      "id": "tea_set_01",
+      "name": "Teeservice",
+      "cat": "kueche",
+      "tags": "geschirr tafel"
+    },
+    {
+      "id": "brass_goblets",
+      "name": "Messingkelche",
+      "cat": "kueche",
+      "tags": "becher tafel"
+    },
+    {
+      "id": "wine_bottles_01",
+      "name": "Weinflaschen",
+      "cat": "kueche",
+      "tags": "wein taverne"
+    },
+    {
+      "id": "carved_wooden_plate",
+      "name": "Holzteller",
+      "cat": "kueche",
+      "tags": "teller tafel"
+    },
+    {
+      "id": "wooden_bowl_01",
+      "name": "Holzschale",
+      "cat": "kueche",
+      "tags": "schale"
+    },
+    {
+      "id": "wooden_cutting_board",
+      "name": "Schneidebrett",
+      "cat": "kueche",
+      "tags": "küche"
+    },
+    {
+      "id": "brass_pan_01",
+      "name": "Messingpfanne",
+      "cat": "kueche",
+      "tags": "pfanne küche"
+    },
+    {
+      "id": "pot_enamel_01",
+      "name": "Kochtopf",
+      "cat": "kueche",
+      "tags": "topf küche"
+    },
+    {
+      "id": "brass_pot_02",
+      "name": "Messingschüssel",
+      "cat": "kueche",
+      "tags": "schüssel"
+    },
+    {
+      "id": "carrot_cake",
+      "name": "Kuchen",
+      "cat": "kueche",
+      "tags": "essen"
+    },
+    {
+      "id": "hamburger_buns",
+      "name": "Brötchen",
+      "cat": "kueche",
+      "tags": "brot essen"
+    },
+    {
+      "id": "bananas",
+      "name": "Bananen",
+      "cat": "kueche",
+      "tags": "obst markt"
+    },
+    {
+      "id": "ornate_medieval_mace",
+      "name": "Streitkolben",
+      "cat": "werkzeug",
+      "tags": "waffe"
+    },
+    {
+      "id": "ornate_war_hammer",
+      "name": "Kriegshammer",
+      "cat": "werkzeug",
+      "tags": "waffe"
+    },
+    {
+      "id": "antique_estoc",
+      "name": "Degen",
+      "cat": "werkzeug",
+      "tags": "waffe schwert"
+    },
+    {
+      "id": "wooden_handle_saber",
+      "name": "Säbel",
+      "cat": "werkzeug",
+      "tags": "waffe schwert pirat"
+    },
+    {
+      "id": "wooden_axe",
+      "name": "Axt",
+      "cat": "werkzeug",
+      "tags": "axt holz"
+    },
+    {
+      "id": "wooden_axe_02",
+      "name": "Holzfälleraxt",
+      "cat": "werkzeug",
+      "tags": "axt holz"
+    },
+    {
+      "id": "hatchet",
+      "name": "Beil",
+      "cat": "werkzeug",
+      "tags": "axt"
+    },
+    {
+      "id": "cross_pein_hammer",
+      "name": "Hammer",
+      "cat": "werkzeug",
+      "tags": "schmiede"
+    },
+    {
+      "id": "handsaw_wood",
+      "name": "Säge",
+      "cat": "werkzeug",
+      "tags": "werkstatt"
+    },
+    {
+      "id": "hand_plane_no4",
+      "name": "Hobel",
+      "cat": "werkzeug",
+      "tags": "werkstatt"
+    },
+    {
+      "id": "picke_dirty_01",
+      "name": "Spitzhacke",
+      "cat": "werkzeug",
+      "tags": "mine"
+    },
+    {
+      "id": "rusted_spade_01",
+      "name": "Spaten",
+      "cat": "werkzeug",
+      "tags": "grab garten"
+    },
+    {
+      "id": "wooden_broom",
+      "name": "Besen",
+      "cat": "werkzeug",
+      "tags": "hexe"
+    },
+    {
+      "id": "wooden_ladder",
+      "name": "Leiter",
+      "cat": "werkzeug",
+      "tags": "leiter",
+      "rough": true
+    },
+    {
+      "id": "wooden_ladder_02",
+      "name": "Stehleiter",
+      "cat": "werkzeug",
+      "tags": "leiter",
+      "rough": true
+    },
+    {
+      "id": "cannon_01",
+      "name": "Kanone",
+      "cat": "werkzeug",
+      "tags": "schiff pirat hafen",
+      "block": true
+    },
+    {
+      "id": "jacaranda_tree",
+      "name": "Großer Laubbaum",
+      "cat": "natur",
+      "tags": "baum wald",
+      "block": true,
+      "layer": "top"
+    },
+    {
+      "id": "tree_small_02",
+      "name": "Kleiner Laubbaum",
+      "cat": "natur",
+      "tags": "baum wald",
+      "block": true,
+      "layer": "top"
+    },
+    {
+      "id": "island_tree_01",
+      "name": "Laubbaum",
+      "cat": "natur",
+      "tags": "baum wald",
+      "block": true,
+      "layer": "top"
+    },
+    {
+      "id": "island_tree_02",
+      "name": "Laubbaum (schmal)",
+      "cat": "natur",
+      "tags": "baum wald",
+      "block": true,
+      "layer": "top"
+    },
+    {
+      "id": "island_tree_03",
+      "name": "Junger Laubbaum",
+      "cat": "natur",
+      "tags": "baum wald",
+      "block": true,
+      "layer": "top"
+    },
+    {
+      "id": "fir_tree_01",
+      "name": "Tanne",
+      "cat": "natur",
+      "tags": "baum nadel wald",
+      "block": true,
+      "layer": "top",
+      "split": true
+    },
+    {
+      "id": "pine_tree_01",
+      "name": "Kiefer",
+      "cat": "natur",
+      "tags": "baum nadel wald",
+      "block": true,
+      "layer": "top",
+      "split": true
+    },
+    {
+      "id": "fir_sapling_medium",
+      "name": "Junge Tanne",
+      "cat": "natur",
+      "tags": "baum nadel wald",
+      "block": true,
+      "layer": "top",
+      "split": true
+    },
+    {
+      "id": "pine_sapling_medium",
+      "name": "Junge Kiefer",
+      "cat": "natur",
+      "tags": "baum nadel wald",
+      "block": true,
+      "layer": "top",
+      "split": true
+    },
+    {
+      "id": "fir_sapling",
+      "name": "Tannensetzling",
+      "cat": "natur",
+      "tags": "baum nadel",
+      "rough": true,
+      "split": true
+    },
+    {
+      "id": "pine_sapling_small",
+      "name": "Kiefernsetzling",
+      "cat": "natur",
+      "tags": "baum nadel",
+      "rough": true,
+      "split": true
+    },
+    {
+      "id": "searsia_burchellii",
+      "name": "Dorngestrüpp (groß)",
+      "cat": "natur",
+      "tags": "busch trocken wüste",
+      "rough": true
+    },
+    {
+      "id": "searsia_lucida",
+      "name": "Dorngestrüpp",
+      "cat": "natur",
+      "tags": "busch trocken",
+      "rough": true
+    },
+    {
+      "id": "othonna_cerarioides",
+      "name": "Sukkulentenbusch",
+      "cat": "natur",
+      "tags": "busch wüste",
+      "rough": true
+    },
+    {
+      "id": "didelta_spinosa",
+      "name": "Strauch",
+      "cat": "natur",
+      "tags": "busch",
+      "rough": true
+    },
+    {
+      "id": "quiver_tree_01",
+      "name": "Köcherbaum",
+      "cat": "natur",
+      "tags": "baum wüste",
+      "block": true
+    },
+    {
+      "id": "quiver_tree_02",
+      "name": "Kleiner Köcherbaum",
+      "cat": "natur",
+      "tags": "baum wüste",
+      "rough": true
+    },
+    {
+      "id": "dead_tree_trunk",
+      "name": "Totholz",
+      "cat": "natur",
+      "tags": "stamm holz wald",
+      "rough": true
+    },
+    {
+      "id": "dead_tree_trunk_02",
+      "name": "Morscher Baumstamm",
+      "cat": "natur",
+      "tags": "stamm holz wald",
+      "block": true
+    },
+    {
+      "id": "tree_stump_01",
+      "name": "Baumstumpf",
+      "cat": "natur",
+      "tags": "stumpf wald",
+      "rough": true
+    },
+    {
+      "id": "tree_stump_02",
+      "name": "Baumstumpf (bemoost)",
+      "cat": "natur",
+      "tags": "stumpf wald",
+      "rough": true
+    },
+    {
+      "id": "root_cluster_01",
+      "name": "Wurzelgeflecht",
+      "cat": "natur",
+      "tags": "wurzel wald",
+      "rough": true
+    },
+    {
+      "id": "root_cluster_02",
+      "name": "Wurzeln",
+      "cat": "natur",
+      "tags": "wurzel wald",
+      "rough": true
+    },
+    {
+      "id": "pine_roots",
+      "name": "Kiefernwurzeln",
+      "cat": "natur",
+      "tags": "wurzel wald"
+    },
+    {
+      "id": "dry_branches_medium_01",
+      "name": "Dürre Äste",
+      "cat": "natur",
+      "tags": "äste holz"
+    },
+    {
+      "id": "bark_debris_01",
+      "name": "Rindenstücke",
+      "cat": "natur",
+      "tags": "holz boden"
+    },
+    {
+      "id": "fern_02",
+      "name": "Farn",
+      "cat": "natur",
+      "tags": "pflanze wald",
+      "split": true
+    },
+    {
+      "id": "shrub_01",
+      "name": "Kraut",
+      "cat": "natur",
+      "tags": "pflanze",
+      "split": true
+    },
+    {
+      "id": "shrub_02",
+      "name": "Busch",
+      "cat": "natur",
+      "tags": "busch pflanze",
+      "rough": true,
+      "split": true
+    },
+    {
+      "id": "shrub_03",
+      "name": "Grasbüschel",
+      "cat": "natur",
+      "tags": "pflanze gras",
+      "split": true
+    },
+    {
+      "id": "shrub_04",
+      "name": "Kleiner Busch",
+      "cat": "natur",
+      "tags": "busch pflanze",
+      "split": true
+    },
+    {
+      "id": "celandine_01",
+      "name": "Schöllkraut",
+      "cat": "natur",
+      "tags": "blume pflanze",
+      "split": true
+    },
+    {
+      "id": "periwinkle_plant",
+      "name": "Immergrün",
+      "cat": "natur",
+      "tags": "blume pflanze",
+      "split": true
+    },
+    {
+      "id": "dandelion_01",
+      "name": "Löwenzahn",
+      "cat": "natur",
+      "tags": "blume",
+      "split": true
+    },
+    {
+      "id": "flower_ursinia",
+      "name": "Wildblumen (gelb)",
+      "cat": "natur",
+      "tags": "blume",
+      "split": true
+    },
+    {
+      "id": "flower_heliophila",
+      "name": "Wildblumen (blau)",
+      "cat": "natur",
+      "tags": "blume",
+      "split": true
+    },
+    {
+      "id": "nettle_plant",
+      "name": "Brennnessel",
+      "cat": "natur",
+      "tags": "pflanze",
+      "split": true
+    },
+    {
+      "id": "weed_plant_02",
+      "name": "Unkraut",
+      "cat": "natur",
+      "tags": "pflanze",
+      "split": true
+    },
+    {
+      "id": "grass_medium_01",
+      "name": "Hohes Gras",
+      "cat": "natur",
+      "tags": "gras wiese",
+      "split": true
+    },
+    {
+      "id": "grass_medium_02",
+      "name": "Grasbüschel (dicht)",
+      "cat": "natur",
+      "tags": "gras wiese",
+      "split": true
+    },
+    {
+      "id": "grass_bermuda_01",
+      "name": "Gras",
+      "cat": "natur",
+      "tags": "gras wiese",
+      "split": true
+    },
+    {
+      "id": "moss_01",
+      "name": "Moospolster",
+      "cat": "natur",
+      "tags": "moos wald",
+      "split": true
+    },
+    {
+      "id": "wild_rooibos_bush",
+      "name": "Heidebusch",
+      "cat": "natur",
+      "tags": "busch trocken",
+      "split": true
+    },
+    {
+      "id": "potted_plant_01",
+      "name": "Topfpflanze (groß)",
+      "cat": "natur",
+      "tags": "pflanze topf"
+    },
+    {
+      "id": "potted_plant_02",
+      "name": "Topfpflanze",
+      "cat": "natur",
+      "tags": "pflanze topf"
+    },
+    {
+      "id": "boulder_01",
+      "name": "Findling",
+      "cat": "fels",
+      "tags": "fels stein",
+      "block": true
+    },
+    {
+      "id": "namaqualand_boulder_02",
+      "name": "Flacher Felsen",
+      "cat": "fels",
+      "tags": "fels stein",
+      "block": true
+    },
+    {
+      "id": "namaqualand_boulder_03",
+      "name": "Felsbrocken",
+      "cat": "fels",
+      "tags": "fels stein",
+      "block": true
+    },
+    {
+      "id": "namaqualand_boulder_04",
+      "name": "Großer Felsen",
+      "cat": "fels",
+      "tags": "fels stein",
+      "block": true
+    },
+    {
+      "id": "namaqualand_boulder_05",
+      "name": "Stein",
+      "cat": "fels",
+      "tags": "fels stein",
+      "rough": true
+    },
+    {
+      "id": "namaqualand_boulder_06",
+      "name": "Runder Stein",
+      "cat": "fels",
+      "tags": "fels stein",
+      "rough": true
+    },
+    {
+      "id": "namaqualand_boulders_01",
+      "name": "Steine",
+      "cat": "fels",
+      "tags": "fels stein",
+      "rough": true
+    },
+    {
+      "id": "coast_rocks_05",
+      "name": "Felsgruppe",
+      "cat": "fels",
+      "tags": "fels küste",
+      "block": true
+    },
+    {
+      "id": "rock_moss_set_01",
+      "name": "Bemooste Steine",
+      "cat": "fels",
+      "tags": "fels moos wald",
+      "rough": true,
+      "split": true
+    },
+    {
+      "id": "rock_moss_set_02",
+      "name": "Bemooste Felsen",
+      "cat": "fels",
+      "tags": "fels moos wald",
+      "rough": true,
+      "split": true
+    },
+    {
+      "id": "sand_rocks_small_01",
+      "name": "Kleine Steine",
+      "cat": "fels",
+      "tags": "fels sand",
+      "rough": true,
+      "split": true
+    },
+    {
+      "id": "rock_face_01",
+      "name": "Felswand",
+      "cat": "fels",
+      "tags": "fels klippe höhle",
+      "block": true
+    },
+    {
+      "id": "rock_face_02",
+      "name": "Felsnase",
+      "cat": "fels",
+      "tags": "fels klippe höhle",
+      "block": true
+    },
+    {
+      "id": "namaqualand_cliff_01",
+      "name": "Felsformation",
+      "cat": "fels",
+      "tags": "fels klippe",
+      "block": true
+    },
+    {
+      "id": "mountainside",
+      "name": "Berghang",
+      "cat": "fels",
+      "tags": "fels klippe berg",
+      "block": true
+    },
+    {
+      "id": "coast_land_rocks_02",
+      "name": "Küstenfelsen",
+      "cat": "fels",
+      "tags": "fels küste",
+      "block": true
+    },
+    {
+      "id": "modular_wooden_pier",
+      "name": "Holzsteg",
+      "cat": "bau",
+      "tags": "steg hafen wasser",
+      "layer": "floor"
+    },
+    {
+      "id": "Barrel_01",
+      "name": "Fass 1",
+      "cat": "behaelter",
+      "rough": 1
+    },
+    {
+      "id": "Barrel_02",
+      "name": "Fass 2",
+      "cat": "behaelter",
+      "rough": 1
+    },
+    {
+      "id": "CheeseBox_01",
+      "name": "CheeseBox 1",
+      "cat": "behaelter"
+    },
+    {
+      "id": "WoodenTable_02",
+      "name": "Holz Tisch 2",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "antique_katana_01",
+      "name": "Antik Katana 1",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "barrel_03",
+      "name": "Fass 3",
+      "cat": "behaelter",
+      "rough": 1
+    },
+    {
+      "id": "brass_vase_02",
+      "name": "Messing Vase 2",
+      "cat": "deko"
+    },
+    {
+      "id": "brass_vase_03",
+      "name": "Messing Vase 3",
+      "cat": "deko"
+    },
+    {
+      "id": "brass_vase_04",
+      "name": "Messing Vase 4",
+      "cat": "deko"
+    },
+    {
+      "id": "ceramic_vase_01",
+      "name": "Keramik Vase 1",
+      "cat": "deko"
+    },
+    {
+      "id": "ceramic_vase_02",
+      "name": "Keramik Vase 2",
+      "cat": "deko"
+    },
+    {
+      "id": "ceramic_vase_03",
+      "name": "Keramik Vase 3",
+      "cat": "deko"
+    },
+    {
+      "id": "ceramic_vase_04",
+      "name": "Keramik Vase 4",
+      "cat": "deko"
+    },
+    {
+      "id": "coast_land_rocks_03",
+      "name": "Küste Land Felsen 3",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "coast_land_rocks_04",
+      "name": "Küste Land Felsen 4",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "coast_rocks_01",
+      "name": "Küste Felsen 1",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "coast_rocks_02",
+      "name": "Küste Felsen 2",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "coast_rocks_03",
+      "name": "Küste Felsen 3",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "crystalline_iceplant",
+      "name": "Crystalline Iceplant",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "dead_quiver_branch_01",
+      "name": "Dead Quiver Ast 1",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "dead_quiver_branch_02",
+      "name": "Dead Quiver Ast 2",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "dead_quiver_trunk",
+      "name": "Dead Quiver Trunk",
+      "cat": "behaelter"
+    },
+    {
+      "id": "dining_chair_02",
+      "name": "Dining Stuhl 2",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "drawer_cabinet",
+      "name": "Drawer Schrank",
+      "cat": "moebel",
+      "block": 1
+    },
+    {
+      "id": "dustpan",
+      "name": "Dustpan",
+      "cat": "kueche"
+    },
+    {
+      "id": "fish_knife",
+      "name": "Fisch Messer",
+      "cat": "kueche"
+    },
+    {
+      "id": "fishermans_hat",
+      "name": "Fishermans Hat",
+      "cat": "kueche"
+    },
+    {
+      "id": "flower_empodium",
+      "name": "Blume Empodium",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "flower_gazania",
+      "name": "Blume Gazania",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "flower_stinkkruid",
+      "name": "Blume Stinkkruid",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "food_apple_01",
+      "name": "Food Apfel 1",
+      "cat": "kueche"
+    },
+    {
+      "id": "food_pears_asian_01",
+      "name": "Pears Asian 1",
+      "cat": "kueche"
+    },
+    {
+      "id": "garden_sprinkler_01",
+      "name": "Garden Sprinkler 1",
+      "cat": "deko"
+    },
+    {
+      "id": "gate_latch_01",
+      "name": "Tor Latch 1",
+      "cat": "bau",
+      "block": 1
+    },
+    {
+      "id": "hanging_industrial_lamp",
+      "name": "Hanging Industrial Lampe",
+      "cat": "licht",
+      "tags": "licht"
+    },
+    {
+      "id": "horse_statue_01",
+      "name": "Horse Statue 1",
+      "cat": "deko",
+      "block": 1
+    },
+    {
+      "id": "industrial_pipe_lamp",
+      "name": "Industrial Pipe Lampe",
+      "cat": "licht",
+      "tags": "licht"
+    },
+    {
+      "id": "industrial_storage_cart",
+      "name": "Industrial Storage Karren",
+      "cat": "werkzeug",
+      "rough": 1
+    },
+    {
+      "id": "industrial_wall_lamp",
+      "name": "Industrial Wand Lampe",
+      "cat": "licht",
+      "tags": "licht"
+    },
+    {
+      "id": "katana_stand_01",
+      "name": "Katana Stand 1",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "ladder_sectioned_01",
+      "name": "Leiter Sectioned 1",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "large_castle_door",
+      "name": "Groß Burg Tür",
+      "cat": "bau"
+    },
+    {
+      "id": "large_iron_gate",
+      "name": "Groß Eisen Tor",
+      "cat": "bau",
+      "block": 1
+    },
+    {
+      "id": "mantel_clock_01",
+      "name": "Mantel Uhr 1",
+      "cat": "deko"
+    },
+    {
+      "id": "metal_stool_01",
+      "name": "Metall Hocker 1",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "metal_stool_02",
+      "name": "Metall Hocker 2",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "metal_stool_03",
+      "name": "Metall Hocker 3",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "metal_tool_chest",
+      "name": "Metall Tool Truhe",
+      "cat": "behaelter",
+      "rough": 1
+    },
+    {
+      "id": "mid_century_lounge_chair",
+      "name": "Mid Century Lounge Stuhl",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "modular_chainlink_fence",
+      "name": "Modular Chainlink Zaun",
+      "cat": "werkzeug",
+      "block": 1
+    },
+    {
+      "id": "modular_street_seating",
+      "name": "Modular Street Seating",
+      "cat": "natur",
+      "layer": "top"
+    },
+    {
+      "id": "moon_rock_01",
+      "name": "Moon Fels 1",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "moon_rock_02",
+      "name": "Moon Fels 2",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "moon_rock_03",
+      "name": "Moon Fels 3",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "moon_rock_04",
+      "name": "Moon Fels 4",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "moon_rock_05",
+      "name": "Moon Fels 5",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "moon_rock_06",
+      "name": "Moon Fels 6",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "moon_rock_07",
+      "name": "Moon Fels 7",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "namaqualand_rocks_01",
+      "name": "Namaqualand Felsen 1",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "namaqualand_stones_01",
+      "name": "Namaqualand Steine 1",
+      "cat": "fels"
+    },
+    {
+      "id": "ornate_medieval_dagger",
+      "name": "Verziert Mittelalterlich Dolch",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "ornate_mirror_01",
+      "name": "Verziert Spiegel 1",
+      "cat": "deko"
+    },
+    {
+      "id": "outdoor_table_chair_set_01",
+      "name": "Outdoor Tisch Stuhl Set 1",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "painted_wooden_chair_01",
+      "name": "Bemalt Holz Stuhl 1",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "pastic_torch_6v",
+      "name": "Pastic Fackel 6v",
+      "cat": "licht",
+      "tags": "licht"
+    },
+    {
+      "id": "planter_box_02",
+      "name": "Planter Kasten 2",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "planter_box_03",
+      "name": "Planter Kasten 3",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "portable_cassette_player",
+      "name": "Portable Cassette Player",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "portable_generator",
+      "name": "Portable Generator",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "portable_searchlight",
+      "name": "Portable Searchlight",
+      "cat": "licht",
+      "rough": 1
+    },
+    {
+      "id": "postcard_set_01",
+      "name": "Postcard Set 1",
+      "cat": "bau"
+    },
+    {
+      "id": "potted_plant_04",
+      "name": "Potted Pflanze 4",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "power_box_01",
+      "name": "Power Kasten 1",
+      "cat": "behaelter"
+    },
+    {
+      "id": "rock_07",
+      "name": "Fels 7",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "rock_09",
+      "name": "Fels 9",
+      "cat": "fels",
+      "block": 1
+    },
+    {
+      "id": "rollershutter_door",
+      "name": "Rollershutter Tür",
+      "cat": "bau"
+    },
+    {
+      "id": "rollershutter_window_01",
+      "name": "Rollershutter Fenster 1",
+      "cat": "bau"
+    },
+    {
+      "id": "rollershutter_window_02",
+      "name": "Rollershutter Fenster 2",
+      "cat": "bau"
+    },
+    {
+      "id": "rollershutter_window_03",
+      "name": "Rollershutter Fenster 3",
+      "cat": "bau"
+    },
+    {
+      "id": "rusted_hacksaw",
+      "name": "Rusted Hacksaw",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "rusted_wheel_rim_01",
+      "name": "Rusted Rad Rim 1",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "rusted_wheel_rim_02",
+      "name": "Rusted Rad Rim 2",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "seeding_tray_01",
+      "name": "Seedling Tablett 1",
+      "cat": "kueche"
+    },
+    {
+      "id": "shrub_sorrel_01",
+      "name": "Strauch Sorrel 1",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "side_table_01",
+      "name": "Side Tisch 1",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "signal_flashlight",
+      "name": "Signal Flashlight",
+      "cat": "licht"
+    },
+    {
+      "id": "single_root",
+      "name": "Single Wurzel",
+      "cat": "natur",
+      "split": 1
+    },
+    {
+      "id": "sofa_02",
+      "name": "Sofa 2",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "sofa_03",
+      "name": "Sofa 3",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "standing_chalkboard_01",
+      "name": "Standing Chalkboard 1",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "stone_01",
+      "name": "Stein 1",
+      "cat": "fels"
+    },
+    {
+      "id": "strawberry_chocolate_cake",
+      "name": "Strawberry Chocolate Cake",
+      "cat": "deko"
+    },
+    {
+      "id": "street_lamp_01",
+      "name": "Street Lampe 1",
+      "cat": "natur",
+      "layer": "top",
+      "tags": "licht"
+    },
+    {
+      "id": "street_lamp_02",
+      "name": "Street Lampe 2",
+      "cat": "natur",
+      "layer": "top",
+      "tags": "licht"
+    },
+    {
+      "id": "street_rat",
+      "name": "Street Rat",
+      "cat": "natur",
+      "layer": "top"
+    },
+    {
+      "id": "sungka_board",
+      "name": "Sungka Board",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "sungka_board_02",
+      "name": "Sungka Board 2",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "sweet_potato",
+      "name": "Sweet Potato",
+      "cat": "behaelter"
+    },
+    {
+      "id": "tool_cart",
+      "name": "Tool Karren",
+      "cat": "werkzeug",
+      "rough": 1
+    },
+    {
+      "id": "utility_box_01",
+      "name": "Utility Kasten 1",
+      "cat": "behaelter"
+    },
+    {
+      "id": "utility_box_02",
+      "name": "Utility Kasten 2",
+      "cat": "behaelter"
+    },
+    {
+      "id": "wall_clock",
+      "name": "Wand Uhr",
+      "cat": "deko"
+    },
+    {
+      "id": "wheelchair_01",
+      "name": "Wheelchair 1",
+      "cat": "moebel",
+      "rough": 1
+    },
+    {
+      "id": "wooden_axe_03",
+      "name": "Holz Axt 3",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "wooden_bowl_02",
+      "name": "Holz Schale 2",
+      "cat": "kueche"
+    },
+    {
+      "id": "wooden_hammer_01",
+      "name": "Holz Hammer 1",
+      "cat": "werkzeug"
+    },
+    {
+      "id": "wooden_spoon",
+      "name": "Holz Löffel",
+      "cat": "kueche"
+    },
+    {
+      "id": "wooden_stool_02",
+      "name": "Holz Hocker 2",
+      "cat": "moebel",
+      "rough": 1
+    }
   ],
   "textures": [
-    { "id": "wood_floor_worn", "name": "Holzdielen (abgenutzt)", "cat": "boden" },
-    { "id": "old_wood_floor", "name": "Alte Holzdielen", "cat": "boden" },
-    { "id": "dark_wooden_planks", "name": "Dunkle Dielen", "cat": "boden" },
-    { "id": "plank_flooring_02", "name": "Dielenboden", "cat": "boden" },
-    { "id": "wooden_floor_02", "name": "Rohe Dielen", "cat": "boden" },
-    { "id": "weathered_planks", "name": "Verwitterte Bretter", "cat": "boden" },
-    { "id": "herringbone_parquet", "name": "Fischgrätparkett", "cat": "boden" },
-    { "id": "stone_tiles", "name": "Steinplatten", "cat": "boden" },
-    { "id": "slate_floor", "name": "Schieferboden", "cat": "boden" },
-    { "id": "slab_tiles", "name": "Steinfliesen", "cat": "boden" },
-    { "id": "monastery_stone_floor", "name": "Klosterboden", "cat": "boden" },
-    { "id": "rock_tile_floor", "name": "Felsplatten", "cat": "boden" },
-    { "id": "large_sandstone_blocks_01", "name": "Sandsteinplatten", "cat": "boden" },
-    { "id": "marble_01", "name": "Marmor", "cat": "boden" },
-    { "id": "marble_mosaic_tiles", "name": "Marmormosaik", "cat": "boden" },
-    { "id": "checkered_pavement_tiles", "name": "Schachbrettfliesen", "cat": "boden" },
-    { "id": "terracotta_floor_tiles", "name": "Terrakotta", "cat": "boden" },
-    { "id": "old_mosaic_floor", "name": "Altes Mosaik", "cat": "boden" },
-    { "id": "worn_brick_floor", "name": "Ziegelboden", "cat": "boden" },
-    { "id": "mossy_brick_floor", "name": "Moosiger Ziegelboden", "cat": "boden" },
-    { "id": "rubble", "name": "Schuttboden", "cat": "boden" },
-    { "id": "dirt_floor", "name": "Erdboden", "cat": "boden" },
-    { "id": "rock_ground", "name": "Felsboden", "cat": "boden" },
-
-    { "id": "cobblestone_floor_01", "name": "Kopfsteinpflaster", "cat": "pflaster" },
-    { "id": "cobblestone_large_01", "name": "Große Pflastersteine", "cat": "pflaster" },
-    { "id": "mossy_cobblestone", "name": "Moosiges Pflaster", "cat": "pflaster" },
-    { "id": "patterned_cobblestone", "name": "Pflaster (Muster)", "cat": "pflaster" },
-    { "id": "grassy_cobblestone", "name": "Pflaster mit Gras", "cat": "pflaster" },
-    { "id": "stone_pathway", "name": "Steinweg", "cat": "pflaster" },
-    { "id": "stone_pavers", "name": "Steinplatten (außen)", "cat": "pflaster" },
-    { "id": "worn_brick_path", "name": "Ziegelweg", "cat": "pflaster" },
-    { "id": "wood_floor_deck", "name": "Holzdeck", "cat": "pflaster" },
-
-    { "id": "leafy_grass", "name": "Wiese", "cat": "gelaende" },
-    { "id": "sparse_grass", "name": "Spärliches Gras", "cat": "gelaende" },
-    { "id": "withered_grass", "name": "Trockenes Gras", "cat": "gelaende" },
-    { "id": "forest_floor", "name": "Waldboden", "cat": "gelaende" },
-    { "id": "forest_leaves_02", "name": "Laubboden", "cat": "gelaende" },
-    { "id": "dry_decay_leaves", "name": "Welkes Laub", "cat": "gelaende" },
-    { "id": "brown_mud", "name": "Schlamm", "cat": "gelaende" },
-    { "id": "mud_forest", "name": "Waldschlamm", "cat": "gelaende" },
-    { "id": "muddy_tracks", "name": "Schlammweg", "cat": "gelaende" },
-    { "id": "dirt", "name": "Erde", "cat": "gelaende" },
-    { "id": "farm_soil", "name": "Ackerboden", "cat": "gelaende" },
-    { "id": "dry_ground_01", "name": "Trockener Boden", "cat": "gelaende" },
-    { "id": "mud_cracked_dry_03", "name": "Rissiger Lehm", "cat": "gelaende" },
-    { "id": "sand_01", "name": "Sand", "cat": "gelaende" },
-    { "id": "coast_sand_04", "name": "Strandsand", "cat": "gelaende" },
-    { "id": "damp_beach_sand", "name": "Nasser Sand", "cat": "gelaende" },
-    { "id": "red_sand", "name": "Roter Sand", "cat": "gelaende" },
-    { "id": "gravel_ground_01", "name": "Kies", "cat": "gelaende" },
-    { "id": "rocky_trail", "name": "Felspfad", "cat": "gelaende" },
-    { "id": "river_small_rocks", "name": "Flusskiesel", "cat": "gelaende" },
-    { "id": "rocks_ground_02", "name": "Steiniger Boden", "cat": "gelaende" },
-    { "id": "mossy_rock", "name": "Moosfels", "cat": "gelaende" },
-    { "id": "lichen_rock", "name": "Flechtenfels", "cat": "gelaende" },
-    { "id": "dark_rock", "name": "Dunkler Fels", "cat": "gelaende" },
-    { "id": "snow_02", "name": "Schnee", "cat": "gelaende" },
-    { "id": "snow_03", "name": "Matschiger Schnee", "cat": "gelaende" },
-    { "id": "burned_ground_01", "name": "Verbrannte Erde", "cat": "gelaende" },
-
-    { "id": "castle_brick_01", "name": "Burgmauer", "cat": "wand" },
-    { "id": "castle_wall_slates", "name": "Schiefermauer", "cat": "wand" },
-    { "id": "medieval_blocks_02", "name": "Quadermauer", "cat": "wand" },
-    { "id": "stone_wall", "name": "Bruchsteinmauer", "cat": "wand" },
-    { "id": "old_stone_wall", "name": "Alte Steinmauer", "cat": "wand" },
-    { "id": "mossy_stone_wall", "name": "Moosige Mauer", "cat": "wand" },
-    { "id": "stone_brick_wall_001", "name": "Steinziegel", "cat": "wand" },
-    { "id": "red_brick", "name": "Rote Ziegel", "cat": "wand" },
-    { "id": "large_sandstone_blocks", "name": "Sandsteinmauer", "cat": "wand" },
-    { "id": "rock_wall_08", "name": "Felswand", "cat": "wand" },
-    { "id": "cliff_side", "name": "Klippe", "cat": "wand" },
-    { "id": "dark_rock_02", "name": "Dunkles Gestein", "cat": "wand" },
-    { "id": "wood_plank_wall", "name": "Bretterwand", "cat": "wand" },
-    { "id": "wood_trunk_wall", "name": "Blockhauswand", "cat": "wand" },
-
-    { "id": "thatch_roof_angled", "name": "Strohdach", "cat": "dach" },
-    { "id": "clay_roof_tiles", "name": "Ziegeldach", "cat": "dach" },
-    { "id": "roof_slates_02", "name": "Schieferdach", "cat": "dach" },
-    { "id": "reed_roof_03", "name": "Reetdach", "cat": "dach" },
-    { "id": "roof_planks", "name": "Holzschindeln", "cat": "dach" }
+    {
+      "id": "wood_floor_worn",
+      "name": "Holzdielen (abgenutzt)",
+      "cat": "boden"
+    },
+    {
+      "id": "old_wood_floor",
+      "name": "Alte Holzdielen",
+      "cat": "boden"
+    },
+    {
+      "id": "dark_wooden_planks",
+      "name": "Dunkle Dielen",
+      "cat": "boden"
+    },
+    {
+      "id": "plank_flooring_02",
+      "name": "Dielenboden",
+      "cat": "boden"
+    },
+    {
+      "id": "wooden_floor_02",
+      "name": "Rohe Dielen",
+      "cat": "boden"
+    },
+    {
+      "id": "weathered_planks",
+      "name": "Verwitterte Bretter",
+      "cat": "boden"
+    },
+    {
+      "id": "herringbone_parquet",
+      "name": "Fischgrätparkett",
+      "cat": "boden"
+    },
+    {
+      "id": "stone_tiles",
+      "name": "Steinplatten",
+      "cat": "boden"
+    },
+    {
+      "id": "slate_floor",
+      "name": "Schieferboden",
+      "cat": "boden"
+    },
+    {
+      "id": "slab_tiles",
+      "name": "Steinfliesen",
+      "cat": "boden"
+    },
+    {
+      "id": "monastery_stone_floor",
+      "name": "Klosterboden",
+      "cat": "boden"
+    },
+    {
+      "id": "rock_tile_floor",
+      "name": "Felsplatten",
+      "cat": "boden"
+    },
+    {
+      "id": "large_sandstone_blocks_01",
+      "name": "Sandsteinplatten",
+      "cat": "boden"
+    },
+    {
+      "id": "marble_01",
+      "name": "Marmor",
+      "cat": "boden"
+    },
+    {
+      "id": "marble_mosaic_tiles",
+      "name": "Marmormosaik",
+      "cat": "boden"
+    },
+    {
+      "id": "checkered_pavement_tiles",
+      "name": "Schachbrettfliesen",
+      "cat": "boden"
+    },
+    {
+      "id": "terracotta_floor_tiles",
+      "name": "Terrakotta",
+      "cat": "boden"
+    },
+    {
+      "id": "old_mosaic_floor",
+      "name": "Altes Mosaik",
+      "cat": "boden"
+    },
+    {
+      "id": "worn_brick_floor",
+      "name": "Ziegelboden",
+      "cat": "boden"
+    },
+    {
+      "id": "mossy_brick_floor",
+      "name": "Moosiger Ziegelboden",
+      "cat": "boden"
+    },
+    {
+      "id": "rubble",
+      "name": "Schuttboden",
+      "cat": "boden"
+    },
+    {
+      "id": "dirt_floor",
+      "name": "Erdboden",
+      "cat": "boden"
+    },
+    {
+      "id": "rock_ground",
+      "name": "Felsboden",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_floor_01",
+      "name": "Kopfsteinpflaster",
+      "cat": "pflaster"
+    },
+    {
+      "id": "cobblestone_large_01",
+      "name": "Große Pflastersteine",
+      "cat": "pflaster"
+    },
+    {
+      "id": "mossy_cobblestone",
+      "name": "Moosiges Pflaster",
+      "cat": "pflaster"
+    },
+    {
+      "id": "patterned_cobblestone",
+      "name": "Pflaster (Muster)",
+      "cat": "pflaster"
+    },
+    {
+      "id": "grassy_cobblestone",
+      "name": "Pflaster mit Gras",
+      "cat": "pflaster"
+    },
+    {
+      "id": "stone_pathway",
+      "name": "Steinweg",
+      "cat": "pflaster"
+    },
+    {
+      "id": "stone_pavers",
+      "name": "Steinplatten (außen)",
+      "cat": "pflaster"
+    },
+    {
+      "id": "worn_brick_path",
+      "name": "Ziegelweg",
+      "cat": "pflaster"
+    },
+    {
+      "id": "wood_floor_deck",
+      "name": "Holzdeck",
+      "cat": "pflaster"
+    },
+    {
+      "id": "leafy_grass",
+      "name": "Wiese",
+      "cat": "gelaende"
+    },
+    {
+      "id": "sparse_grass",
+      "name": "Spärliches Gras",
+      "cat": "gelaende"
+    },
+    {
+      "id": "withered_grass",
+      "name": "Trockenes Gras",
+      "cat": "gelaende"
+    },
+    {
+      "id": "forest_floor",
+      "name": "Waldboden",
+      "cat": "gelaende"
+    },
+    {
+      "id": "forest_leaves_02",
+      "name": "Laubboden",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dry_decay_leaves",
+      "name": "Welkes Laub",
+      "cat": "gelaende"
+    },
+    {
+      "id": "brown_mud",
+      "name": "Schlamm",
+      "cat": "gelaende"
+    },
+    {
+      "id": "mud_forest",
+      "name": "Waldschlamm",
+      "cat": "gelaende"
+    },
+    {
+      "id": "muddy_tracks",
+      "name": "Schlammweg",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dirt",
+      "name": "Erde",
+      "cat": "gelaende"
+    },
+    {
+      "id": "farm_soil",
+      "name": "Ackerboden",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dry_ground_01",
+      "name": "Trockener Boden",
+      "cat": "gelaende"
+    },
+    {
+      "id": "mud_cracked_dry_03",
+      "name": "Rissiger Lehm",
+      "cat": "gelaende"
+    },
+    {
+      "id": "sand_01",
+      "name": "Sand",
+      "cat": "gelaende"
+    },
+    {
+      "id": "coast_sand_04",
+      "name": "Strandsand",
+      "cat": "gelaende"
+    },
+    {
+      "id": "damp_beach_sand",
+      "name": "Nasser Sand",
+      "cat": "gelaende"
+    },
+    {
+      "id": "red_sand",
+      "name": "Roter Sand",
+      "cat": "gelaende"
+    },
+    {
+      "id": "gravel_ground_01",
+      "name": "Kies",
+      "cat": "gelaende"
+    },
+    {
+      "id": "rocky_trail",
+      "name": "Felspfad",
+      "cat": "gelaende"
+    },
+    {
+      "id": "river_small_rocks",
+      "name": "Flusskiesel",
+      "cat": "gelaende"
+    },
+    {
+      "id": "rocks_ground_02",
+      "name": "Steiniger Boden",
+      "cat": "gelaende"
+    },
+    {
+      "id": "mossy_rock",
+      "name": "Moosfels",
+      "cat": "gelaende"
+    },
+    {
+      "id": "lichen_rock",
+      "name": "Flechtenfels",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dark_rock",
+      "name": "Dunkler Fels",
+      "cat": "gelaende"
+    },
+    {
+      "id": "snow_02",
+      "name": "Schnee",
+      "cat": "gelaende"
+    },
+    {
+      "id": "snow_03",
+      "name": "Matschiger Schnee",
+      "cat": "gelaende"
+    },
+    {
+      "id": "burned_ground_01",
+      "name": "Verbrannte Erde",
+      "cat": "gelaende"
+    },
+    {
+      "id": "castle_brick_01",
+      "name": "Burgmauer",
+      "cat": "wand"
+    },
+    {
+      "id": "castle_wall_slates",
+      "name": "Schiefermauer",
+      "cat": "wand"
+    },
+    {
+      "id": "medieval_blocks_02",
+      "name": "Quadermauer",
+      "cat": "wand"
+    },
+    {
+      "id": "stone_wall",
+      "name": "Bruchsteinmauer",
+      "cat": "wand"
+    },
+    {
+      "id": "old_stone_wall",
+      "name": "Alte Steinmauer",
+      "cat": "wand"
+    },
+    {
+      "id": "mossy_stone_wall",
+      "name": "Moosige Mauer",
+      "cat": "wand"
+    },
+    {
+      "id": "stone_brick_wall_001",
+      "name": "Steinziegel",
+      "cat": "wand"
+    },
+    {
+      "id": "red_brick",
+      "name": "Rote Ziegel",
+      "cat": "wand"
+    },
+    {
+      "id": "large_sandstone_blocks",
+      "name": "Sandsteinmauer",
+      "cat": "wand"
+    },
+    {
+      "id": "rock_wall_08",
+      "name": "Felswand",
+      "cat": "wand"
+    },
+    {
+      "id": "cliff_side",
+      "name": "Klippe",
+      "cat": "wand"
+    },
+    {
+      "id": "dark_rock_02",
+      "name": "Dunkles Gestein",
+      "cat": "wand"
+    },
+    {
+      "id": "wood_plank_wall",
+      "name": "Bretterwand",
+      "cat": "wand"
+    },
+    {
+      "id": "wood_trunk_wall",
+      "name": "Blockhauswand",
+      "cat": "wand"
+    },
+    {
+      "id": "thatch_roof_angled",
+      "name": "Strohdach",
+      "cat": "dach"
+    },
+    {
+      "id": "clay_roof_tiles",
+      "name": "Ziegeldach",
+      "cat": "dach"
+    },
+    {
+      "id": "roof_slates_02",
+      "name": "Schieferdach",
+      "cat": "dach"
+    },
+    {
+      "id": "reed_roof_03",
+      "name": "Reetdach",
+      "cat": "dach"
+    },
+    {
+      "id": "roof_planks",
+      "name": "Holzschindeln",
+      "cat": "dach"
+    },
+    {
+      "id": "aerial_beach_01",
+      "name": "Luftbild Strand 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "aerial_beach_02",
+      "name": "Luftbild Strand 2",
+      "cat": "gelaende"
+    },
+    {
+      "id": "aerial_beach_03",
+      "name": "Luftbild Strand 3",
+      "cat": "gelaende"
+    },
+    {
+      "id": "aerial_grass_rock",
+      "name": "Luftbild Gras Fels",
+      "cat": "gelaende"
+    },
+    {
+      "id": "aerial_ground_rock",
+      "name": "Luftbild Boden Fels",
+      "cat": "gelaende"
+    },
+    {
+      "id": "aerial_mud_1",
+      "name": "Luftbild Schlamm 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "aerial_rocks_01",
+      "name": "Luftbild Felsen 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "aerial_rocks_02",
+      "name": "Luftbild Felsen 2",
+      "cat": "gelaende"
+    },
+    {
+      "id": "aerial_rocks_04",
+      "name": "Luftbild Felsen 4",
+      "cat": "gelaende"
+    },
+    {
+      "id": "aerial_sand",
+      "name": "Luftbild Sand",
+      "cat": "gelaende"
+    },
+    {
+      "id": "beam_wall_01",
+      "name": "Beam Wand 1",
+      "cat": "wand"
+    },
+    {
+      "id": "beige_wall_001",
+      "name": "Beige Wand 1",
+      "cat": "wand"
+    },
+    {
+      "id": "beige_wall_002",
+      "name": "Beige Wand 2",
+      "cat": "wand"
+    },
+    {
+      "id": "bicolour_gravel",
+      "name": "Bicolour Kies",
+      "cat": "gelaende"
+    },
+    {
+      "id": "black_painted_planks",
+      "name": "Schwarz Bemalt Dielen",
+      "cat": "boden"
+    },
+    {
+      "id": "blue_floor_tiles_01",
+      "name": "Blau Boden Fliesen 1",
+      "cat": "boden"
+    },
+    {
+      "id": "blue_painted_planks",
+      "name": "Blau Bemalt Dielen",
+      "cat": "boden"
+    },
+    {
+      "id": "blue_plaster_wall",
+      "name": "Blau Putz Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "blue_plaster_weathered",
+      "name": "Blau Putz Weathered",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_4",
+      "name": "Ziegel 4",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_crosswalk",
+      "name": "Ziegel Crosswalk",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_floor",
+      "name": "Ziegel Boden",
+      "cat": "boden"
+    },
+    {
+      "id": "brick_floor_003",
+      "name": "Ziegel Boden 3",
+      "cat": "boden"
+    },
+    {
+      "id": "brick_floor_02",
+      "name": "Ziegel Boden 2",
+      "cat": "boden"
+    },
+    {
+      "id": "brick_floor_04",
+      "name": "Ziegel Boden 4",
+      "cat": "boden"
+    },
+    {
+      "id": "brick_gravel",
+      "name": "Ziegel Kies",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_moss_001",
+      "name": "Ziegel Moos 1",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_pavement",
+      "name": "Ziegel Pflaster",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_pavement_02",
+      "name": "Ziegel Pflaster 2",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_pavement_03",
+      "name": "Ziegel Pflaster 3",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_pavement_04",
+      "name": "Ziegel Pflaster 4",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_villa_floor",
+      "name": "Ziegel Villa Boden",
+      "cat": "boden"
+    },
+    {
+      "id": "brick_wall_001",
+      "name": "Ziegel Wand 1",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_003",
+      "name": "Ziegel Wand 3",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_005",
+      "name": "Ziegel Wand 5",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_006",
+      "name": "Ziegel Wand 6",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_02",
+      "name": "Ziegel Wand 2",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_04",
+      "name": "Ziegel Wand 4",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_07",
+      "name": "Ziegel Wand 7",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_08",
+      "name": "Ziegel Wand 8",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_09",
+      "name": "Ziegel Wand 9",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_10",
+      "name": "Ziegel Wand 10",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_11",
+      "name": "Ziegel Wand 11",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_12",
+      "name": "Ziegel Wand 12",
+      "cat": "wand"
+    },
+    {
+      "id": "brick_wall_13",
+      "name": "Ziegel Wand 13",
+      "cat": "wand"
+    },
+    {
+      "id": "broken_brick_wall",
+      "name": "Zerbrochen Ziegel Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "broken_wall",
+      "name": "Zerbrochen Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "brown_brick_02",
+      "name": "Braun Ziegel 2",
+      "cat": "wand"
+    },
+    {
+      "id": "brown_floor_tiles",
+      "name": "Braun Boden Tilles",
+      "cat": "boden"
+    },
+    {
+      "id": "brown_mud_02",
+      "name": "Braun Schlamm 2",
+      "cat": "gelaende"
+    },
+    {
+      "id": "brown_mud_03",
+      "name": "Braun Schlamm 3",
+      "cat": "gelaende"
+    },
+    {
+      "id": "brown_mud_dry",
+      "name": "Braun Schlamm Trocken",
+      "cat": "gelaende"
+    },
+    {
+      "id": "brown_mud_leaves_01",
+      "name": "Braun Schlamm Laub 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "brown_mud_rocks_01",
+      "name": "Braun Schlamm Felsen 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "brown_planks_03",
+      "name": "Braun Dielen 3",
+      "cat": "boden"
+    },
+    {
+      "id": "brown_planks_04",
+      "name": "Braun Dielen 4",
+      "cat": "boden"
+    },
+    {
+      "id": "brown_planks_05",
+      "name": "Braun Dielen 5",
+      "cat": "boden"
+    },
+    {
+      "id": "brown_planks_07",
+      "name": "Braun Dielen 7",
+      "cat": "boden"
+    },
+    {
+      "id": "brown_planks_08",
+      "name": "Braun Dielen 8",
+      "cat": "boden"
+    },
+    {
+      "id": "brown_planks_09",
+      "name": "Braun Dielen 9",
+      "cat": "boden"
+    },
+    {
+      "id": "castle_brick_02_red",
+      "name": "Burg Ziegel 2 Rot",
+      "cat": "wand"
+    },
+    {
+      "id": "castle_brick_02_white",
+      "name": "Burg Ziegel 2 Weiß",
+      "cat": "wand"
+    },
+    {
+      "id": "castle_brick_07",
+      "name": "Burg Ziegel 7",
+      "cat": "wand"
+    },
+    {
+      "id": "castle_brick_broken_06",
+      "name": "Burg Ziegel Zerbrochen 6",
+      "cat": "wand"
+    },
+    {
+      "id": "castle_wall_varriation",
+      "name": "Burg Wand Variation",
+      "cat": "wand"
+    },
+    {
+      "id": "ceramic_roof_01",
+      "name": "Keramik Dach 1",
+      "cat": "dach"
+    },
+    {
+      "id": "chinese_cedar_bark",
+      "name": "Chinese Cedar Rinde",
+      "cat": "gelaende"
+    },
+    {
+      "id": "chinese_hackberry_bark",
+      "name": "Chinese Hackberry Rinde",
+      "cat": "gelaende"
+    },
+    {
+      "id": "church_bricks_02",
+      "name": "Kirche Ziegel 2",
+      "cat": "wand"
+    },
+    {
+      "id": "church_bricks_03",
+      "name": "Kirche Ziegel 3",
+      "cat": "wand"
+    },
+    {
+      "id": "clay_block_wall",
+      "name": "Lehm Block Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "clay_floor_001",
+      "name": "Lehm Boden 1",
+      "cat": "boden"
+    },
+    {
+      "id": "clay_plaster",
+      "name": "Lehm Putz",
+      "cat": "wand"
+    },
+    {
+      "id": "clay_roof_tiles_02",
+      "name": "Lehm Dach Fliesen 2",
+      "cat": "dach"
+    },
+    {
+      "id": "clay_roof_tiles_03",
+      "name": "Lehm Dach Fliesen 3",
+      "cat": "dach"
+    },
+    {
+      "id": "climbing_wall",
+      "name": "Climbing Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "climbing_wall_02",
+      "name": "Climbing Wand 2",
+      "cat": "wand"
+    },
+    {
+      "id": "climbing_wall_base",
+      "name": "Climbing Wand Base",
+      "cat": "wand"
+    },
+    {
+      "id": "coast_land_rocks_01",
+      "name": "Küste Land Felsen 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "coast_sand_01",
+      "name": "Küste Sand 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "coast_sand_02",
+      "name": "Küste Sand 2",
+      "cat": "gelaende"
+    },
+    {
+      "id": "coast_sand_03",
+      "name": "Küste Sand 3",
+      "cat": "gelaende"
+    },
+    {
+      "id": "coast_sand_05",
+      "name": "Küste Sand 5",
+      "cat": "gelaende"
+    },
+    {
+      "id": "coast_sand_rocks_02",
+      "name": "Küste Sand Felsen 2",
+      "cat": "gelaende"
+    },
+    {
+      "id": "cobblestone_01",
+      "name": "Kopfstein 1",
+      "cat": "pflaster"
+    },
+    {
+      "id": "cobblestone_02",
+      "name": "Kopfstein 2",
+      "cat": "pflaster"
+    },
+    {
+      "id": "cobblestone_03",
+      "name": "Kopfstein 3",
+      "cat": "pflaster"
+    },
+    {
+      "id": "cobblestone_04",
+      "name": "Kopfstein 4",
+      "cat": "pflaster"
+    },
+    {
+      "id": "cobblestone_05",
+      "name": "Kopfstein 5",
+      "cat": "pflaster"
+    },
+    {
+      "id": "cobblestone_color",
+      "name": "Kopfstein Color",
+      "cat": "pflaster"
+    },
+    {
+      "id": "cobblestone_floor_001",
+      "name": "Kopfstein Boden 1",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_floor_02",
+      "name": "Kopfstein Boden 2",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_floor_03",
+      "name": "Kopfstein Boden 3",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_floor_04",
+      "name": "Kopfstein Boden 4",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_floor_05",
+      "name": "Kopfstein Boden 5",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_floor_06",
+      "name": "Kopfstein Boden 6",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_floor_07",
+      "name": "Kopfstein Boden 7",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_floor_08",
+      "name": "Kopfstein Boden 8",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_floor_09",
+      "name": "Kopfstein Boden 9",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_floor_13",
+      "name": "Kopfstein Boden 13",
+      "cat": "boden"
+    },
+    {
+      "id": "cobblestone_pavement",
+      "name": "Kopfstein Pflaster",
+      "cat": "pflaster"
+    },
+    {
+      "id": "cobblestone_square",
+      "name": "Kopfstein Eckig",
+      "cat": "pflaster"
+    },
+    {
+      "id": "concrete_block_wall",
+      "name": "Beton Block Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_block_wall_02",
+      "name": "Beton Block Wand 2",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_block_wall_03",
+      "name": "Beton Block Wand 3",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_brick_wall_001",
+      "name": "Beton Ziegel Wand 1",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_floor",
+      "name": "Beton Boden",
+      "cat": "boden"
+    },
+    {
+      "id": "concrete_floor_01",
+      "name": "Beton Boden 1",
+      "cat": "boden"
+    },
+    {
+      "id": "concrete_floor_02",
+      "name": "Beton Boden 2",
+      "cat": "boden"
+    },
+    {
+      "id": "concrete_floor_03",
+      "name": "Beton Boden 3",
+      "cat": "boden"
+    },
+    {
+      "id": "concrete_floor_damaged_01",
+      "name": "Beton Boden Damaged 1",
+      "cat": "boden"
+    },
+    {
+      "id": "concrete_floor_painted",
+      "name": "Beton Boden Bemalt",
+      "cat": "boden"
+    },
+    {
+      "id": "concrete_floor_worn_001",
+      "name": "Beton Boden Abgenutzt 1",
+      "cat": "boden"
+    },
+    {
+      "id": "concrete_floor_worn_02",
+      "name": "Beton Boden Abgenutzt 2",
+      "cat": "boden"
+    },
+    {
+      "id": "concrete_moss",
+      "name": "Beton Moos",
+      "cat": "gelaende"
+    },
+    {
+      "id": "concrete_pavement",
+      "name": "Beton Pflaster",
+      "cat": "pflaster"
+    },
+    {
+      "id": "concrete_pavement_02",
+      "name": "Beton Pflaster 2",
+      "cat": "pflaster"
+    },
+    {
+      "id": "concrete_pavement_03",
+      "name": "Beton Pflaster 3",
+      "cat": "pflaster"
+    },
+    {
+      "id": "concrete_rock_path",
+      "name": "Beton Fels Weg",
+      "cat": "pflaster"
+    },
+    {
+      "id": "concrete_slab_wall",
+      "name": "Beton Slab Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_slab_wall_02",
+      "name": "Beton Slab Wand 2",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_tile_facade",
+      "name": "Beton Fliese Facade",
+      "cat": "gelaende"
+    },
+    {
+      "id": "concrete_tiles",
+      "name": "Beton Fliesen",
+      "cat": "boden"
+    },
+    {
+      "id": "concrete_tiles_02",
+      "name": "Beton Fliesen 2",
+      "cat": "boden"
+    },
+    {
+      "id": "concrete_wall_001",
+      "name": "Beton Wand 1",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_wall_003",
+      "name": "Beton Wand 3",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_wall_004",
+      "name": "Beton Wand 4",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_wall_005",
+      "name": "Beton Wand 5",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_wall_006",
+      "name": "Beton Wand 6",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_wall_007",
+      "name": "Beton Wand 7",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_wall_008",
+      "name": "Beton Wand 8",
+      "cat": "wand"
+    },
+    {
+      "id": "concrete_wall_009",
+      "name": "Beton Wand 9",
+      "cat": "wand"
+    },
+    {
+      "id": "coral_fort_wall_01",
+      "name": "Coral Fort Wand 1",
+      "cat": "wand"
+    },
+    {
+      "id": "coral_fort_wall_02",
+      "name": "Coral Fort Wand 2",
+      "cat": "wand"
+    },
+    {
+      "id": "coral_fort_wall_03",
+      "name": "Coral Fort Wand 3",
+      "cat": "wand"
+    },
+    {
+      "id": "coral_gravel",
+      "name": "Coral Kies",
+      "cat": "gelaende"
+    },
+    {
+      "id": "coral_ground_02",
+      "name": "Coral Boden 2",
+      "cat": "gelaende"
+    },
+    {
+      "id": "coral_mud_01",
+      "name": "Coral Schlamm 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "coral_stone_wall",
+      "name": "Coral Stein Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "cracked_concrete_wall",
+      "name": "Rissig Beton Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "cracked_red_ground",
+      "name": "Rissig Rot Boden",
+      "cat": "gelaende"
+    },
+    {
+      "id": "damaged_concrete_floor",
+      "name": "Damaged Beton Boden",
+      "cat": "boden"
+    },
+    {
+      "id": "damaged_concrete_floor_02",
+      "name": "Damaged Beton Boden 2",
+      "cat": "boden"
+    },
+    {
+      "id": "damaged_concrete_floor_03",
+      "name": "Damaged Beton Boden 3",
+      "cat": "boden"
+    },
+    {
+      "id": "damaged_plaster",
+      "name": "Damaged Putz",
+      "cat": "wand"
+    },
+    {
+      "id": "damp_beach_sand_02",
+      "name": "Damp Strand Sand 2",
+      "cat": "gelaende"
+    },
+    {
+      "id": "damp_sand",
+      "name": "Damp Sand",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dark_brick_wall",
+      "name": "Dunkel Ziegel Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "dark_paneled_wood",
+      "name": "Dunkel Paneled Holz",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dark_planks",
+      "name": "Dunkel Dielen",
+      "cat": "boden"
+    },
+    {
+      "id": "dark_wood",
+      "name": "Dunkel Holz",
+      "cat": "gelaende"
+    },
+    {
+      "id": "defense_wall",
+      "name": "Defense Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "defense_wall_02",
+      "name": "Defense Wand 2",
+      "cat": "wand"
+    },
+    {
+      "id": "dense_sand",
+      "name": "Dense Sand",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dirt_aerial_02",
+      "name": "Erde Luftbild 2",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dirt_aerial_03",
+      "name": "Erde Luftbild 3",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dirty_carpet",
+      "name": "Dirty Teppich",
+      "cat": "boden"
+    },
+    {
+      "id": "dirty_concrete",
+      "name": "Dirty Beton",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dirty_tiles",
+      "name": "Dirty Fliesen",
+      "cat": "boden"
+    },
+    {
+      "id": "distressed_painted_planks",
+      "name": "Distressed Bemalt Dielen",
+      "cat": "boden"
+    },
+    {
+      "id": "double_brick_floor",
+      "name": "Double Ziegel Boden",
+      "cat": "boden"
+    },
+    {
+      "id": "dry_ground_rocks",
+      "name": "Trocken Boden Felsen",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dry_mud_field_001",
+      "name": "Trocken Schlamm Feld 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "dry_riverbed_rock",
+      "name": "Trocken Riverbed Fels",
+      "cat": "gelaende"
+    },
+    {
+      "id": "embedded_plank_flooring",
+      "name": "Embedded Diele Flooring",
+      "cat": "boden"
+    },
+    {
+      "id": "embedded_rock_floor",
+      "name": "Embedded Fels Boden",
+      "cat": "boden"
+    },
+    {
+      "id": "eucalyptus_bark",
+      "name": "Eucalyptus Rinde",
+      "cat": "gelaende"
+    },
+    {
+      "id": "excavated_soil_wall",
+      "name": "Excavated Boden Wand",
+      "cat": "wand"
+    },
+    {
+      "id": "exterior_wall_cladding",
+      "name": "Exterior Wand Cladding",
+      "cat": "wand"
+    },
+    {
+      "id": "exterior_wall_cladding_02",
+      "name": "Exterior Wand Cladding 2",
+      "cat": "wand"
+    },
+    {
+      "id": "exterior_wall_cladding_03",
+      "name": "Exterior Wand Cladding 3",
+      "cat": "wand"
+    },
+    {
+      "id": "fabric_leather_01",
+      "name": "Stoff Leder 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "fabric_leather_02",
+      "name": "Stoff Leder 2",
+      "cat": "gelaende"
+    },
+    {
+      "id": "fabric_pattern_05",
+      "name": "Stoff Pattern 5",
+      "cat": "gelaende"
+    },
+    {
+      "id": "fabric_pattern_07",
+      "name": "Stoff Pattern 7",
+      "cat": "gelaende"
+    },
+    {
+      "id": "fever_tree_bark",
+      "name": "Fever Baum Rinde",
+      "cat": "gelaende"
+    },
+    {
+      "id": "fine_grained_wood",
+      "name": "Fine Grained Holz",
+      "cat": "gelaende"
+    },
+    {
+      "id": "floor_bricks_02",
+      "name": "Boden Ziegel 2",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_klinkers_01",
+      "name": "Boden Klinkers 1",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_klinkers_04",
+      "name": "Boden Klinkers 4",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_pattern_01",
+      "name": "Boden Pattern 1",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_pattern_02",
+      "name": "Boden Pattern 2",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_pavement",
+      "name": "Boden Pflaster",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_pebbles_01",
+      "name": "Boden Pebbles 1",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_tiles_02",
+      "name": "Boden Fliesen 2",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_tiles_04",
+      "name": "Boden Fliesen 4",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_tiles_06",
+      "name": "Boden Fliesen 6",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_tiles_08",
+      "name": "Boden Fliesen 8",
+      "cat": "boden"
+    },
+    {
+      "id": "floor_tiles_09",
+      "name": "Boden Fliesen 9",
+      "cat": "boden"
+    },
+    {
+      "id": "flower_scattered_dirt",
+      "name": "Blume Scattered Erde",
+      "cat": "gelaende"
+    },
+    {
+      "id": "flower_scattered_gravel",
+      "name": "Blume Scattered Kies",
+      "cat": "gelaende"
+    },
+    {
+      "id": "forest_ground_04",
+      "name": "Wald Boden 4",
+      "cat": "gelaende"
+    },
+    {
+      "id": "forest_ground_05",
+      "name": "Wald Boden 5",
+      "cat": "gelaende"
+    },
+    {
+      "id": "forest_ground_06",
+      "name": "Wald Boden 6",
+      "cat": "gelaende"
+    },
+    {
+      "id": "forest_leaves_03",
+      "name": "Wald Laub 3",
+      "cat": "gelaende"
+    },
+    {
+      "id": "forest_leaves_04",
+      "name": "Wald Laub 4",
+      "cat": "gelaende"
+    },
+    {
+      "id": "forrest_ground_01",
+      "name": "Wald Boden 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "forrest_ground_03",
+      "name": "Wald Boden 3",
+      "cat": "gelaende"
+    },
+    {
+      "id": "forrest_sand_01",
+      "name": "Wald Sand 1",
+      "cat": "gelaende"
+    },
+    {
+      "id": "granite_tile",
+      "name": "Granit Fliese",
+      "cat": "gelaende"
+    }
   ]
 }

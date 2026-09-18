@@ -2,12 +2,13 @@
 // (von oben gerenderte 3D-Modelle), eigene Assets (nur lokal importiert), prozedurale Bauteile (Türen, Treppen,
 // Teppiche, Feuer …), weiche Geländeübergänge, Wasser/Lava, texturierte Wände mit Schatten, Dächer und Licht.
 import { STAMPS, TEXTURES } from '../data/mapassets.js';
+import { ALL_TEXTURES, TEX_MODS, splitTex, modFilter, shiftColor } from '../data/texvars.js';
 import { userAssetInfo, userAssetImage, userThumb, onUserAssets } from '../core/userassets.js';
 
 // Im MCP-Server (Cloudflare Worker) gibt es keine Modul-URL – dort werden keine Bilder geladen
 const ASSETS = (() => { try { return new URL('../../assets/', import.meta.url).href; } catch { return 'assets/'; } })();
 export const STAMP_BY_ID = new Map(STAMPS.map((s) => [s.id, s]));
-export const TEX_BY_ID = new Map(TEXTURES.map((t) => [t.id, t]));
+export const TEX_BY_ID = new Map(ALL_TEXTURES.map((t) => [t.id, t]));
 export const texUrl = (id, thumb = false) => `${ASSETS}tex/${thumb ? 't/' : ''}${id}.webp`;
 export const stampUrl = (id, thumb = false) => `${ASSETS}stamps/${thumb ? 't/' : ''}${id}.webp`;
 const TAU = Math.PI * 2;
@@ -25,6 +26,44 @@ function bump() {
 onUserAssets(bump);
 export const assetsVersion = () => ver;
 export function onAssets(fn) { subs.add(fn); return () => subs.delete(fn); }
+const varCache = new Map();
+// Texturbild – bei Varianten („basis~spielart“) wird die Kachel einmal eingefärbt
+export function texImage(id) {
+  const [base, mod] = splitTex(id);
+  const im = img(texUrl(base));
+  if (!im || !mod || !TEX_MODS[mod]) return im;
+  const key = `${base}~${mod}`;
+  const hit = varCache.get(key);
+  if (hit && hit.src === im) return hit.cv;
+  const cv = document.createElement('canvas');
+  cv.width = im.width;
+  cv.height = im.height;
+  const g = cv.getContext('2d');
+  if (FILTER) g.filter = modFilter(mod);
+  g.drawImage(im, 0, 0);
+  varCache.set(key, { src: im, cv });
+  return cv;
+}
+// Vorschaubild: bei Varianten als Daten-URL (einmal berechnet)
+const varThumbs = new Map();
+export function texThumb(id) {
+  const [base, mod] = splitTex(id);
+  if (!mod) return texUrl(base, true);
+  const key = `${base}~${mod}`;
+  if (varThumbs.has(key)) return varThumbs.get(key);
+  const im = img(texUrl(base, true));
+  if (!im) return texUrl(base, true);
+  const cv = document.createElement('canvas');
+  cv.width = im.width;
+  cv.height = im.height;
+  const g = cv.getContext('2d');
+  if (FILTER) g.filter = modFilter(mod);
+  g.drawImage(im, 0, 0);
+  let url = '';
+  try { url = cv.toDataURL('image/webp', 0.8); } catch { url = texUrl(base, true); }
+  varThumbs.set(key, url);
+  return url;
+}
 const imgCache = new Map();
 export function img(url) {
   let e = imgCache.get(url);
@@ -81,7 +120,7 @@ const hash = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++)
 const TEX_FALLBACK = { boden: '#8b7d6b', pflaster: '#8a857b', gelaende: '#6f7a4a', wand: '#6d665d', dach: '#7a5a44' };
 export function pat(ctx, id, unit, fallback) {
   const t = TEX_BY_ID.get(id);
-  const im = t && img(texUrl(id));
+  const im = t && texImage(id);
   if (!im) return fallback || TEX_FALLBACK[t?.cat] || '#7d7468';
   const p = ctx.createPattern(im, 'repeat');
   const tile = ((t.m || 2) / 1.5) * unit;
@@ -113,6 +152,10 @@ function variation(ctx, w, h, a = 0.22) {
 export function tracePath(c, s) {
   const p = s.pts || [];
   c.beginPath();
+  if (s.kind === 'cells') {
+    for (let i = 0; i < p.length; i += 2) c.rect(p[i], p[i + 1], 1, 1);
+    return;
+  }
   if (s.kind === 'rect' || s.kind === 'ellipse') {
     const [x1, y1, x2, y2] = p;
     const x = Math.min(x1, x2);
@@ -209,8 +252,17 @@ function waves(g, w, h, cs, color, a, seed) {
   }
   g.restore();
 }
+// „water~dunkel“ & Co.: Farben rechnerisch verschieben
+export function fluidOf(kind) {
+  const [base, mod] = splitTex(kind);
+  const f = FLUIDS[base];
+  if (!f) return null;
+  if (!mod || !TEX_MODS[mod]) return f;
+  return { ...f, label: `${f.label} (${TEX_MODS[mod].name})`, deep: shiftColor(f.deep, mod, { fluid: true }), shallow: shiftColor(f.shallow, mod, { fluid: true }) };
+}
+
 function fluidLayer(mask, kind, cs, seed) {
-  const f = FLUIDS[kind] || FLUIDS.water;
+  const f = fluidOf(kind) || FLUIDS.water;
   const w = mask.width;
   const h = mask.height;
   const out = canvasOf(`fluid_${kind}`, w, h);
@@ -559,10 +611,11 @@ export function objAsset(o, legacyDefs) {
 }
 export async function preloadMap(m, legacyDefs) {
   const urls = new Set();
-  for (const s of m.shapes || []) if (s.tex) urls.add(texUrl(s.tex));
-  for (const s of m.shapes || []) if (s.roof) urls.add(texUrl(s.roof));
-  for (const t of m.terrain || []) if (String(t.mat || '').startsWith('tex:')) urls.add(texUrl(t.mat.slice(4))); else if (MAT_TEX[t.mat]) urls.add(texUrl(MAT_TEX[t.mat]));
-  for (const id of [m.ground || (m.outdoor ? 'leafy_grass' : 'dark_rock'), m.floorTex || 'stone_tiles', m.wallTex || 'castle_brick_01']) urls.add(texUrl(id));
+  const tex = (id) => urls.add(texUrl(splitTex(id)[0]));
+  for (const s of m.shapes || []) if (s.tex) tex(s.tex);
+  for (const s of m.shapes || []) if (s.roof) tex(s.roof);
+  for (const t of m.terrain || []) if (String(t.mat || '').startsWith('tex:')) tex(t.mat.slice(4)); else if (MAT_TEX[t.mat]) tex(MAT_TEX[t.mat]);
+  for (const id of [m.ground || (m.outdoor ? 'leafy_grass' : 'dark_rock'), m.floorTex || 'stone_tiles', m.wallTex || 'castle_brick_01']) tex(id);
   for (const o of m.objects || []) {
     const a = objAsset(o, legacyDefs);
     if (!a) continue;
@@ -607,7 +660,12 @@ function drawAsset(ctx, o, a, { shadow = false, alpha = 1 } = {}) {
   }
   if (o.r) ctx.rotate((o.r * Math.PI) / 180);
   if (o.fx) ctx.scale(-1, 1);
-  ctx.globalAlpha = alpha;
+  ctx.globalAlpha = alpha * (o.o ?? 1);
+  // Weichzeichnen: Stärke wächst mit der Darstellungsgröße (o.b = Pixel bei 40 px/Feld)
+  if (o.b && !shadow && FILTER) {
+    const sc = ctx.getTransform ? ctx.getTransform().a : 1;
+    ctx.filter = `blur(${Math.max(0.3, (o.b * Math.abs(sc)) / 40).toFixed(2)}px)`;
+  }
   if (!im) {
     if (!shadow) {
       ctx.fillStyle = 'rgba(120,110,100,.35)';
@@ -654,7 +712,7 @@ function terrainLayer(tc, m, cs) {
       return;
     }
     const kind = grp.kind || 'water';
-    const fluid = FLUIDS[kind];
+    const fluid = fluidOf(kind);
     const soft2 = fluid ? Math.min(soft, cs * 0.12) : soft;
     const m2 = soft2 > 0.5 ? blurred('tmaskS', mk, soft2) : mk;
     let layer;
@@ -896,8 +954,9 @@ const LAYERS = { floor: 0, obj: 1, top: 2 };
 // view = { x0, y0, x1, y1 } blendet alles außerhalb aus (beim Hineinzoomen).
 export function drawObjects(ctx, m, { legacyDefs, skip = null, view = null } = {}) {
   const items = [];
+  const skipped = (id) => !!skip && (skip.has ? skip.has(id) : skip === id);
   for (const o of m.objects || []) {
-    if (skip && o.id === skip) continue;
+    if (o.hidden || skipped(o.id)) continue;
     const a = objAsset(o, legacyDefs);
     if (!a) continue;
     if (view) {
@@ -938,7 +997,7 @@ function fade(c, a) {
 export function collectGlows(m, legacyDefs) {
   const out = [];
   for (const o of m.objects || []) {
-    if (o.glow === false) continue;
+    if (o.glow === false || o.hidden) continue;
     const a = objAsset(o, legacyDefs);
     const g = a?.info?.glow;
     if (g) out.push({ x: o.x, y: o.y, r: g.r * Math.sqrt(o.s || 1), color: g.color, i: 1 });

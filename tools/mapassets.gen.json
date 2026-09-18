@@ -2760,6 +2760,1116 @@
    "h": 12.734,
    "hM": 7.52,
    "layer": "floor"
+  },
+  "barrel_01": {
+   "id": "barrel_01",
+   "src": "Barrel_01",
+   "name": "Fass 1",
+   "cat": "behaelter",
+   "tags": "",
+   "w": 0.392,
+   "h": 0.392,
+   "hM": 0.88,
+   "rough": 1
+  },
+  "barrel_02": {
+   "id": "barrel_02",
+   "src": "Barrel_02",
+   "name": "Fass 2",
+   "cat": "behaelter",
+   "tags": "",
+   "w": 0.341,
+   "h": 0.341,
+   "hM": 0.88,
+   "rough": 1
+  },
+  "cheesebox_01": {
+   "id": "cheesebox_01",
+   "src": "CheeseBox_01",
+   "name": "CheeseBox 1",
+   "cat": "behaelter",
+   "tags": "",
+   "w": 0.176,
+   "h": 0.09,
+   "hM": 0.07
+  },
+  "woodentable_02": {
+   "id": "woodentable_02",
+   "src": "WoodenTable_02",
+   "name": "Holz Tisch 2",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.22,
+   "h": 0.22,
+   "hM": 0.42,
+   "rough": 1
+  },
+  "barrel_03": {
+   "id": "barrel_03",
+   "src": "barrel_03",
+   "name": "Fass 3",
+   "cat": "behaelter",
+   "tags": "",
+   "w": 0.439,
+   "h": 0.443,
+   "hM": 0.93,
+   "rough": 1
+  },
+  "brass_vase_02": {
+   "id": "brass_vase_02",
+   "src": "brass_vase_02",
+   "name": "Messing Vase 2",
+   "cat": "deko",
+   "tags": "",
+   "w": 0.157,
+   "h": 0.157,
+   "hM": 0.53
+  },
+  "ceramic_vase_01": {
+   "id": "ceramic_vase_01",
+   "src": "ceramic_vase_01",
+   "name": "Keramik Vase 1",
+   "cat": "deko",
+   "tags": "",
+   "w": 0.153,
+   "h": 0.153,
+   "hM": 0.4
+  },
+  "ceramic_vase_02": {
+   "id": "ceramic_vase_02",
+   "src": "ceramic_vase_02",
+   "name": "Keramik Vase 2",
+   "cat": "deko",
+   "tags": "",
+   "w": 0.165,
+   "h": 0.165,
+   "hM": 0.31
+  },
+  "ceramic_vase_04": {
+   "id": "ceramic_vase_04",
+   "src": "ceramic_vase_04",
+   "name": "Keramik Vase 4",
+   "cat": "deko",
+   "tags": "",
+   "w": 0.137,
+   "h": 0.137,
+   "hM": 0.34
+  },
+  "coast_land_rocks_03": {
+   "id": "coast_land_rocks_03",
+   "src": "coast_land_rocks_03",
+   "name": "Küste Land Felsen 3",
+   "cat": "fels",
+   "tags": "",
+   "w": 6.007,
+   "h": 3.781,
+   "hM": 1.53,
+   "block": 1
+  },
+  "coast_land_rocks_04": {
+   "id": "coast_land_rocks_04",
+   "src": "coast_land_rocks_04",
+   "name": "Küste Land Felsen 4",
+   "cat": "fels",
+   "tags": "",
+   "w": 6.679,
+   "h": 7.698,
+   "hM": 0.85,
+   "block": 1
+  },
+  "coast_rocks_01": {
+   "id": "coast_rocks_01",
+   "src": "coast_rocks_01",
+   "name": "Küste Felsen 1",
+   "cat": "fels",
+   "tags": "",
+   "w": 39.826,
+   "h": 28.514,
+   "hM": 3.29,
+   "block": 1
+  },
+  "coast_rocks_02": {
+   "id": "coast_rocks_02",
+   "src": "coast_rocks_02",
+   "name": "Küste Felsen 2",
+   "cat": "fels",
+   "tags": "",
+   "w": 30.787,
+   "h": 33.105,
+   "hM": 3.17,
+   "block": 1
+  },
+  "coast_rocks_03": {
+   "id": "coast_rocks_03",
+   "src": "coast_rocks_03",
+   "name": "Küste Felsen 3",
+   "cat": "fels",
+   "tags": "",
+   "w": 14.172,
+   "h": 18.921,
+   "hM": 3.2,
+   "block": 1
+  },
+  "crystalline_iceplant_a": {
+   "id": "crystalline_iceplant_a",
+   "src": "crystalline_iceplant",
+   "name": "Crystalline Iceplant 1",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.2,
+   "h": 0.227,
+   "hM": 0.08
+  },
+  "crystalline_iceplant_b": {
+   "id": "crystalline_iceplant_b",
+   "src": "crystalline_iceplant",
+   "name": "Crystalline Iceplant 2",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.204,
+   "h": 0.224,
+   "hM": 0.07
+  },
+  "crystalline_iceplant_c": {
+   "id": "crystalline_iceplant_c",
+   "src": "crystalline_iceplant",
+   "name": "Crystalline Iceplant 3",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.196,
+   "h": 0.169,
+   "hM": 0.06
+  },
+  "crystalline_iceplant_d": {
+   "id": "crystalline_iceplant_d",
+   "src": "crystalline_iceplant",
+   "name": "Crystalline Iceplant 4",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.114,
+   "h": 0.141,
+   "hM": 0.04
+  },
+  "dead_quiver_branch_01": {
+   "id": "dead_quiver_branch_01",
+   "src": "dead_quiver_branch_01",
+   "name": "Dead Quiver Ast 1",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.188,
+   "h": 0.169,
+   "hM": 0.44
+  },
+  "dead_quiver_branch_02": {
+   "id": "dead_quiver_branch_02",
+   "src": "dead_quiver_branch_02",
+   "name": "Dead Quiver Ast 2",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.208,
+   "h": 0.153,
+   "hM": 0.53
+  },
+  "dead_quiver_trunk": {
+   "id": "dead_quiver_trunk",
+   "src": "dead_quiver_trunk",
+   "name": "Dead Quiver Trunk",
+   "cat": "behaelter",
+   "tags": "",
+   "w": 0.224,
+   "h": 0.196,
+   "hM": 1.99
+  },
+  "dining_chair_02": {
+   "id": "dining_chair_02",
+   "src": "dining_chair_02",
+   "name": "Dining Stuhl 2",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.306,
+   "h": 0.4,
+   "hM": 0.97,
+   "rough": 1
+  },
+  "drawer_cabinet": {
+   "id": "drawer_cabinet",
+   "src": "drawer_cabinet",
+   "name": "Drawer Schrank",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.776,
+   "h": 0.341,
+   "hM": 1.88,
+   "block": 1
+  },
+  "dustpan": {
+   "id": "dustpan",
+   "src": "dustpan",
+   "name": "Dustpan",
+   "cat": "kueche",
+   "tags": "",
+   "w": 0.239,
+   "h": 0.263,
+   "hM": 0.1
+  },
+  "fishermans_hat": {
+   "id": "fishermans_hat",
+   "src": "fishermans_hat",
+   "name": "Fishermans Hat",
+   "cat": "kueche",
+   "tags": "",
+   "w": 0.235,
+   "h": 0.251,
+   "hM": 0.12
+  },
+  "flower_empodium_a": {
+   "id": "flower_empodium_a",
+   "src": "flower_empodium",
+   "name": "Blume Empodium 1",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.161,
+   "h": 0.184,
+   "hM": 0.27
+  },
+  "flower_empodium_b": {
+   "id": "flower_empodium_b",
+   "src": "flower_empodium",
+   "name": "Blume Empodium 2",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.137,
+   "h": 0.153,
+   "hM": 0.19
+  },
+  "flower_empodium_c": {
+   "id": "flower_empodium_c",
+   "src": "flower_empodium",
+   "name": "Blume Empodium 3",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.161,
+   "h": 0.122,
+   "hM": 0.18
+  },
+  "flower_empodium_d": {
+   "id": "flower_empodium_d",
+   "src": "flower_empodium",
+   "name": "Blume Empodium 4",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.145,
+   "h": 0.149,
+   "hM": 0.17
+  },
+  "flower_gazania_a": {
+   "id": "flower_gazania_a",
+   "src": "flower_gazania",
+   "name": "Blume Gazania 1",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.11,
+   "h": 0.11,
+   "hM": 0.1
+  },
+  "flower_gazania_b": {
+   "id": "flower_gazania_b",
+   "src": "flower_gazania",
+   "name": "Blume Gazania 2",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.161,
+   "h": 0.196,
+   "hM": 0.11
+  },
+  "flower_gazania_c": {
+   "id": "flower_gazania_c",
+   "src": "flower_gazania",
+   "name": "Blume Gazania 3",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.18,
+   "h": 0.141,
+   "hM": 0.18
+  },
+  "flower_gazania_d": {
+   "id": "flower_gazania_d",
+   "src": "flower_gazania",
+   "name": "Blume Gazania 4",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.184,
+   "h": 0.2,
+   "hM": 0.16
+  },
+  "flower_gazania_e": {
+   "id": "flower_gazania_e",
+   "src": "flower_gazania",
+   "name": "Blume Gazania 5",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.243,
+   "h": 0.239,
+   "hM": 0.4
+  },
+  "flower_gazania_f": {
+   "id": "flower_gazania_f",
+   "src": "flower_gazania",
+   "name": "Blume Gazania 6",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.196,
+   "h": 0.212,
+   "hM": 0.36
+  },
+  "flower_gazania_g": {
+   "id": "flower_gazania_g",
+   "src": "flower_gazania",
+   "name": "Blume Gazania 7",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.227,
+   "h": 0.224,
+   "hM": 0.4
+  },
+  "flower_gazania_h": {
+   "id": "flower_gazania_h",
+   "src": "flower_gazania",
+   "name": "Blume Gazania 8",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.18,
+   "h": 0.141,
+   "hM": 0.2
+  },
+  "flower_stinkkruid_a": {
+   "id": "flower_stinkkruid_a",
+   "src": "flower_stinkkruid",
+   "name": "Blume Stinkkruid 1",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.251,
+   "h": 0.22,
+   "hM": 0.18
+  },
+  "flower_stinkkruid_b": {
+   "id": "flower_stinkkruid_b",
+   "src": "flower_stinkkruid",
+   "name": "Blume Stinkkruid 2",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.184,
+   "h": 0.157,
+   "hM": 0.15
+  },
+  "flower_stinkkruid_c": {
+   "id": "flower_stinkkruid_c",
+   "src": "flower_stinkkruid",
+   "name": "Blume Stinkkruid 3",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.161,
+   "h": 0.145,
+   "hM": 0.15
+  },
+  "flower_stinkkruid_d": {
+   "id": "flower_stinkkruid_d",
+   "src": "flower_stinkkruid",
+   "name": "Blume Stinkkruid 4",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.165,
+   "h": 0.165,
+   "hM": 0.13
+  },
+  "garden_sprinkler_01_a": {
+   "id": "garden_sprinkler_01_a",
+   "src": "garden_sprinkler_01",
+   "name": "Garden Sprinkler 1 1",
+   "cat": "deko",
+   "tags": "",
+   "w": 0.251,
+   "h": 0.098,
+   "hM": 0.09
+  },
+  "garden_sprinkler_01_b": {
+   "id": "garden_sprinkler_01_b",
+   "src": "garden_sprinkler_01",
+   "name": "Garden Sprinkler 1 2",
+   "cat": "deko",
+   "tags": "",
+   "w": 0.216,
+   "h": 0.075,
+   "hM": 0.07
+  },
+  "gate_latch_01": {
+   "id": "gate_latch_01",
+   "src": "gate_latch_01",
+   "name": "Tor Latch 1",
+   "cat": "bau",
+   "tags": "",
+   "w": 0.153,
+   "h": 0.067,
+   "hM": 0.09,
+   "block": 1
+  },
+  "hanging_industrial_lamp": {
+   "id": "hanging_industrial_lamp",
+   "src": "hanging_industrial_lamp",
+   "name": "Hanging Industrial Lampe",
+   "cat": "licht",
+   "tags": "licht",
+   "w": 0.384,
+   "h": 0.384,
+   "hM": 1.36
+  },
+  "industrial_pipe_lamp": {
+   "id": "industrial_pipe_lamp",
+   "src": "industrial_pipe_lamp",
+   "name": "Industrial Pipe Lampe",
+   "cat": "licht",
+   "tags": "licht",
+   "w": 0.141,
+   "h": 0.192,
+   "hM": 0.36
+  },
+  "industrial_storage_cart": {
+   "id": "industrial_storage_cart",
+   "src": "industrial_storage_cart",
+   "name": "Industrial Storage Karren",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 1.086,
+   "h": 0.753,
+   "hM": 1.38,
+   "rough": 1
+  },
+  "industrial_wall_lamp": {
+   "id": "industrial_wall_lamp",
+   "src": "industrial_wall_lamp",
+   "name": "Industrial Wand Lampe",
+   "cat": "licht",
+   "tags": "licht",
+   "w": 0.2,
+   "h": 0.11,
+   "hM": 0.43
+  },
+  "katana_stand_01": {
+   "id": "katana_stand_01",
+   "src": "katana_stand_01",
+   "name": "Katana Stand 1",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 0.216,
+   "h": 0.055,
+   "hM": 0.18
+  },
+  "ladder_sectioned_01": {
+   "id": "ladder_sectioned_01",
+   "src": "ladder_sectioned_01",
+   "name": "Leiter Sectioned 1",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 0.459,
+   "h": 0.137,
+   "hM": 2.13
+  },
+  "large_castle_door": {
+   "id": "large_castle_door",
+   "src": "large_castle_door",
+   "name": "Groß Burg Tür",
+   "cat": "bau",
+   "tags": "",
+   "w": 1.361,
+   "h": 0.216,
+   "hM": 2.96
+  },
+  "large_iron_gate": {
+   "id": "large_iron_gate",
+   "src": "large_iron_gate",
+   "name": "Groß Eisen Tor",
+   "cat": "bau",
+   "tags": "",
+   "w": 1.984,
+   "h": 0.082,
+   "hM": 2.93,
+   "block": 1
+  },
+  "mantel_clock_01_a": {
+   "id": "mantel_clock_01_a",
+   "src": "mantel_clock_01",
+   "name": "Mantel Uhr 1 1",
+   "cat": "deko",
+   "tags": "",
+   "w": 0.247,
+   "h": 0.102,
+   "hM": 0.16
+  },
+  "metal_stool_01": {
+   "id": "metal_stool_01",
+   "src": "metal_stool_01",
+   "name": "Metall Hocker 1",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.251,
+   "h": 0.255,
+   "hM": 0.88,
+   "rough": 1
+  },
+  "metal_stool_02": {
+   "id": "metal_stool_02",
+   "src": "metal_stool_02",
+   "name": "Metall Hocker 2",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.318,
+   "h": 0.333,
+   "hM": 0.46,
+   "rough": 1
+  },
+  "metal_stool_03": {
+   "id": "metal_stool_03",
+   "src": "metal_stool_03",
+   "name": "Metall Hocker 3",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.325,
+   "h": 0.333,
+   "hM": 1.02,
+   "rough": 1
+  },
+  "metal_tool_chest": {
+   "id": "metal_tool_chest",
+   "src": "metal_tool_chest",
+   "name": "Metall Tool Truhe",
+   "cat": "behaelter",
+   "tags": "",
+   "w": 0.475,
+   "h": 0.29,
+   "hM": 0.65,
+   "rough": 1
+  },
+  "mid_century_lounge_chair": {
+   "id": "mid_century_lounge_chair",
+   "src": "mid_century_lounge_chair",
+   "name": "Mid Century Lounge Stuhl",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.69,
+   "h": 0.812,
+   "hM": 1.17,
+   "rough": 1
+  },
+  "modular_chainlink_fence": {
+   "id": "modular_chainlink_fence",
+   "src": "modular_chainlink_fence",
+   "name": "Modular Chainlink Zaun",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 5.431,
+   "h": 1.458,
+   "hM": 2.52,
+   "block": 1
+  },
+  "modular_street_seating": {
+   "id": "modular_street_seating",
+   "src": "modular_street_seating",
+   "name": "Modular Street Seating",
+   "cat": "natur",
+   "tags": "",
+   "w": 2.91,
+   "h": 0.529,
+   "hM": 0.95,
+   "layer": "top"
+  },
+  "moon_rock_01": {
+   "id": "moon_rock_01",
+   "src": "moon_rock_01",
+   "name": "Moon Fels 1",
+   "cat": "fels",
+   "tags": "",
+   "w": 0.161,
+   "h": 0.09,
+   "hM": 0.08,
+   "block": 1
+  },
+  "moon_rock_02": {
+   "id": "moon_rock_02",
+   "src": "moon_rock_02",
+   "name": "Moon Fels 2",
+   "cat": "fels",
+   "tags": "",
+   "w": 0.18,
+   "h": 0.184,
+   "hM": 0.2,
+   "block": 1
+  },
+  "namaqualand_rocks_01_a": {
+   "id": "namaqualand_rocks_01_a",
+   "src": "namaqualand_rocks_01",
+   "name": "Namaqualand Felsen 1 1",
+   "cat": "fels",
+   "tags": "",
+   "w": 0.169,
+   "h": 0.161,
+   "hM": 0.15,
+   "block": 1
+  },
+  "namaqualand_rocks_01_b": {
+   "id": "namaqualand_rocks_01_b",
+   "src": "namaqualand_rocks_01",
+   "name": "Namaqualand Felsen 1 2",
+   "cat": "fels",
+   "tags": "",
+   "w": 0.165,
+   "h": 0.125,
+   "hM": 0.08,
+   "block": 1
+  },
+  "namaqualand_rocks_01_c": {
+   "id": "namaqualand_rocks_01_c",
+   "src": "namaqualand_rocks_01",
+   "name": "Namaqualand Felsen 1 3",
+   "cat": "fels",
+   "tags": "",
+   "w": 0.161,
+   "h": 0.129,
+   "hM": 0.09,
+   "block": 1
+  },
+  "namaqualand_rocks_01_d": {
+   "id": "namaqualand_rocks_01_d",
+   "src": "namaqualand_rocks_01",
+   "name": "Namaqualand Felsen 1 4",
+   "cat": "fels",
+   "tags": "",
+   "w": 0.149,
+   "h": 0.122,
+   "hM": 0.12,
+   "block": 1
+  },
+  "ornate_mirror_01": {
+   "id": "ornate_mirror_01",
+   "src": "ornate_mirror_01",
+   "name": "Verziert Spiegel 1",
+   "cat": "deko",
+   "tags": "",
+   "w": 0.341,
+   "h": 0.039,
+   "hM": 0.74
+  },
+  "outdoor_table_chair_set_01": {
+   "id": "outdoor_table_chair_set_01",
+   "src": "outdoor_table_chair_set_01",
+   "name": "Outdoor Tisch Stuhl Set 1",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.514,
+   "h": 1.161,
+   "hM": 0.86,
+   "rough": 1
+  },
+  "painted_wooden_chair_01": {
+   "id": "painted_wooden_chair_01",
+   "src": "painted_wooden_chair_01",
+   "name": "Bemalt Holz Stuhl 1",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.306,
+   "h": 0.376,
+   "hM": 0.96,
+   "rough": 1
+  },
+  "pastic_torch_6v": {
+   "id": "pastic_torch_6v",
+   "src": "pastic_torch_6v",
+   "name": "Pastic Fackel 6v",
+   "cat": "licht",
+   "tags": "licht",
+   "w": 0.11,
+   "h": 0.169,
+   "hM": 0.14
+  },
+  "planter_box_02": {
+   "id": "planter_box_02",
+   "src": "planter_box_02",
+   "name": "Planter Kasten 2",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.851,
+   "h": 0.329,
+   "hM": 0.45
+  },
+  "planter_box_03": {
+   "id": "planter_box_03",
+   "src": "planter_box_03",
+   "name": "Planter Kasten 3",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.627,
+   "h": 0.455,
+   "hM": 0.86
+  },
+  "portable_generator": {
+   "id": "portable_generator",
+   "src": "portable_generator",
+   "name": "Portable Generator",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.565,
+   "h": 0.392,
+   "hM": 0.58,
+   "rough": 1
+  },
+  "portable_searchlight": {
+   "id": "portable_searchlight",
+   "src": "portable_searchlight",
+   "name": "Portable Searchlight",
+   "cat": "licht",
+   "tags": "",
+   "w": 0.129,
+   "h": 0.188,
+   "hM": 0.19,
+   "rough": 1
+  },
+  "potted_plant_04": {
+   "id": "potted_plant_04",
+   "src": "potted_plant_04",
+   "name": "Potted Pflanze 4",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.129,
+   "h": 0.141,
+   "hM": 0.27
+  },
+  "power_box_01_a": {
+   "id": "power_box_01_a",
+   "src": "power_box_01",
+   "name": "Power Kasten 1 1",
+   "cat": "behaelter",
+   "tags": "",
+   "w": 0.102,
+   "h": 0.227,
+   "hM": 0.49
+  },
+  "power_box_01_b": {
+   "id": "power_box_01_b",
+   "src": "power_box_01",
+   "name": "Power Kasten 1 2",
+   "cat": "behaelter",
+   "tags": "",
+   "w": 0.247,
+   "h": 0.082,
+   "hM": 0.5
+  },
+  "rock_07": {
+   "id": "rock_07",
+   "src": "rock_07",
+   "name": "Fels 7",
+   "cat": "fels",
+   "tags": "",
+   "w": 0.129,
+   "h": 0.231,
+   "hM": 0.14,
+   "block": 1
+  },
+  "rollershutter_door_a": {
+   "id": "rollershutter_door_a",
+   "src": "rollershutter_door",
+   "name": "Rollershutter Tür 1",
+   "cat": "bau",
+   "tags": "",
+   "w": 0.737,
+   "h": 0.22,
+   "hM": 2.4
+  },
+  "rollershutter_door_b": {
+   "id": "rollershutter_door_b",
+   "src": "rollershutter_door",
+   "name": "Rollershutter Tür 2",
+   "cat": "bau",
+   "tags": "",
+   "w": 0.737,
+   "h": 0.22,
+   "hM": 2.4
+  },
+  "rollershutter_window_01_a": {
+   "id": "rollershutter_window_01_a",
+   "src": "rollershutter_window_01",
+   "name": "Rollershutter Fenster 1 1",
+   "cat": "bau",
+   "tags": "",
+   "w": 1.42,
+   "h": 0.22,
+   "hM": 1.85
+  },
+  "rollershutter_window_01_b": {
+   "id": "rollershutter_window_01_b",
+   "src": "rollershutter_window_01",
+   "name": "Rollershutter Fenster 1 2",
+   "cat": "bau",
+   "tags": "",
+   "w": 1.42,
+   "h": 0.22,
+   "hM": 1.85
+  },
+  "rollershutter_window_02_a": {
+   "id": "rollershutter_window_02_a",
+   "src": "rollershutter_window_02",
+   "name": "Rollershutter Fenster 2 1",
+   "cat": "bau",
+   "tags": "",
+   "w": 1.086,
+   "h": 0.129,
+   "hM": 1.56
+  },
+  "rollershutter_window_02_b": {
+   "id": "rollershutter_window_02_b",
+   "src": "rollershutter_window_02",
+   "name": "Rollershutter Fenster 2 2",
+   "cat": "bau",
+   "tags": "",
+   "w": 1.086,
+   "h": 0.129,
+   "hM": 1.56
+  },
+  "rollershutter_window_03_a": {
+   "id": "rollershutter_window_03_a",
+   "src": "rollershutter_window_03",
+   "name": "Rollershutter Fenster 3 1",
+   "cat": "bau",
+   "tags": "",
+   "w": 0.667,
+   "h": 0.122,
+   "hM": 1.55
+  },
+  "rollershutter_window_03_b": {
+   "id": "rollershutter_window_03_b",
+   "src": "rollershutter_window_03",
+   "name": "Rollershutter Fenster 3 2",
+   "cat": "bau",
+   "tags": "",
+   "w": 0.667,
+   "h": 0.122,
+   "hM": 1.55
+  },
+  "rusted_hacksaw": {
+   "id": "rusted_hacksaw",
+   "src": "rusted_hacksaw",
+   "name": "Rusted Hacksaw",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 0.349,
+   "h": 0.039,
+   "hM": 0.11
+  },
+  "rusted_wheel_rim_01": {
+   "id": "rusted_wheel_rim_01",
+   "src": "rusted_wheel_rim_01",
+   "name": "Rusted Rad Rim 1",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 0.286,
+   "h": 0.122,
+   "hM": 0.44
+  },
+  "rusted_wheel_rim_02": {
+   "id": "rusted_wheel_rim_02",
+   "src": "rusted_wheel_rim_02",
+   "name": "Rusted Rad Rim 2",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 0.243,
+   "h": 0.098,
+   "hM": 0.35
+  },
+  "seeding_tray_01": {
+   "id": "seeding_tray_01",
+   "src": "seeding_tray_01",
+   "name": "Seedling Tablett 1",
+   "cat": "kueche",
+   "tags": "",
+   "w": 0.165,
+   "h": 0.165,
+   "hM": 0.06
+  },
+  "side_table_01": {
+   "id": "side_table_01",
+   "src": "side_table_01",
+   "name": "Side Tisch 1",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.384,
+   "h": 0.318,
+   "hM": 0.55,
+   "rough": 1
+  },
+  "single_root": {
+   "id": "single_root",
+   "src": "single_root",
+   "name": "Single Wurzel",
+   "cat": "natur",
+   "tags": "",
+   "w": 0.388,
+   "h": 1.243,
+   "hM": 0.18
+  },
+  "sofa_02": {
+   "id": "sofa_02",
+   "src": "sofa_02",
+   "name": "Sofa 2",
+   "cat": "moebel",
+   "tags": "",
+   "w": 1.224,
+   "h": 0.565,
+   "hM": 0.71,
+   "rough": 1
+  },
+  "sofa_03": {
+   "id": "sofa_03",
+   "src": "sofa_03",
+   "name": "Sofa 3",
+   "cat": "moebel",
+   "tags": "",
+   "w": 1.839,
+   "h": 0.635,
+   "hM": 1.12,
+   "rough": 1
+  },
+  "standing_chalkboard_01": {
+   "id": "standing_chalkboard_01",
+   "src": "standing_chalkboard_01",
+   "name": "Standing Chalkboard 1",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 0.631,
+   "h": 0.522,
+   "hM": 1.51
+  },
+  "strawberry_chocolate_cake": {
+   "id": "strawberry_chocolate_cake",
+   "src": "strawberry_chocolate_cake",
+   "name": "Strawberry Chocolate Cake",
+   "cat": "deko",
+   "tags": "",
+   "w": 0.18,
+   "h": 0.176,
+   "hM": 0.08
+  },
+  "street_lamp_01": {
+   "id": "street_lamp_01",
+   "src": "street_lamp_01",
+   "name": "Street Lampe 1",
+   "cat": "natur",
+   "tags": "licht",
+   "w": 0.486,
+   "h": 0.275,
+   "hM": 3.87,
+   "layer": "top"
+  },
+  "street_lamp_02": {
+   "id": "street_lamp_02",
+   "src": "street_lamp_02",
+   "name": "Street Lampe 2",
+   "cat": "natur",
+   "tags": "licht",
+   "w": 0.275,
+   "h": 0.557,
+   "hM": 1.68,
+   "layer": "top"
+  },
+  "sungka_board": {
+   "id": "sungka_board",
+   "src": "sungka_board",
+   "name": "Sungka Board",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 0.11,
+   "h": 0.42,
+   "hM": 0.04
+  },
+  "sungka_board_02": {
+   "id": "sungka_board_02",
+   "src": "sungka_board_02",
+   "name": "Sungka Board 2",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 0.639,
+   "h": 0.133,
+   "hM": 0.03
+  },
+  "tool_cart": {
+   "id": "tool_cart",
+   "src": "tool_cart",
+   "name": "Tool Karren",
+   "cat": "werkzeug",
+   "tags": "",
+   "w": 0.867,
+   "h": 0.522,
+   "hM": 0.96,
+   "rough": 1
+  },
+  "utility_box_01": {
+   "id": "utility_box_01",
+   "src": "utility_box_01",
+   "name": "Utility Kasten 1",
+   "cat": "behaelter",
+   "tags": "",
+   "w": 0.365,
+   "h": 0.306,
+   "hM": 1.12
+  },
+  "utility_box_02": {
+   "id": "utility_box_02",
+   "src": "utility_box_02",
+   "name": "Utility Kasten 2",
+   "cat": "behaelter",
+   "tags": "",
+   "w": 0.631,
+   "h": 0.306,
+   "hM": 1.12
+  },
+  "wall_clock": {
+   "id": "wall_clock",
+   "src": "wall_clock",
+   "name": "Wand Uhr",
+   "cat": "deko",
+   "tags": "",
+   "w": 0.231,
+   "h": 0.051,
+   "hM": 0.32
+  },
+  "wheelchair_01": {
+   "id": "wheelchair_01",
+   "src": "wheelchair_01",
+   "name": "Wheelchair 1",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.569,
+   "h": 0.745,
+   "hM": 1.1,
+   "rough": 1
+  },
+  "wooden_spoon": {
+   "id": "wooden_spoon",
+   "src": "wooden_spoon",
+   "name": "Holz Löffel",
+   "cat": "kueche",
+   "tags": "",
+   "w": 0.075,
+   "h": 0.204,
+   "hM": 0.03
+  },
+  "wooden_stool_02": {
+   "id": "wooden_stool_02",
+   "src": "wooden_stool_02",
+   "name": "Holz Hocker 2",
+   "cat": "moebel",
+   "tags": "",
+   "w": 0.196,
+   "h": 0.141,
+   "hM": 0.18,
+   "rough": 1
   }
  },
  "textures": {
@@ -3230,6 +4340,1164 @@
    "name": "Holzschindeln",
    "cat": "dach",
    "m": 1.5
+  },
+  "aerial_beach_01": {
+   "id": "aerial_beach_01",
+   "name": "Luftbild Strand 1",
+   "cat": "gelaende",
+   "m": 30
+  },
+  "aerial_beach_02": {
+   "id": "aerial_beach_02",
+   "name": "Luftbild Strand 2",
+   "cat": "gelaende",
+   "m": 20
+  },
+  "aerial_beach_03": {
+   "id": "aerial_beach_03",
+   "name": "Luftbild Strand 3",
+   "cat": "gelaende",
+   "m": 20
+  },
+  "aerial_grass_rock": {
+   "id": "aerial_grass_rock",
+   "name": "Luftbild Gras Fels",
+   "cat": "gelaende",
+   "m": 15
+  },
+  "aerial_ground_rock": {
+   "id": "aerial_ground_rock",
+   "name": "Luftbild Boden Fels",
+   "cat": "gelaende",
+   "m": 20
+  },
+  "aerial_mud_1": {
+   "id": "aerial_mud_1",
+   "name": "Luftbild Schlamm 1",
+   "cat": "gelaende",
+   "m": 8
+  },
+  "aerial_rocks_01": {
+   "id": "aerial_rocks_01",
+   "name": "Luftbild Felsen 1",
+   "cat": "gelaende",
+   "m": 80
+  },
+  "aerial_rocks_02": {
+   "id": "aerial_rocks_02",
+   "name": "Luftbild Felsen 2",
+   "cat": "gelaende",
+   "m": 50
+  },
+  "aerial_rocks_04": {
+   "id": "aerial_rocks_04",
+   "name": "Luftbild Felsen 4",
+   "cat": "gelaende",
+   "m": 80
+  },
+  "aerial_sand": {
+   "id": "aerial_sand",
+   "name": "Luftbild Sand",
+   "cat": "gelaende",
+   "m": 15
+  },
+  "beam_wall_01": {
+   "id": "beam_wall_01",
+   "name": "Beam Wand 1",
+   "cat": "wand",
+   "m": 1
+  },
+  "beige_wall_001": {
+   "id": "beige_wall_001",
+   "name": "Beige Wand 1",
+   "cat": "wand",
+   "m": 3
+  },
+  "beige_wall_002": {
+   "id": "beige_wall_002",
+   "name": "Beige Wand 2",
+   "cat": "wand",
+   "m": 3
+  },
+  "bicolour_gravel": {
+   "id": "bicolour_gravel",
+   "name": "Bicolour Kies",
+   "cat": "gelaende",
+   "m": 1.9
+  },
+  "black_painted_planks": {
+   "id": "black_painted_planks",
+   "name": "Schwarz Bemalt Dielen",
+   "cat": "boden",
+   "m": 1.6
+  },
+  "blue_floor_tiles_01": {
+   "id": "blue_floor_tiles_01",
+   "name": "Blau Boden Fliesen 1",
+   "cat": "boden",
+   "m": 2
+  },
+  "blue_painted_planks": {
+   "id": "blue_painted_planks",
+   "name": "Blau Bemalt Dielen",
+   "cat": "boden",
+   "m": 1
+  },
+  "blue_plaster_wall": {
+   "id": "blue_plaster_wall",
+   "name": "Blau Putz Wand",
+   "cat": "wand",
+   "m": 2
+  },
+  "blue_plaster_weathered": {
+   "id": "blue_plaster_weathered",
+   "name": "Blau Putz Weathered",
+   "cat": "wand",
+   "m": 2
+  },
+  "brick_4": {
+   "id": "brick_4",
+   "name": "Ziegel 4",
+   "cat": "wand",
+   "m": 0.5
+  },
+  "brick_crosswalk": {
+   "id": "brick_crosswalk",
+   "name": "Ziegel Crosswalk",
+   "cat": "wand",
+   "m": 1.9
+  },
+  "brick_floor": {
+   "id": "brick_floor",
+   "name": "Ziegel Boden",
+   "cat": "boden",
+   "m": 0.5
+  },
+  "brick_floor_003": {
+   "id": "brick_floor_003",
+   "name": "Ziegel Boden 3",
+   "cat": "boden",
+   "m": 2
+  },
+  "brick_floor_02": {
+   "id": "brick_floor_02",
+   "name": "Ziegel Boden 2",
+   "cat": "boden",
+   "m": 1.87
+  },
+  "brick_floor_04": {
+   "id": "brick_floor_04",
+   "name": "Ziegel Boden 4",
+   "cat": "boden",
+   "m": 1.91
+  },
+  "brick_gravel": {
+   "id": "brick_gravel",
+   "name": "Ziegel Kies",
+   "cat": "wand",
+   "m": 2
+  },
+  "brick_moss_001": {
+   "id": "brick_moss_001",
+   "name": "Ziegel Moos 1",
+   "cat": "wand",
+   "m": 2.24
+  },
+  "brick_pavement": {
+   "id": "brick_pavement",
+   "name": "Ziegel Pflaster",
+   "cat": "wand",
+   "m": 2
+  },
+  "brick_pavement_02": {
+   "id": "brick_pavement_02",
+   "name": "Ziegel Pflaster 2",
+   "cat": "wand",
+   "m": 2
+  },
+  "brick_pavement_03": {
+   "id": "brick_pavement_03",
+   "name": "Ziegel Pflaster 3",
+   "cat": "wand",
+   "m": 2.5
+  },
+  "brick_pavement_04": {
+   "id": "brick_pavement_04",
+   "name": "Ziegel Pflaster 4",
+   "cat": "wand",
+   "m": 2
+  },
+  "brick_villa_floor": {
+   "id": "brick_villa_floor",
+   "name": "Ziegel Villa Boden",
+   "cat": "boden",
+   "m": 2.1
+  },
+  "brick_wall_001": {
+   "id": "brick_wall_001",
+   "name": "Ziegel Wand 1",
+   "cat": "wand",
+   "m": 3
+  },
+  "brick_wall_003": {
+   "id": "brick_wall_003",
+   "name": "Ziegel Wand 3",
+   "cat": "wand",
+   "m": 4
+  },
+  "brick_wall_005": {
+   "id": "brick_wall_005",
+   "name": "Ziegel Wand 5",
+   "cat": "wand",
+   "m": 1.44
+  },
+  "brick_wall_006": {
+   "id": "brick_wall_006",
+   "name": "Ziegel Wand 6",
+   "cat": "wand",
+   "m": 3
+  },
+  "brick_wall_02": {
+   "id": "brick_wall_02",
+   "name": "Ziegel Wand 2",
+   "cat": "wand",
+   "m": 2
+  },
+  "brick_wall_04": {
+   "id": "brick_wall_04",
+   "name": "Ziegel Wand 4",
+   "cat": "wand",
+   "m": 1.39
+  },
+  "brick_wall_07": {
+   "id": "brick_wall_07",
+   "name": "Ziegel Wand 7",
+   "cat": "wand",
+   "m": 1.7
+  },
+  "brick_wall_08": {
+   "id": "brick_wall_08",
+   "name": "Ziegel Wand 8",
+   "cat": "wand",
+   "m": 1.9
+  },
+  "brick_wall_09": {
+   "id": "brick_wall_09",
+   "name": "Ziegel Wand 9",
+   "cat": "wand",
+   "m": 2.01
+  },
+  "brick_wall_10": {
+   "id": "brick_wall_10",
+   "name": "Ziegel Wand 10",
+   "cat": "wand",
+   "m": 1.9
+  },
+  "brick_wall_11": {
+   "id": "brick_wall_11",
+   "name": "Ziegel Wand 11",
+   "cat": "wand",
+   "m": 4
+  },
+  "brick_wall_12": {
+   "id": "brick_wall_12",
+   "name": "Ziegel Wand 12",
+   "cat": "wand",
+   "m": 1.9
+  },
+  "brick_wall_13": {
+   "id": "brick_wall_13",
+   "name": "Ziegel Wand 13",
+   "cat": "wand",
+   "m": 2
+  },
+  "broken_brick_wall": {
+   "id": "broken_brick_wall",
+   "name": "Zerbrochen Ziegel Wand",
+   "cat": "wand",
+   "m": 1.8
+  },
+  "broken_wall": {
+   "id": "broken_wall",
+   "name": "Zerbrochen Wand",
+   "cat": "wand",
+   "m": 3
+  },
+  "brown_brick_02": {
+   "id": "brown_brick_02",
+   "name": "Braun Ziegel 2",
+   "cat": "wand",
+   "m": 1
+  },
+  "brown_floor_tiles": {
+   "id": "brown_floor_tiles",
+   "name": "Braun Boden Tilles",
+   "cat": "boden",
+   "m": 1.7
+  },
+  "brown_mud_leaves_01": {
+   "id": "brown_mud_leaves_01",
+   "name": "Braun Schlamm Laub 1",
+   "cat": "gelaende",
+   "m": 1.3
+  },
+  "brown_mud_rocks_01": {
+   "id": "brown_mud_rocks_01",
+   "name": "Braun Schlamm Felsen 1",
+   "cat": "gelaende",
+   "m": 1.3
+  },
+  "brown_planks_04": {
+   "id": "brown_planks_04",
+   "name": "Braun Dielen 4",
+   "cat": "boden",
+   "m": 1
+  },
+  "brown_planks_05": {
+   "id": "brown_planks_05",
+   "name": "Braun Dielen 5",
+   "cat": "boden",
+   "m": 1
+  },
+  "brown_planks_07": {
+   "id": "brown_planks_07",
+   "name": "Braun Dielen 7",
+   "cat": "boden",
+   "m": 1
+  },
+  "brown_planks_08": {
+   "id": "brown_planks_08",
+   "name": "Braun Dielen 8",
+   "cat": "boden",
+   "m": 1
+  },
+  "brown_planks_09": {
+   "id": "brown_planks_09",
+   "name": "Braun Dielen 9",
+   "cat": "boden",
+   "m": 1
+  },
+  "castle_brick_02_red": {
+   "id": "castle_brick_02_red",
+   "name": "Burg Ziegel 2 Rot",
+   "cat": "wand",
+   "m": 1.5
+  },
+  "castle_brick_02_white": {
+   "id": "castle_brick_02_white",
+   "name": "Burg Ziegel 2 Weiß",
+   "cat": "wand",
+   "m": 2.5
+  },
+  "castle_brick_07": {
+   "id": "castle_brick_07",
+   "name": "Burg Ziegel 7",
+   "cat": "wand",
+   "m": 2.5
+  },
+  "castle_brick_broken_06": {
+   "id": "castle_brick_broken_06",
+   "name": "Burg Ziegel Zerbrochen 6",
+   "cat": "wand",
+   "m": 2.5
+  },
+  "castle_wall_varriation": {
+   "id": "castle_wall_varriation",
+   "name": "Burg Wand Variation",
+   "cat": "wand",
+   "m": 2
+  },
+  "ceramic_roof_01": {
+   "id": "ceramic_roof_01",
+   "name": "Keramik Dach 1",
+   "cat": "dach",
+   "m": 3.5
+  },
+  "chinese_cedar_bark": {
+   "id": "chinese_cedar_bark",
+   "name": "Chinese Cedar Rinde",
+   "cat": "gelaende",
+   "m": 2.27
+  },
+  "chinese_hackberry_bark": {
+   "id": "chinese_hackberry_bark",
+   "name": "Chinese Hackberry Rinde",
+   "cat": "gelaende",
+   "m": 1.8
+  },
+  "church_bricks_03": {
+   "id": "church_bricks_03",
+   "name": "Kirche Ziegel 3",
+   "cat": "wand",
+   "m": 1.2
+  },
+  "clay_block_wall": {
+   "id": "clay_block_wall",
+   "name": "Lehm Block Wand",
+   "cat": "wand",
+   "m": 2
+  },
+  "clay_floor_001": {
+   "id": "clay_floor_001",
+   "name": "Lehm Boden 1",
+   "cat": "boden",
+   "m": 2
+  },
+  "clay_plaster": {
+   "id": "clay_plaster",
+   "name": "Lehm Putz",
+   "cat": "wand",
+   "m": 2
+  },
+  "clay_roof_tiles_02": {
+   "id": "clay_roof_tiles_02",
+   "name": "Lehm Dach Fliesen 2",
+   "cat": "dach",
+   "m": 2.5
+  },
+  "clay_roof_tiles_03": {
+   "id": "clay_roof_tiles_03",
+   "name": "Lehm Dach Fliesen 3",
+   "cat": "dach",
+   "m": 2.6
+  },
+  "climbing_wall": {
+   "id": "climbing_wall",
+   "name": "Climbing Wand",
+   "cat": "wand",
+   "m": 2.2
+  },
+  "climbing_wall_02": {
+   "id": "climbing_wall_02",
+   "name": "Climbing Wand 2",
+   "cat": "wand",
+   "m": 1.9
+  },
+  "climbing_wall_base": {
+   "id": "climbing_wall_base",
+   "name": "Climbing Wand Base",
+   "cat": "wand",
+   "m": 2
+  },
+  "coast_land_rocks_01": {
+   "id": "coast_land_rocks_01",
+   "name": "Küste Land Felsen 1",
+   "cat": "gelaende",
+   "m": 20
+  },
+  "coast_sand_01": {
+   "id": "coast_sand_01",
+   "name": "Küste Sand 1",
+   "cat": "gelaende",
+   "m": 15
+  },
+  "coast_sand_02": {
+   "id": "coast_sand_02",
+   "name": "Küste Sand 2",
+   "cat": "gelaende",
+   "m": 15
+  },
+  "coast_sand_03": {
+   "id": "coast_sand_03",
+   "name": "Küste Sand 3",
+   "cat": "gelaende",
+   "m": 3
+  },
+  "coast_sand_05": {
+   "id": "coast_sand_05",
+   "name": "Küste Sand 5",
+   "cat": "gelaende",
+   "m": 25
+  },
+  "coast_sand_rocks_02": {
+   "id": "coast_sand_rocks_02",
+   "name": "Küste Sand Felsen 2",
+   "cat": "gelaende",
+   "m": 15
+  },
+  "cobblestone_01": {
+   "id": "cobblestone_01",
+   "name": "Kopfstein 1",
+   "cat": "pflaster",
+   "m": 2.4
+  },
+  "cobblestone_02": {
+   "id": "cobblestone_02",
+   "name": "Kopfstein 2",
+   "cat": "pflaster",
+   "m": 1.8
+  },
+  "cobblestone_03": {
+   "id": "cobblestone_03",
+   "name": "Kopfstein 3",
+   "cat": "pflaster",
+   "m": 2
+  },
+  "cobblestone_04": {
+   "id": "cobblestone_04",
+   "name": "Kopfstein 4",
+   "cat": "pflaster",
+   "m": 2.02
+  },
+  "cobblestone_05": {
+   "id": "cobblestone_05",
+   "name": "Kopfstein 5",
+   "cat": "pflaster",
+   "m": 2.4
+  },
+  "cobblestone_color": {
+   "id": "cobblestone_color",
+   "name": "Kopfstein Color",
+   "cat": "pflaster",
+   "m": 2.4
+  },
+  "cobblestone_floor_02": {
+   "id": "cobblestone_floor_02",
+   "name": "Kopfstein Boden 2",
+   "cat": "boden",
+   "m": 2
+  },
+  "cobblestone_floor_03": {
+   "id": "cobblestone_floor_03",
+   "name": "Kopfstein Boden 3",
+   "cat": "boden",
+   "m": 2.4
+  },
+  "cobblestone_floor_04": {
+   "id": "cobblestone_floor_04",
+   "name": "Kopfstein Boden 4",
+   "cat": "boden",
+   "m": 1.5
+  },
+  "cobblestone_floor_05": {
+   "id": "cobblestone_floor_05",
+   "name": "Kopfstein Boden 5",
+   "cat": "boden",
+   "m": 2
+  },
+  "cobblestone_floor_06": {
+   "id": "cobblestone_floor_06",
+   "name": "Kopfstein Boden 6",
+   "cat": "boden",
+   "m": 2
+  },
+  "cobblestone_floor_07": {
+   "id": "cobblestone_floor_07",
+   "name": "Kopfstein Boden 7",
+   "cat": "boden",
+   "m": 2
+  },
+  "cobblestone_floor_08": {
+   "id": "cobblestone_floor_08",
+   "name": "Kopfstein Boden 8",
+   "cat": "boden",
+   "m": 2
+  },
+  "cobblestone_floor_09": {
+   "id": "cobblestone_floor_09",
+   "name": "Kopfstein Boden 9",
+   "cat": "boden",
+   "m": 2.17
+  },
+  "cobblestone_floor_13": {
+   "id": "cobblestone_floor_13",
+   "name": "Kopfstein Boden 13",
+   "cat": "boden",
+   "m": 2
+  },
+  "cobblestone_pavement": {
+   "id": "cobblestone_pavement",
+   "name": "Kopfstein Pflaster",
+   "cat": "pflaster",
+   "m": 2.5
+  },
+  "cobblestone_square": {
+   "id": "cobblestone_square",
+   "name": "Kopfstein Eckig",
+   "cat": "pflaster",
+   "m": 1
+  },
+  "concrete_block_wall": {
+   "id": "concrete_block_wall",
+   "name": "Beton Block Wand",
+   "cat": "wand",
+   "m": 2
+  },
+  "concrete_block_wall_02": {
+   "id": "concrete_block_wall_02",
+   "name": "Beton Block Wand 2",
+   "cat": "wand",
+   "m": 2.01
+  },
+  "concrete_block_wall_03": {
+   "id": "concrete_block_wall_03",
+   "name": "Beton Block Wand 3",
+   "cat": "wand",
+   "m": 1.81
+  },
+  "concrete_brick_wall_001": {
+   "id": "concrete_brick_wall_001",
+   "name": "Beton Ziegel Wand 1",
+   "cat": "wand",
+   "m": 3
+  },
+  "concrete_floor": {
+   "id": "concrete_floor",
+   "name": "Beton Boden",
+   "cat": "boden",
+   "m": 2.08
+  },
+  "concrete_floor_01": {
+   "id": "concrete_floor_01",
+   "name": "Beton Boden 1",
+   "cat": "boden",
+   "m": 2
+  },
+  "concrete_floor_02": {
+   "id": "concrete_floor_02",
+   "name": "Beton Boden 2",
+   "cat": "boden",
+   "m": 2
+  },
+  "concrete_floor_03": {
+   "id": "concrete_floor_03",
+   "name": "Beton Boden 3",
+   "cat": "boden",
+   "m": 2.5
+  },
+  "concrete_floor_damaged_01": {
+   "id": "concrete_floor_damaged_01",
+   "name": "Beton Boden Damaged 1",
+   "cat": "boden",
+   "m": 5
+  },
+  "concrete_floor_worn_001": {
+   "id": "concrete_floor_worn_001",
+   "name": "Beton Boden Abgenutzt 1",
+   "cat": "boden",
+   "m": 3
+  },
+  "concrete_floor_worn_02": {
+   "id": "concrete_floor_worn_02",
+   "name": "Beton Boden Abgenutzt 2",
+   "cat": "boden",
+   "m": 2
+  },
+  "concrete_moss": {
+   "id": "concrete_moss",
+   "name": "Beton Moos",
+   "cat": "gelaende",
+   "m": 3
+  },
+  "concrete_pavement": {
+   "id": "concrete_pavement",
+   "name": "Beton Pflaster",
+   "cat": "pflaster",
+   "m": 1.8
+  },
+  "concrete_pavement_02": {
+   "id": "concrete_pavement_02",
+   "name": "Beton Pflaster 2",
+   "cat": "pflaster",
+   "m": 1.8
+  },
+  "concrete_pavement_03": {
+   "id": "concrete_pavement_03",
+   "name": "Beton Pflaster 3",
+   "cat": "pflaster",
+   "m": 2.1
+  },
+  "concrete_rock_path": {
+   "id": "concrete_rock_path",
+   "name": "Beton Fels Weg",
+   "cat": "pflaster",
+   "m": 2
+  },
+  "concrete_slab_wall": {
+   "id": "concrete_slab_wall",
+   "name": "Beton Slab Wand",
+   "cat": "wand",
+   "m": 2.3
+  },
+  "concrete_slab_wall_02": {
+   "id": "concrete_slab_wall_02",
+   "name": "Beton Slab Wand 2",
+   "cat": "wand",
+   "m": 2.1
+  },
+  "concrete_tile_facade": {
+   "id": "concrete_tile_facade",
+   "name": "Beton Fliese Facade",
+   "cat": "gelaende",
+   "m": 2.09
+  },
+  "concrete_tiles": {
+   "id": "concrete_tiles",
+   "name": "Beton Fliesen",
+   "cat": "boden",
+   "m": 1.85
+  },
+  "concrete_tiles_02": {
+   "id": "concrete_tiles_02",
+   "name": "Beton Fliesen 2",
+   "cat": "boden",
+   "m": 1.83
+  },
+  "concrete_wall_001": {
+   "id": "concrete_wall_001",
+   "name": "Beton Wand 1",
+   "cat": "wand",
+   "m": 1.5
+  },
+  "concrete_wall_003": {
+   "id": "concrete_wall_003",
+   "name": "Beton Wand 3",
+   "cat": "wand",
+   "m": 3
+  },
+  "concrete_wall_004": {
+   "id": "concrete_wall_004",
+   "name": "Beton Wand 4",
+   "cat": "wand",
+   "m": 2
+  },
+  "concrete_wall_005": {
+   "id": "concrete_wall_005",
+   "name": "Beton Wand 5",
+   "cat": "wand",
+   "m": 1.15
+  },
+  "concrete_wall_006": {
+   "id": "concrete_wall_006",
+   "name": "Beton Wand 6",
+   "cat": "wand",
+   "m": 2
+  },
+  "concrete_wall_007": {
+   "id": "concrete_wall_007",
+   "name": "Beton Wand 7",
+   "cat": "wand",
+   "m": 2.16
+  },
+  "concrete_wall_008": {
+   "id": "concrete_wall_008",
+   "name": "Beton Wand 8",
+   "cat": "wand",
+   "m": 2.71
+  },
+  "concrete_wall_009": {
+   "id": "concrete_wall_009",
+   "name": "Beton Wand 9",
+   "cat": "wand",
+   "m": 1.8
+  },
+  "coral_fort_wall_01": {
+   "id": "coral_fort_wall_01",
+   "name": "Coral Fort Wand 1",
+   "cat": "wand",
+   "m": 1.36
+  },
+  "coral_fort_wall_02": {
+   "id": "coral_fort_wall_02",
+   "name": "Coral Fort Wand 2",
+   "cat": "wand",
+   "m": 0.99
+  },
+  "coral_fort_wall_03": {
+   "id": "coral_fort_wall_03",
+   "name": "Coral Fort Wand 3",
+   "cat": "wand",
+   "m": 1.1
+  },
+  "coral_gravel": {
+   "id": "coral_gravel",
+   "name": "Coral Kies",
+   "cat": "gelaende",
+   "m": 2
+  },
+  "coral_ground_02": {
+   "id": "coral_ground_02",
+   "name": "Coral Boden 2",
+   "cat": "gelaende",
+   "m": 2
+  },
+  "coral_mud_01": {
+   "id": "coral_mud_01",
+   "name": "Coral Schlamm 1",
+   "cat": "gelaende",
+   "m": 2
+  },
+  "coral_stone_wall": {
+   "id": "coral_stone_wall",
+   "name": "Coral Stein Wand",
+   "cat": "wand",
+   "m": 2
+  },
+  "cracked_concrete_wall": {
+   "id": "cracked_concrete_wall",
+   "name": "Rissig Beton Wand",
+   "cat": "wand",
+   "m": 1
+  },
+  "cracked_red_ground": {
+   "id": "cracked_red_ground",
+   "name": "Rissig Rot Boden",
+   "cat": "gelaende",
+   "m": 2
+  },
+  "damaged_concrete_floor": {
+   "id": "damaged_concrete_floor",
+   "name": "Damaged Beton Boden",
+   "cat": "boden",
+   "m": 4.5
+  },
+  "damaged_concrete_floor_02": {
+   "id": "damaged_concrete_floor_02",
+   "name": "Damaged Beton Boden 2",
+   "cat": "boden",
+   "m": 3.5
+  },
+  "damaged_concrete_floor_03": {
+   "id": "damaged_concrete_floor_03",
+   "name": "Damaged Beton Boden 3",
+   "cat": "boden",
+   "m": 2
+  },
+  "damaged_plaster": {
+   "id": "damaged_plaster",
+   "name": "Damaged Putz",
+   "cat": "wand",
+   "m": 1.85
+  },
+  "damp_beach_sand_02": {
+   "id": "damp_beach_sand_02",
+   "name": "Damp Strand Sand 2",
+   "cat": "gelaende",
+   "m": 1.87
+  },
+  "damp_sand": {
+   "id": "damp_sand",
+   "name": "Damp Sand",
+   "cat": "gelaende",
+   "m": 2.04
+  },
+  "dark_brick_wall": {
+   "id": "dark_brick_wall",
+   "name": "Dunkel Ziegel Wand",
+   "cat": "wand",
+   "m": 1.05
+  },
+  "dark_paneled_wood": {
+   "id": "dark_paneled_wood",
+   "name": "Dunkel Paneled Holz",
+   "cat": "gelaende",
+   "m": 1.4
+  },
+  "dark_planks": {
+   "id": "dark_planks",
+   "name": "Dunkel Dielen",
+   "cat": "boden",
+   "m": 2
+  },
+  "dark_wood": {
+   "id": "dark_wood",
+   "name": "Dunkel Holz",
+   "cat": "gelaende",
+   "m": 2
+  },
+  "defense_wall": {
+   "id": "defense_wall",
+   "name": "Defense Wand",
+   "cat": "wand",
+   "m": 20
+  },
+  "defense_wall_02": {
+   "id": "defense_wall_02",
+   "name": "Defense Wand 2",
+   "cat": "wand",
+   "m": 12
+  },
+  "dense_sand": {
+   "id": "dense_sand",
+   "name": "Dense Sand",
+   "cat": "gelaende",
+   "m": 1.8
+  },
+  "dirt_aerial_02": {
+   "id": "dirt_aerial_02",
+   "name": "Erde Luftbild 2",
+   "cat": "gelaende",
+   "m": 20
+  },
+  "dirt_aerial_03": {
+   "id": "dirt_aerial_03",
+   "name": "Erde Luftbild 3",
+   "cat": "gelaende",
+   "m": 25
+  },
+  "dirty_carpet": {
+   "id": "dirty_carpet",
+   "name": "Dirty Teppich",
+   "cat": "boden",
+   "m": 0.6
+  },
+  "dirty_concrete": {
+   "id": "dirty_concrete",
+   "name": "Dirty Beton",
+   "cat": "gelaende",
+   "m": 3
+  },
+  "dirty_tiles": {
+   "id": "dirty_tiles",
+   "name": "Dirty Fliesen",
+   "cat": "boden",
+   "m": 2.26
+  },
+  "distressed_painted_planks": {
+   "id": "distressed_painted_planks",
+   "name": "Distressed Bemalt Dielen",
+   "cat": "boden",
+   "m": 1.6
+  },
+  "double_brick_floor": {
+   "id": "double_brick_floor",
+   "name": "Double Ziegel Boden",
+   "cat": "boden",
+   "m": 2.16
+  },
+  "dry_ground_rocks": {
+   "id": "dry_ground_rocks",
+   "name": "Trocken Boden Felsen",
+   "cat": "gelaende",
+   "m": 4
+  },
+  "dry_mud_field_001": {
+   "id": "dry_mud_field_001",
+   "name": "Trocken Schlamm Feld 1",
+   "cat": "gelaende",
+   "m": 3
+  },
+  "dry_riverbed_rock": {
+   "id": "dry_riverbed_rock",
+   "name": "Trocken Riverbed Fels",
+   "cat": "gelaende",
+   "m": 2
+  },
+  "embedded_plank_flooring": {
+   "id": "embedded_plank_flooring",
+   "name": "Embedded Diele Flooring",
+   "cat": "boden",
+   "m": 2.03
+  },
+  "embedded_rock_floor": {
+   "id": "embedded_rock_floor",
+   "name": "Embedded Fels Boden",
+   "cat": "boden",
+   "m": 1.8
+  },
+  "eucalyptus_bark": {
+   "id": "eucalyptus_bark",
+   "name": "Eucalyptus Rinde",
+   "cat": "gelaende",
+   "m": 1.81
+  },
+  "excavated_soil_wall": {
+   "id": "excavated_soil_wall",
+   "name": "Excavated Boden Wand",
+   "cat": "wand",
+   "m": 2
+  },
+  "exterior_wall_cladding": {
+   "id": "exterior_wall_cladding",
+   "name": "Exterior Wand Cladding",
+   "cat": "wand",
+   "m": 2
+  },
+  "exterior_wall_cladding_02": {
+   "id": "exterior_wall_cladding_02",
+   "name": "Exterior Wand Cladding 2",
+   "cat": "wand",
+   "m": 1.99
+  },
+  "exterior_wall_cladding_03": {
+   "id": "exterior_wall_cladding_03",
+   "name": "Exterior Wand Cladding 3",
+   "cat": "wand",
+   "m": 1.96
+  },
+  "fabric_leather_01": {
+   "id": "fabric_leather_01",
+   "name": "Stoff Leder 1",
+   "cat": "gelaende",
+   "m": 0.4
+  },
+  "fabric_leather_02": {
+   "id": "fabric_leather_02",
+   "name": "Stoff Leder 2",
+   "cat": "gelaende",
+   "m": 0.5
+  },
+  "fever_tree_bark": {
+   "id": "fever_tree_bark",
+   "name": "Fever Baum Rinde",
+   "cat": "gelaende",
+   "m": 1.36
+  },
+  "fine_grained_wood": {
+   "id": "fine_grained_wood",
+   "name": "Fine Grained Holz",
+   "cat": "gelaende",
+   "m": 0.6
+  },
+  "floor_bricks_02": {
+   "id": "floor_bricks_02",
+   "name": "Boden Ziegel 2",
+   "cat": "boden",
+   "m": 1.3
+  },
+  "floor_klinkers_01": {
+   "id": "floor_klinkers_01",
+   "name": "Boden Klinkers 1",
+   "cat": "boden",
+   "m": 1.2
+  },
+  "floor_klinkers_04": {
+   "id": "floor_klinkers_04",
+   "name": "Boden Klinkers 4",
+   "cat": "boden",
+   "m": 1.2
+  },
+  "floor_pattern_01": {
+   "id": "floor_pattern_01",
+   "name": "Boden Pattern 1",
+   "cat": "boden",
+   "m": 1.2
+  },
+  "floor_pattern_02": {
+   "id": "floor_pattern_02",
+   "name": "Boden Pattern 2",
+   "cat": "boden",
+   "m": 1.2
+  },
+  "floor_pavement": {
+   "id": "floor_pavement",
+   "name": "Boden Pflaster",
+   "cat": "boden",
+   "m": 2
+  },
+  "floor_pebbles_01": {
+   "id": "floor_pebbles_01",
+   "name": "Boden Pebbles 1",
+   "cat": "boden",
+   "m": 3
+  },
+  "floor_tiles_02": {
+   "id": "floor_tiles_02",
+   "name": "Boden Fliesen 2",
+   "cat": "boden",
+   "m": 4
+  },
+  "floor_tiles_04": {
+   "id": "floor_tiles_04",
+   "name": "Boden Fliesen 4",
+   "cat": "boden",
+   "m": 4
+  },
+  "floor_tiles_06": {
+   "id": "floor_tiles_06",
+   "name": "Boden Fliesen 6",
+   "cat": "boden",
+   "m": 3
+  },
+  "floor_tiles_08": {
+   "id": "floor_tiles_08",
+   "name": "Boden Fliesen 8",
+   "cat": "boden",
+   "m": 1.5
+  },
+  "floor_tiles_09": {
+   "id": "floor_tiles_09",
+   "name": "Boden Fliesen 9",
+   "cat": "boden",
+   "m": 2
+  },
+  "flower_scattered_dirt": {
+   "id": "flower_scattered_dirt",
+   "name": "Blume Scattered Erde",
+   "cat": "gelaende",
+   "m": 1.8
+  },
+  "flower_scattered_gravel": {
+   "id": "flower_scattered_gravel",
+   "name": "Blume Scattered Kies",
+   "cat": "gelaende",
+   "m": 1.8
+  },
+  "forest_ground_04": {
+   "id": "forest_ground_04",
+   "name": "Wald Boden 4",
+   "cat": "gelaende",
+   "m": 3.15
+  },
+  "forest_ground_05": {
+   "id": "forest_ground_05",
+   "name": "Wald Boden 5",
+   "cat": "gelaende",
+   "m": 2
+  },
+  "forest_ground_06": {
+   "id": "forest_ground_06",
+   "name": "Wald Boden 6",
+   "cat": "gelaende",
+   "m": 2.11
+  },
+  "forest_leaves_03": {
+   "id": "forest_leaves_03",
+   "name": "Wald Laub 3",
+   "cat": "gelaende",
+   "m": 2.3
+  },
+  "forest_leaves_04": {
+   "id": "forest_leaves_04",
+   "name": "Wald Laub 4",
+   "cat": "gelaende",
+   "m": 1.5
+  },
+  "forrest_ground_01": {
+   "id": "forrest_ground_01",
+   "name": "Wald Boden 1",
+   "cat": "gelaende",
+   "m": 2
+  },
+  "forrest_ground_03": {
+   "id": "forrest_ground_03",
+   "name": "Wald Boden 3",
+   "cat": "gelaende",
+   "m": 2
+  },
+  "forrest_sand_01": {
+   "id": "forrest_sand_01",
+   "name": "Wald Sand 1",
+   "cat": "gelaende",
+   "m": 2
+  },
+  "granite_tile": {
+   "id": "granite_tile",
+   "name": "Granit Fliese",
+   "cat": "gelaende",
+   "m": 2.3
+  },
+  "cobblestone_floor_001": {
+   "id": "cobblestone_floor_001",
+   "name": "Kopfstein Boden 1",
+   "cat": "boden",
+   "m": 2.4
+  },
+  "concrete_floor_painted": {
+   "id": "concrete_floor_painted",
+   "name": "Beton Boden Bemalt",
+   "cat": "boden",
+   "m": 2
   }
  }
 }

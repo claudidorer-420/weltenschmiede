@@ -1,7 +1,7 @@
 // Hooks für Live-Daten aus der Datenbank.
 import { useState, useEffect } from '../lib/preact.js';
 import { db } from './db.js';
-import { app, playerLens } from './app.js';
+import { app, playerLens, visQueries } from './app.js';
 import { useStore } from './store.js';
 
 export function useCol(path, opts) {
@@ -39,10 +39,16 @@ export function useVisibleCol(name) {
   const cid = useStore(app, (s) => s.cid);
   const role = useStore(app, (s) => s.role);
   const preview = useStore(app, (s) => s.viewAsPlayer);
-  const opts = role === 'gm' ? {} : { where: [['visibility', '==', 'players']] };
-  const docs = useCol(cid ? `campaigns/${cid}/${name}` : null, opts);
-  if (!docs) return docs;
-  return preview ? docs.filter((d) => d.visibility === 'players') : docs;
+  const uid = useStore(app, (s) => s.user?.uid || '');
+  const gm = role === 'gm';
+  const qs = gm ? [{}, null] : visQueries(uid);
+  const path = cid ? `campaigns/${cid}/${name}` : null;
+  // Spieler: alles für alle Freigegebene + alles nur für sie Freigegebene
+  const a = useCol(path, qs[0] || {});
+  const b = useCol(gm ? null : path, qs[1] || {});
+  if (!a) return a;
+  const docs = gm ? a : [...a, ...(b || []).filter((d) => !a.some((x) => x.id === d.id))];
+  return preview ? docs.filter((d) => d.visibility === 'players' && (!d.onlyN || (d.only || []).includes(uid))) : docs;
 }
 
 export function visibilityOpts() {
