@@ -3,11 +3,7 @@
   "id": "folterbank",
   "name": "Folterbank",
   "en": "medieval wooden torture rack with ropes and iron chains",
-  "kind": "object",
-  "cat": "dungeon",
-  "w": 1.6,
-  "h": 1.6,
-  "rough": 1
+  "kind": "object"
  },
  {
   "id": "eiserne_jungfrau",
@@ -31,31 +27,19 @@
   "id": "streckbett",
   "name": "Streckbett",
   "en": "medieval stretching bench with iron winch",
-  "kind": "object",
-  "cat": "dungeon",
-  "w": 1.2,
-  "h": 2.2,
-  "rough": 1
+  "kind": "object"
  },
  {
   "id": "opferaltar",
   "name": "Blutopfer-Altar",
   "en": "dark stone sacrificial altar with dried blood and candles",
-  "kind": "object",
-  "cat": "dungeon",
-  "w": 2,
-  "h": 1.2,
-  "block": 1
+  "kind": "object"
  },
  {
   "id": "runenstein",
   "name": "Runenstein",
   "en": "standing stone monolith carved with glowing blue runes",
-  "kind": "object",
-  "cat": "dungeon",
-  "w": 1,
-  "h": 1,
-  "block": 1
+  "kind": "object"
  },
  {
   "id": "zauberbuch",
@@ -79,21 +63,13 @@
   "id": "hexenkessel_feuer",
   "name": "Hexenkessel über Feuer",
   "en": "black iron cauldron over a campfire with glowing embers",
-  "kind": "object",
-  "cat": "dungeon",
-  "w": 1.1,
-  "h": 1.1,
-  "rough": 1
+  "kind": "object"
  },
  {
   "id": "skelett_boden",
   "name": "Skelett am Boden",
   "en": "human skeleton lying on the ground, bones and tattered cloth",
-  "kind": "object",
-  "cat": "dungeon",
-  "w": 1.4,
-  "h": 1.4,
-  "layer": "floor"
+  "kind": "object"
  },
  {
   "id": "goldhaufen",
@@ -105,21 +81,13 @@
   "id": "juwelentruhe",
   "name": "Juwelentruhe",
   "en": "open treasure chest overflowing with gold coins and jewels",
-  "kind": "object",
-  "cat": "behaelter",
-  "w": 1,
-  "h": 0.8,
-  "rough": 1
+  "kind": "object"
  },
  {
   "id": "waffenstaender",
   "name": "Waffenständer",
   "en": "wooden weapon rack with swords, axes and spears",
-  "kind": "object",
-  "cat": "werkzeug",
-  "w": 2,
-  "h": 0.7,
-  "rough": 1
+  "kind": "object"
  },
  {
   "id": "ruestungsstaender",
@@ -131,86 +99,24 @@
   "id": "katapult",
   "name": "Katapult",
   "en": "medieval wooden catapult siege engine",
-  "kind": "object",
-  "cat": "werkzeug",
-  "w": 2.4,
-  "h": 2.4,
-  "block": 1
+  "kind": "object"
  },
  {
   "id": "rammbock",
   "name": "Rammbock",
   "en": "medieval battering ram with iron head on wheels",
-  "kind": "object",
-  "cat": "werkzeug",
-  "w": 1.2,
-  "h": 3,
-  "rough": 1
+  "kind": "object"
  },
  {
   "id": "baerenfalle",
   "name": "Bärenfalle",
   "en": "rusty iron bear trap, open jaws",
-  "kind": "object",
-  "cat": "dungeon",
-  "w": 0.8,
-  "h": 0.8
+  "kind": "object"
  },
  {
   "id": "kerzenleuchter_boden",
   "name": "Bodenleuchter",
   "en": "tall wrought iron floor candelabra with lit candles",
-  "kind": "object",
-  "cat": "licht",
-  "w": 0.6,
-  "h": 0.6
- },
- {
-  "id": "blutboden",
-  "name": "Blutverschmierter Steinboden",
-  "en": "old stone dungeon floor smeared with dried blood",
-  "kind": "texture",
-  "cat": "boden",
-  "m": 3
- },
- {
-  "id": "runenboden",
-  "name": "Runenboden",
-  "en": "dark stone floor engraved with arcane runes and circles",
-  "kind": "texture",
-  "cat": "boden",
-  "m": 3
- },
- {
-  "id": "knochenboden",
-  "name": "Knochenboden",
-  "en": "ground covered with old bones and skulls, dirt between them",
-  "kind": "texture",
-  "cat": "gelaende",
-  "m": 3
- },
- {
-  "id": "lavariss",
-  "name": "Lavarisse",
-  "en": "cracked black volcanic rock with glowing orange lava veins",
-  "kind": "texture",
-  "cat": "gelaende",
-  "m": 4
- },
- {
-  "id": "verkohltes_holz",
-  "name": "Verkohltes Holz",
-  "en": "charred burnt wooden planks, black and cracked",
-  "kind": "texture",
-  "cat": "boden",
-  "m": 3
- },
- {
-  "id": "kryptastein",
-  "name": "Krypta-Stein",
-  "en": "damp mossy crypt stone slabs, dark and worn",
-  "kind": "texture",
-  "cat": "boden",
-  "m": 3
+  "kind": "object"
  }
 ]

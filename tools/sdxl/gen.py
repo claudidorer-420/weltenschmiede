@@ -20,13 +20,14 @@ TEX_PROMPT = (
     "no shadows, no highlights, no objects, no text, flat orthographic top view, highly detailed, 8k material scan"
 )
 OBJ_PROMPT = (
-    "a single {name} for a tabletop battlemap, strict orthographic top-down view seen from directly above, "
-    "centered, whole object visible, flat neutral daylight, no cast shadow, isolated on plain magenta background, "
-    "photorealistic, sharp focus, highly detailed"
+    "top-down flat lay photograph of a single {name}, camera directly overhead at 90 degrees, bird's eye view, "
+    "object lying flat, centered, whole object visible, even soft daylight, no cast shadow, "
+    "isolated on a plain pure magenta #FF00FF background, photorealistic, sharp focus, highly detailed"
 )
 NEG = (
     "text, watermark, signature, people, person, hands, blurry, low quality, jpeg artifacts, "
-    "perspective, side view, isometric, tilted, multiple objects, frame, border, drop shadow"
+    "perspective view, side view, front view, three-quarter view, eye level, isometric, tilted, horizon, "
+    "background scenery, floor, wall, table, multiple objects, frame, border, drop shadow, vignette"
 )
 
 
@@ -40,17 +41,41 @@ def set_tiling(pipe, on: bool):
 
 
 def cutout_magenta(img: Image.Image, tol: int = 60) -> Image.Image:
-    """Magenta-Hintergrund entfernen, Rand beschneiden."""
-    img = img.convert("RGBA")
-    px = img.load()
-    w, h = img.size
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if r > 150 and b > 150 and g < 110 and abs(r - b) < 90:
-                px[x, y] = (r, g, b, 0)
-    bbox = img.getbbox()
-    return img.crop(bbox) if bbox else img
+    """Magenta/Pink-Hintergrund entfernen (auch gedämpfte Töne), Farbsaum abziehen, zuschneiden."""
+    import numpy as np
+    from PIL import ImageFilter
+
+    rgb = np.asarray(img.convert("RGB")).astype(np.int16)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    mx = rgb.max(2)
+    mn = rgb.min(2)
+    sat = (mx - mn) / np.maximum(mx, 1)
+    # Hintergrund: Rot UND Blau deutlich über Grün (Magenta-Familie), halbwegs bunt
+    bg = (r > g + 22) & (b > g + 22) & (sat > 0.16) & (mx > 45)
+    # nur was am Rand hängt, ist wirklich Hintergrund (Magenta im Objekt bleibt)
+    h, w = bg.shape
+    keep = np.zeros_like(bg)
+    stack = [(0, x) for x in range(w) if bg[0, x]] + [(h - 1, x) for x in range(w) if bg[h - 1, x]]
+    stack += [(y, 0) for y in range(h) if bg[y, 0]] + [(y, w - 1) for y in range(h) if bg[y, w - 1]]
+    seen = np.zeros_like(bg)
+    while stack:
+        y, x = stack.pop()
+        if y < 0 or x < 0 or y >= h or x >= w or seen[y, x] or not bg[y, x]:
+            continue
+        seen[y, x] = True
+        keep[y, x] = True
+        stack.extend(((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)))
+    alpha = np.where(keep, 0, 255).astype(np.uint8)
+    # Farbsaum: an den Rändern das Magenta aus der Farbe rechnen
+    fringe = (r > g + 12) & (b > g + 12) & (~keep)
+    rr = np.where(fringe, np.minimum(r, g + 18), r)
+    bb = np.where(fringe, np.minimum(b, g + 18), b)
+    out = np.dstack([rr, g, bb, alpha]).astype(np.uint8)
+    im = Image.fromarray(out, "RGBA")
+    a = im.getchannel("A").filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.6))
+    im.putalpha(a)
+    bbox = im.getbbox()
+    return im.crop(bbox) if bbox else im
 
 
 def main():

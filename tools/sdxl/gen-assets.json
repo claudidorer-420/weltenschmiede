@@ -1,0 +1,148 @@
+{
+ "stamps": {
+  "folterbank": {
+   "id": "folterbank",
+   "src": "folterbank",
+   "name": "Folterbank",
+   "cat": "dungeon",
+   "w": 1.541,
+   "h": 1.6,
+   "rough": 1
+  },
+  "streckbett": {
+   "id": "streckbett",
+   "src": "streckbett",
+   "name": "Streckbett",
+   "cat": "dungeon",
+   "w": 2.2,
+   "h": 2.122,
+   "rough": 1
+  },
+  "opferaltar": {
+   "id": "opferaltar",
+   "src": "opferaltar",
+   "name": "Blutopfer-Altar",
+   "cat": "dungeon",
+   "w": 1.984,
+   "h": 2.0,
+   "block": 1
+  },
+  "runenstein": {
+   "id": "runenstein",
+   "src": "runenstein",
+   "name": "Runenstein",
+   "cat": "dungeon",
+   "w": 0.898,
+   "h": 1.0,
+   "block": 1
+  },
+  "hexenkessel_feuer": {
+   "id": "hexenkessel_feuer",
+   "src": "hexenkessel_feuer",
+   "name": "Hexenkessel über Feuer",
+   "cat": "dungeon",
+   "w": 1.098,
+   "h": 1.098,
+   "rough": 1
+  },
+  "skelett_boden": {
+   "id": "skelett_boden",
+   "src": "skelett_boden",
+   "name": "Skelett am Boden",
+   "cat": "dungeon",
+   "w": 1.4,
+   "h": 1.361,
+   "layer": "floor"
+  },
+  "juwelentruhe": {
+   "id": "juwelentruhe",
+   "src": "juwelentruhe",
+   "name": "Juwelentruhe",
+   "cat": "behaelter",
+   "w": 1.0,
+   "h": 0.894,
+   "rough": 1
+  },
+  "waffenstaender": {
+   "id": "waffenstaender",
+   "src": "waffenstaender",
+   "name": "Waffenständer",
+   "cat": "werkzeug",
+   "w": 2.0,
+   "h": 1.945,
+   "rough": 1
+  },
+  "katapult": {
+   "id": "katapult",
+   "src": "katapult",
+   "name": "Katapult",
+   "cat": "werkzeug",
+   "w": 2.361,
+   "h": 2.4,
+   "block": 1
+  },
+  "rammbock": {
+   "id": "rammbock",
+   "src": "rammbock",
+   "name": "Rammbock",
+   "cat": "werkzeug",
+   "w": 2.914,
+   "h": 3.0,
+   "rough": 1
+  },
+  "baerenfalle": {
+   "id": "baerenfalle",
+   "src": "baerenfalle",
+   "name": "Bärenfalle",
+   "cat": "dungeon",
+   "w": 0.761,
+   "h": 0.8
+  },
+  "kerzenleuchter_boden": {
+   "id": "kerzenleuchter_boden",
+   "src": "kerzenleuchter_boden",
+   "name": "Bodenleuchter",
+   "cat": "licht",
+   "w": 0.502,
+   "h": 0.6
+  }
+ },
+ "textures": {
+  "blutboden": {
+   "id": "blutboden",
+   "name": "Blutverschmierter Steinboden",
+   "cat": "boden",
+   "m": 3
+  },
+  "runenboden": {
+   "id": "runenboden",
+   "name": "Runenboden",
+   "cat": "boden",
+   "m": 3
+  },
+  "knochenboden": {
+   "id": "knochenboden",
+   "name": "Knochenboden",
+   "cat": "gelaende",
+   "m": 3
+  },
+  "lavariss": {
+   "id": "lavariss",
+   "name": "Lavarisse",
+   "cat": "gelaende",
+   "m": 4
+  },
+  "verkohltes_holz": {
+   "id": "verkohltes_holz",
+   "name": "Verkohltes Holz",
+   "cat": "boden",
+   "m": 3
+  },
+  "kryptastein": {
+   "id": "kryptastein",
+   "name": "Krypta-Stein",
+   "cat": "boden",
+   "m": 3
+  }
+ }
+}
