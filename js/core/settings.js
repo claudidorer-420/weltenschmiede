@@ -58,7 +58,6 @@ export const DEFAULTS = {
     pulses: true,
   },
   diceSkin: 'klassisch',
-  mcpUrl: '',
   forge: { recipes: [], customBlocks: [], lastConfig: null },
   bookmarks: [],
   layout: { left: true, right: false },

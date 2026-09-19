@@ -15,7 +15,10 @@ fallthrough = true
 FIREBASE_API_KEY = "AIzaSyDlDyPSUlgtKNiWe69SFagDBU_kuwF8doA"
 FIREBASE_PROJECT = "weltenschmiede"
 APP_URL = "https://claudidorer-420.github.io/weltenschmiede/"
-# Erlaubte Rücksprung-Adressen nach der Anmeldung (OAuth)
-ALLOWED_REDIRECT_HOSTS = "claude.ai,claude.com,localhost,127.0.0.1"
+# Erlaubte Rücksprung-Adressen nach der Anmeldung (OAuth) – leer lassen nutzt die Vorgabe im Code
+# (Claude, ChatGPT, Gemini, Cursor, VS Code, Windsurf, Zed, Raycast … plus lokale Schleifenadressen)
+ALLOWED_REDIRECT_HOSTS = "claude.ai,claude.com,anthropic.com,chatgpt.com,openai.com,google.com,googleusercontent.com,cursor.com,cursor.sh,vscode.dev,github.com,githubusercontent.com,windsurf.com,codeium.com,zed.dev,raycast.com,perplexity.ai,mistral.ai,localhost,127.0.0.1"
+# Eigene Adressschemata der Desktop-Programme
+ALLOWED_REDIRECT_SCHEMES = "vscode,vscode-insiders,cursor,windsurf,zed,claude,lmstudio,raycast,msty,cherrystudio,witsy"
 
 # Geheimnis (nicht hier eintragen!):  npx wrangler secret put SEAL_SECRET

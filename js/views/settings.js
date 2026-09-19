@@ -134,13 +134,14 @@ function AISection() {
   const usage = usageStats();
   const tasks = Object.keys(TASKS).filter((t) => gm || PLAYER_TASKS.includes(t));
   return html`<div class="stack lg">
+    <${McpCard} />
     <div class="callout callout-blue"><div class="callout-title"><${Icon} name="info" size=${16} />So funktioniert der KI-Zugang</div><div class="callout-content small" style="line-height:1.6">
       Du bringst deinen eigenen Schlüssel mit – die App schickt Anfragen direkt vom Browser an den Anbieter, ohne Umweg über einen Server. Du zahlst nur, was du nutzt.<br />
       <b>Günstiger Start:</b> Google Gemini (Flash-Modelle mit Gratis-Kontingent). <b>Beste Texte:</b> Claude Opus 5. <b>Viele Modelle mit einem Schlüssel:</b> OpenRouter.
     </div></div>
-    <div class="card row nowrap" style="gap:12px">
-      <${Icon} name="lock" size=${20} class="accent-text" style=${{ flex: 'none' }} />
-      <div class="small muted" style="line-height:1.55;min-width:0;overflow-wrap:anywhere">${mode === 'cloud'
+    <div class="card key-note">
+      <${Icon} name="lock" size=${20} class="accent-text" />
+      <div class="txt small muted">${mode === 'cloud'
         ? `Deine Schlüssel gehören nur zu deinem Konto: Sie liegen im privaten Bereich deines Kontos – nur du kannst sie lesen, ${gm ? 'deine Spieler' : 'weder die Spielleitung noch deine Mitspieler'} sehen sie nie. Sie stehen auf all deinen Geräten bereit und werden beim Abmelden von diesem Gerät entfernt; meldet sich jemand anderes an, sind sie weg.`
         : 'Offline-Modus: Die Schlüssel liegen nur auf diesem Gerät und gehören zum Offline-Profil.'}</div>
     </div>
@@ -155,8 +156,6 @@ function AISection() {
       <div class="small muted">⭐ = Top-Empfehlung, ☆ = gute Alternative. In jedem Generator kannst du das Modell zusätzlich pro Anfrage wechseln.</div>
       ${tasks.map((t) => html`<${TaskRow} key=${t} task=${t} />`)}
     </div>
-
-    <${McpCard} />
 
     ${Object.keys(usage).length ? html`<div class="card"><div class="card-head"><h3><${Icon} name="activity" size=${18} />Nutzung auf diesem Gerät</h3><span class="grow"></span><${Btn} size="sm" kind="ghost" onClick=${() => { localStorage.removeItem('ws.usage'); toast('Zurückgesetzt'); }}>Zurücksetzen<//></div>
       <table class="xp-table">${Object.entries(usage).map(([p, u]) => html`<tr><td>${PROVIDERS[p]?.label || p}</td><td>${u.calls} Anfragen · ${(u.input || 0).toLocaleString('de-DE')} → ${(u.output || 0).toLocaleString('de-DE')} Tokens</td></tr>`)}</table>
@@ -262,41 +261,73 @@ function SkinPicker() {
   </div>`;
 }
 
-// ── Weltenschmiede in Claude bedienen (MCP-Connector) ──
+// ── Weltenschmiede in einem KI-Werkzeug bedienen (MCP-Server) ──
+export const MCP_URL = 'https://weltenschmiede-mcp.claudidorer.workers.dev/mcp';
+
+const MCP_CLIENTS = [
+  {
+    key: 'claude', name: 'Claude', hint: 'Web, Desktop, Handy, Claude Code',
+    steps: [
+      'Einstellungen → Connectors → „Benutzerdefinierten Connector hinzufügen“.',
+      'Name „Weltenschmiede“, als MCP-Server-URL die Adresse oben einsetzen.',
+      '„Verbinden“ → Anmeldeseite der Weltenschmiede → Name + Geheimwort → „Zugriff erlauben“.',
+    ],
+  },
+  {
+    key: 'chatgpt', name: 'ChatGPT', hint: 'Plus, Pro, Business – Entwicklermodus',
+    steps: [
+      'Einstellungen → Apps & Connectors → ganz unten „Erweiterte Einstellungen“ → Entwicklermodus einschalten.',
+      'Apps & Connectors → „Erstellen“: Name „Weltenschmiede“, Server-URL wie oben (mit /mcp), Authentifizierung „OAuth“.',
+      'Verbinden → Name + Geheimwort → „Zugriff erlauben“. Danach den Connector im Chat über das Werkzeug-Menü zuschalten.',
+    ],
+  },
+  {
+    key: 'gemini', name: 'Gemini', hint: 'Spark („Verbundene Apps“) und Gemini CLI',
+    steps: [
+      'Gemini-App: Verbundene Apps → eigene App hinzufügen → die Adresse oben eintragen (nur mit Spark-Zugang).',
+      'Gemini CLI: `gemini mcp add --transport http weltenschmiede <Adresse>` und danach im Chat `/mcp auth weltenschmiede`.',
+      'Die Anmeldung läuft über den Browser; Name + Geheimwort wie in der App.',
+    ],
+  },
+  {
+    key: 'andere', name: 'Andere Programme', hint: 'Cursor, VS Code, Windsurf, Zed, LM Studio …',
+    steps: [
+      'Fast alle nehmen einen Eintrag in ihrer MCP-Konfiguration entgegen: { "mcpServers": { "weltenschmiede": { "url": "<Adresse>" } } }.',
+      'Manche nennen das Feld „httpUrl“ oder fragen nach dem Transport – immer „HTTP“ bzw. „Streamable HTTP“ wählen, nicht „stdio“.',
+      'Beim ersten Zugriff öffnet sich die Anmeldeseite der Weltenschmiede (OAuth). Rücksprung auf localhost und die eigenen Programm-Adressen ist erlaubt.',
+    ],
+  },
+];
+
 function McpCard() {
-  const url = useStore(settings, (s) => s.mcpUrl || '');
-  const [open, setOpen] = useState(false);
-  const ziel = url.trim() || 'https://weltenschmiede-mcp.<dein-name>.workers.dev/mcp';
-  return html`<div class="card stack sm">
-    <div class="card-head" style="margin:0"><h3><${Icon} name="plug" size=${18} />Weltenschmiede in Claude bedienen (MCP)</h3>
-      <span class="grow"></span><${Btn} size="sm" kind="ghost" icon=${open ? 'chevron-up' : 'chevron-down'} onClick=${() => setOpen(!open)}>${open ? 'Weniger' : 'Anleitung'}<//></div>
+  const [tab, setTab] = useState('claude');
+  const cur = MCP_CLIENTS.find((c) => c.key === tab) || MCP_CLIENTS[0];
+  return html`<div class="card stack sm accent-left">
+    <div class="card-head" style="margin:0"><h3><${Icon} name="plug" size=${18} />Weltenschmiede in deinem KI-Werkzeug bedienen (MCP)</h3></div>
     <div class="small muted" style="line-height:1.6">
-      Der Connector macht deine Kampagne in Claude bedienbar – am Rechner, in der App und am Handy: Codex durchsuchen und
+      Über den MCP-Server bedienst du deine Kampagne direkt im Chat – egal mit welchem Anbieter: Codex durchsuchen und
       schreiben, Quests und Sitzungen pflegen, Handouts und Szene zeigen, im Spieltisch-Chat schreiben, würfeln, Monster
       und Zauber nachschlagen, Karten bauen. Änderungen erscheinen sofort bei allen Mitspielern.
     </div>
-    <${Field} label="Adresse deines Servers" hint="Die Adresse, die beim Veröffentlichen ausgegeben wird – endet auf /mcp. Wird nur bei dir gespeichert.">
+    <${Field} label="MCP-Server-URL" hint="Diese Adresse trägst du in deinem KI-Werkzeug ein. Es läuft bereits alles – du brauchst nichts einzurichten.">
       <div class="row nowrap">
-        <input class="input mono" value=${url} placeholder="https://weltenschmiede-mcp.<dein-name>.workers.dev/mcp" onInput=${(e) => updateSettings({ mcpUrl: e.target.value })} />
-        <${IconBtn} icon="copy" title="Adresse kopieren" disabled=${!url.trim()} onClick=${() => { copyText(url.trim()); toast('Adresse kopiert'); }} />
+        <input class="input mono" value=${MCP_URL} readonly onFocus=${(e) => e.target.select()} />
+        <${IconBtn} icon="copy" title="Adresse kopieren" onClick=${() => { copyText(MCP_URL); toast('Adresse kopiert'); }} />
       </div>
     <//>
-    ${open ? html`<div class="step-list small" style="line-height:1.6">
-      <div class="step"><div><b>1. Server veröffentlichen (einmalig):</b> kostenloses Cloudflare-Konto anlegen und im
-        Projektordner <code>powershell -ExecutionPolicy Bypass -File mcp\\deploy.ps1</code> ausführen. Am Ende steht die
-        Adresse – oben eintragen.</div></div>
-      <div class="step"><div><b>2. In Claude verbinden:</b> Einstellungen → Connectors → „Benutzerdefinierten Connector
-        hinzufügen“. Name <b>Weltenschmiede</b>, als MCP-Server-URL die Adresse von oben (mit <code>/mcp</code>).</div></div>
-      <div class="step"><div><b>3. Anmelden:</b> „Verbinden“ öffnet die Anmeldeseite der Weltenschmiede – derselbe Name und
-        dasselbe Geheimwort wie in der App, dann „Zugriff erlauben“.</div></div>
-      <div class="step"><div><b>4. Losreden:</b> „Zeig mir alle offenen Quests“, „Leg eine NSC-Notiz für den Schmied Borin
-        an und verlinke ihn mit [[Eisenfurt]]“, „Baue eine Höhlenkarte mit drei Räumen“, „Würfle 4W6 sechsmal und poste es
-        in den Chat“.</div></div>
-      <div class="step"><div><b>Sicherheit:</b> Der Server speichert nichts. Alle Zugriffe laufen mit deinem Konto durch
-        dieselben Firestore-Regeln wie die App – ein Spieler-Konto sieht auch über Claude nur Freigegebenes. Das Geheimwort
-        in der App zu ändern meldet alle Verbindungen ab.</div></div>
+    <${Segmented} value=${tab} onChange=${setTab} options=${MCP_CLIENTS.map((c) => ({ value: c.key, label: c.name }))} />
+    <div class="small muted">${cur.hint}</div>
+    <ol class="mcp-steps small">${cur.steps.map((s, i) => html`<li key=${i}>${s}</li>`)}</ol>
+    <div class="small muted" style="line-height:1.6">
+      <b>Danach einfach reden:</b> „Zeig mir alle offenen Quests“, „Leg eine NSC-Notiz für den Schmied Borin an und
+      verlinke ihn mit [[Eisenfurt]]“, „Baue eine Höhlenkarte mit drei Räumen“, „Würfle 4W6 sechsmal und poste es in den Chat“.
     </div>
-    <div class="tiny faint">Volle Beschreibung samt Werkzeugliste: <code>mcp/README.md</code> im Projektordner.</div>` : null}
+    <div class="tiny faint" style="line-height:1.6">
+      <${Icon} name="lock" size=${12} /> Der Server speichert nichts: Du meldest dich mit demselben Namen und Geheimwort an wie in
+      der App, und jeder Zugriff läuft mit deinem Konto durch dieselben Firestore-Regeln – ein Spieler-Konto sieht auch hier nur
+      Freigegebenes. Dein Geheimwort in der App zu ändern meldet alle Verbindungen ab.
+      Voraussetzung auf Anbieterseite: Unterstützung für eigene MCP-Server über HTTP mit OAuth (bei ChatGPT der Entwicklermodus, bei Gemini Spark bzw. die CLI).
+    </div>
   </div>`;
 }
 
@@ -384,7 +415,7 @@ export function SettingsPanel({ section: initial }) {
   else if (section === 'data') body = html`<${DataSection} />`;
   else if (section === 'about') body = html`<${AboutSection} />`;
   else body = html`<${AISection} />`;
-  return html`<div class="stack lg"><${Segmented} value=${section} onChange=${setSection} options=${sections} />${body}</div>`;
+  return html`<div class="stack lg settings-panel"><${Segmented} value=${section} onChange=${setSection} options=${sections} />${body}</div>`;
 }
 
 export function SettingsView({ params, tabId }) {

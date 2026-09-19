@@ -5,3 +5,4 @@ tools/sdxl/cache/
 tools/sdxl/models/
 tools/sdxl/out/
 tools/sdxl/uv.exe
+tools/sdxl/*.log

@@ -22,12 +22,12 @@ import { normalizeMonster, monsterToMarkdown } from '../ui/statblock.js';
 import { useCol } from '../core/hooks.js';
 import { uid, now, sortBy, debounce, fmtDate } from '../lib/util.js';
 import { crToNumber } from '../data/rules5e.js';
-import { ORIGINS, DND, namesFor, matchNames, hasNameList, originOf, originShort } from '../data/origins.js';
+import { ORIGINS, namesFor, matchNames, hasNameList, originOf, originShort } from '../data/origins.js';
 
 const ENVIRONMENTS = ['Wald', 'Höhle', 'Ruine', 'Sumpf', 'Gebirge', 'Stadtgassen', 'Taverne', 'Schiff', 'Wüste', 'Friedhof', 'Tempel', 'Kanalisation', 'Brücke', 'Schneesturm'];
 const GOALS = ['Kampf bis zum Tod', 'Hinterhalt', 'Verteidigung', 'Flucht', 'Boss-Kampf', 'Welle um Welle', 'Ritual unterbrechen', 'Geisel befreien', 'Verfolgungsjagd'];
 
-const blankMonster = (origin = DND) => ({ id: uid(6), qty: 1, name: '', origin, note: '' });
+const blankMonster = (origin = '') => ({ id: uid(6), qty: 1, name: '', origin, note: '' });
 const defaultDraft = () => ({ levels: [5, 5, 5, 5], monsters: [blankMonster()], environment: '', goal: '', extra: '', paint: false });
 
 // Namensfeld mit Suchliste: Monster der gewählten Welt (Wiki-Listen, bei D&D SRD + offizielle Bücher) und das eigene Bestiarium
@@ -171,7 +171,7 @@ export function EncounterView({ tabId, params = {} }) {
   useEffect(() => {
     const p = params.preset;
     if (!p?.name || (p.ts && Date.now() - p.ts > 60000)) return; // nach dem Neuladen nicht erneut übernehmen
-    set({ monsters: [{ ...blankMonster(p.origin || DND), name: p.name }] });
+    set({ monsters: [{ ...blankMonster(p.origin || ''), name: p.name }] });
     toast(`„${p.name}“ übernommen – Gruppe prüfen und „Statblocks generieren“`, 'success');
   }, [params.preset?.name, params.preset?.ts]);
 
@@ -271,7 +271,7 @@ export function EncounterView({ tabId, params = {} }) {
               <${IconBtn} icon="x" class="danger" title="Entfernen" onClick=${() => draft.monsters.length > 1 ? set({ monsters: draft.monsters.filter((_, j) => j !== i) }) : toast('Mindestens ein Monster ist nötig.', 'error')} />
               <input class="input sm extra" value=${m.note} placeholder="Hinweis (optional): Anführer, verwundet, reitet einen Warg …" onInput=${(e) => setMon(i, { note: e.target.value })} />
             </div>`)}
-            <${Btn} icon="plus" onClick=${() => set({ monsters: [...draft.monsters, blankMonster(draft.monsters[draft.monsters.length - 1]?.origin || DND)] })}>Weiteres Monster<//>
+            <${Btn} icon="plus" onClick=${() => set({ monsters: [...draft.monsters, blankMonster(draft.monsters[draft.monsters.length - 1]?.origin || '')] })}>Weiteres Monster<//>
             ${livePreview ? html`<div class="small"><${Icon} name="activity" size=${14} /> Vorab (Bestiarium): <b>${livePreview.score}/10 · ${livePreview.band}</b></div>` : null}
           </div>
 

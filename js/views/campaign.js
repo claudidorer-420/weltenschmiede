@@ -1,7 +1,7 @@
 // Kampagnen-Manager: Sitzungen (Vorbereitung, Live-Notizen, Rückblick mit KI), Quests (Kanban), Mitspieler & Einladungen.
 import { html, useState, useEffect, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { app, vault, col, getInvites, renewInvite, removeMember, setMemberField, myUid, inviteLink, visFields } from '../core/app.js';
+import { app, vault, col, getInvites, renewInvite, removeMember, setMemberField, myUid, inviteLink, visFields, nurTitelFuerMich } from '../core/app.js';
 import { sendEvent } from '../core/relay.js';
 import { db } from '../core/db.js';
 import { openView, forgetView } from '../core/workspace.js';
@@ -163,7 +163,8 @@ const COLUMNS = [
 function visHint(q) {
   if (q.visibility !== 'players') return 'Nur die Spielleitung';
   const wer = (q.only || []).length ? `${q.only.length} Mitspieler` : 'Alle Spieler';
-  return `${wer}${q.teaser ? ' · nur der Titel' : ''}${q.future && (q.only || []).length ? ' · auch spätere' : ''}`;
+  const nur = (q.teaserOnly || []).length;
+  return `${wer}${q.teaser ? ' · nur der Titel' : nur ? ` · ${nur}× nur Titel` : ''}${q.future && (q.only || []).length ? ' · auch spätere' : ''}`;
 }
 
 function QuestForm({ close, quest }) {
@@ -253,7 +254,7 @@ export function QuestsView({ tabId }) {
       ] : []),
     ]);
   };
-  const showQuest = (q) => openModal(() => (q.teaser
+  const showQuest = (q) => openModal(() => (nurTitelFuerMich(q)
     ? html`<div class="modal-body"><p class="faint" style="font-style:italic;margin:0">Die Spielleitung hat von dieser Quest nur die Überschrift freigegeben.</p></div>`
     : html`<div class="modal-body"><${MarkdownView} src=${`${q.giver ? `**Auftraggeber:** ${q.giver}\n\n` : ''}${q.description || ''}${q.reward ? `\n\n**Belohnung:** ${q.reward}` : ''}`} /></div>`), { title: q.title, icon: 'list-checks' });
   return html`<${ViewFrame} tabId=${tabId} title="Quests">
@@ -265,7 +266,7 @@ export function QuestsView({ tabId }) {
           <h4><${Icon} name=${c.icon} size=${14} />${c.label} <span class="faint">${list.filter((q) => (q.status || 'open') === c.id).length}</span></h4>
           ${sortBy(list.filter((q) => (q.status || 'open') === c.id), (q) => q.updatedAt || 0, -1).map((q) => html`<div class=${`quest-card${drag === q.id ? ' dragging' : ''}`} key=${q.id} draggable=${true} onDragStart=${() => setDrag(q.id)} onDragEnd=${() => { setDrag(null); setOver(null); }} onClick=${() => (gm ? editQuest(q) : showQuest(q))}>
             <div class="row nowrap" style="align-items:flex-start;gap:4px"><div class="t grow">${q.title}</div><${IconBtn} icon="more-vertical" size=${16} class="sm" title="Verschieben" onClick=${(e) => moveMenu(e, q)} /></div>
-            ${(gm || !q.teaser) && (q.giver || q.reward) ? html`<div class="tiny faint">${[q.giver && q.giver.replace(/\[\[|\]\]/g, ''), q.reward].filter(Boolean).join(' · ')}</div>` : null}
+            ${(gm || !nurTitelFuerMich(q)) && (q.giver || q.reward) ? html`<div class="tiny faint">${[q.giver && q.giver.replace(/\[\[|\]\]/g, ''), q.reward].filter(Boolean).join(' · ')}</div>` : null}
             ${gm ? html`<div class="row" style="margin-top:6px"><span class=${`badge ${q.visibility === 'players' ? 'players' : 'gm'}`} title=${visHint(q)}>${q.visibility === 'players' ? ((q.only || []).length ? `${q.only.length} Spieler` : 'sichtbar') : 'SL'}${q.teaser ? ' · nur Titel' : ''}</span></div>` : null}
           </div>`)}
         </div>`)}

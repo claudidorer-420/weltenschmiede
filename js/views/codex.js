@@ -4,7 +4,7 @@ import { useStore } from '../core/store.js';
 import {
   app, vault, isGM, isRealGM, myUid, getIndex, noteById, updateNote, renameNote, moveNote, deleteNote, duplicateNote,
   createNote, createFolder, renameFolder, deleteFolder, allFolders, watchSecret, saveSecret, searchNotes, restoreNote,
-  purgeNote, setNoteVisibility, setSecretVisibility, col, setFolderMeta,
+  purgeNote, setNoteVisibility, setSecretVisibility, nurTitelFuerMich, col, setFolderMeta,
 } from '../core/app.js';
 import { ws, openNote, openView, setEditMode, forgetNote, openSearch, currentOf, isMobile } from '../core/workspace.js';
 import { settings, updateSettings } from '../core/settings.js';
@@ -30,6 +30,7 @@ export function shareDialog(doc) {
   const members = Object.values(vault.get().members || {}).filter((m) => m.role !== 'gm');
   return openModal(({ close }) => {
     const [only, setOnly] = useState(() => new Set(doc.only || []));
+    const [nurTitel, setNurTitel] = useState(() => new Set(doc.teaserOnly || []));
     const [mode, setMode] = useState(doc.visibility === 'players' ? ((doc.only || []).length ? 'some' : 'all') : 'gm');
     const [future, setFuture] = useState(doc.future !== false);
     const [teaser, setTeaser] = useState(!!doc.teaser);
@@ -39,9 +40,21 @@ export function shareDialog(doc) {
       setOnly(n);
       setMode(n.size ? 'some' : 'all');
     };
+    // Je Spieler: ganzer Inhalt oder nur die Überschrift
+    const toggleTitel = (uid) => {
+      const n = new Set(nurTitel);
+      if (n.has(uid)) n.delete(uid); else n.add(uid);
+      setNurTitel(n);
+    };
     const ok = () => close(mode === 'gm'
-      ? { visibility: 'gm', only: [], future: false, teaser: false }
-      : { visibility: 'players', only: mode === 'some' ? [...only] : [], future: mode === 'all' ? true : future, teaser });
+      ? { visibility: 'gm', only: [], future: false, teaser: false, teaserOnly: [] }
+      : {
+        visibility: 'players',
+        only: mode === 'some' ? [...only] : [],
+        future: mode === 'all' ? true : future,
+        teaser: mode === 'all' ? teaser : false,
+        teaserOnly: mode === 'some' ? [...nurTitel].filter((u) => only.has(u)) : [],
+      });
     return html`<div class="modal-body stack">
       <${Segmented} value=${mode} onChange=${(v) => { setMode(v); if (v !== 'some') setOnly(new Set()); }} options=${[
         { value: 'gm', label: 'Nur SL', icon: 'lock' },
@@ -49,11 +62,22 @@ export function shareDialog(doc) {
         { value: 'some', label: 'Bestimmte', icon: 'user' },
       ]} />
       ${mode === 'some' ? (members.length ? html`<div class="stack sm">
-        <div class="tiny faint">Nur die angehakten Mitspieler sehen dieses Dokument. Alle anderen finden es nicht – auch nicht über die Suche oder Links.</div>
-        ${members.map((m) => html`<label key=${m.uid || m.id} class="row nowrap share-row">
-          <input type="checkbox" checked=${only.has(m.uid || m.id)} onChange=${() => toggle(m.uid || m.id)} />
-          <${Avatar} name=${m.name} size="sm" /><span class="grow">${m.name || 'Mitspieler'}</span>
-        </label>`)}
+        <div class="tiny faint">Nur die angehakten Mitspieler sehen dieses Dokument. Alle anderen finden es nicht – auch nicht über die Suche oder Links. Rechts stellst du je Spieler ein, ob er den ganzen Inhalt oder nur die Überschrift sieht.</div>
+        ${members.map((m) => {
+          const uid = m.uid || m.id;
+          const an = only.has(uid);
+          const nur = nurTitel.has(uid);
+          return html`<div key=${uid} class="share-line">
+            <label class="row nowrap share-row grow">
+              <input type="checkbox" checked=${an} onChange=${() => toggle(uid)} />
+              <${Avatar} name=${m.name} size="sm" /><span class="grow ellipsis">${m.name || 'Mitspieler'}</span>
+            </label>
+            <button type="button" class=${`share-teaser${nur ? ' on' : ''}`} disabled=${!an}
+              title=${nur ? 'Sieht nur die Überschrift' : 'Sieht den ganzen Inhalt'} onClick=${() => toggleTitel(uid)}>
+              <${Icon} name=${nur ? 'eye-off' : 'eye'} size=${13} />${nur ? 'nur Überschrift' : 'ganzer Inhalt'}
+            </button>
+          </div>`;
+        })}
       </div>` : html`<div class="tiny faint">Noch keine Mitspieler in dieser Kampagne – lade zuerst jemanden ein.</div>`) : null}
       ${mode === 'all' ? html`<div class="tiny faint">Alle Mitspieler dieser Kampagne sehen das Dokument.</div>` : null}
       ${mode === 'gm' ? html`<div class="tiny faint">Nur du als Spielleitung siehst es.</div>` : null}
@@ -63,11 +87,12 @@ export function shareDialog(doc) {
           <span class="grow">und zukünftige Spieler</span>
         </label>
         <div class="tiny faint">${mode === 'all' ? 'Bei „Alle Spieler“ gilt das immer – auch für alle, die später dazukommen.' : 'Wer der Kampagne später beitritt, wird automatisch mit freigegeben.'}</div>
-        <label class="row nowrap share-row">
-          <input type="checkbox" checked=${teaser} onChange=${(e) => setTeaser(e.target.checked)} />
-          <span class="grow">Ohne Inhalt – nur die Überschrift</span>
-        </label>
-        <div class="tiny faint">Die Spieler sehen den Titel im Explorer, in der Suche und in Rückverweisen, der Text bleibt verborgen.</div>
+        ${mode === 'all' ? html`<label class="row nowrap share-row">
+            <input type="checkbox" checked=${teaser} onChange=${(e) => setTeaser(e.target.checked)} />
+            <span class="grow">Ohne Inhalt – nur die Überschrift</span>
+          </label>
+          <div class="tiny faint">Alle sehen den Titel im Explorer, in der Suche und in Rückverweisen, der Text bleibt verborgen.</div>`
+        : html`<div class="tiny faint">„Ohne Inhalt“ stellst du oben je Spieler ein – ${nurTitel.size ? `${nurTitel.size} ${nurTitel.size === 1 ? 'Spieler sieht' : 'Spieler sehen'} nur die Überschrift.` : 'aktuell sehen alle Angehakten den ganzen Inhalt.'}</div>`}
       </div>` : null}
     </div><div class="modal-foot">
       <${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//>
@@ -94,7 +119,8 @@ export async function shareNoteDialog(n) {
 export function shareToast(r) {
   if (r.visibility === 'gm') return 'Nur für die Spielleitung';
   const wer = r.only.length ? `für ${r.only.length} Mitspieler` : 'für alle Spieler';
-  return `${r.teaser ? 'Überschrift' : 'Freigegeben'} ${wer}${r.future && r.only.length ? ' (auch für spätere)' : ''}`;
+  const nur = (r.teaserOnly || []).length;
+  return `${r.teaser ? 'Überschrift' : 'Freigegeben'} ${wer}${nur ? `, davon ${nur}× nur die Überschrift` : ''}${r.future && r.only.length ? ' (auch für spätere)' : ''}`;
 }
 
 // Freigabe für mehrere Notizen auf einmal (Ordner oder Mehrfachauswahl)
@@ -197,7 +223,9 @@ async function shareAsHandout(n) {
 export function shareHint(n) {
   if (n.visibility !== 'players') return 'Nur SL';
   const wer = (n.only || []).length ? `${n.only.length} Mitspieler` : 'Alle';
-  return n.teaser ? `${wer} · ohne Inhalt` : wer;
+  if (n.teaser) return `${wer} · ohne Inhalt`;
+  const nur = (n.teaserOnly || []).length;
+  return nur ? `${wer} · ${nur}× nur Titel` : wer;
 }
 
 export function noteMenu(e, n) {
@@ -584,22 +612,37 @@ function FileExplorer() {
     const dragged = { kind: drag.kind, id: drag.id };
     if (dragged.kind === 'folder' && kind === 'folder' && (target.path === dragged.id || target.path.startsWith(`${dragged.id}/`))) return;
     const dragKey = dragged.kind === 'folder' ? `f:${dragged.id}` : dragged.kind === 'file' ? `x:${dragged.id}` : dragged.id;
-    // Ist die gezogene Zeile Teil einer Mehrfachauswahl, wandern alle markierten Notizen mit
-    const mehr = sel.length > 1 && sel.includes(dragKey)
-      ? selItems().filter((r) => r.kind === 'note').map((r) => r.item) : null;
+    // Ist die gezogene Zeile Teil einer Mehrfachauswahl, wandert die ganze Auswahl mit
+    const mehr = sel.length > 1 && sel.includes(dragKey) ? selItems() : null;
     if (mehr?.length) {
       const ziel = zone === 'into' && kind === 'folder' ? target.path : (kind === 'folder' ? parentOf(target.path) : (target.folder || ''));
-      for (const n of mehr) if ((n.folder || '') !== ziel) await moveNote(n.id, ziel);
+      // Ordner nicht in sich selbst oder einen eigenen Unterordner schieben
+      const gueltig = mehr.filter((r) => !(r.kind === 'folder' && (ziel === r.item.path || ziel.startsWith(`${r.item.path}/`))));
+      const neueKeys = [];
+      for (const r of gueltig) {
+        if (r.kind === 'note') {
+          if ((r.item.folder || '') !== ziel) await moveNote(r.item.id, ziel);
+          neueKeys.push(r.item.id);
+        } else if (r.kind === 'folder') {
+          const name = r.item.path.split('/').pop();
+          const neu = ziel ? `${ziel}/${name}` : name;
+          if (neu !== r.item.path) await renameFolder(r.item.path, neu).catch(() => {});
+          neueKeys.push(`f:${neu}`);
+        } else {
+          if ((r.item.folder || '') !== ziel) await updateFileMeta(cid, r.item.id, { folder: ziel }).catch(() => {});
+          neueKeys.push(`x:${r.item.id}`);
+        }
+      }
       if (zone !== 'into' || kind !== 'folder') {
-        const ids = mehr.map((n) => n.id);
         const targetKey = kind === 'folder' ? `f:${target.path}` : kind === 'file' ? `x:${target.id}` : target.id;
-        const keys = visibleKeys(ziel).filter((k) => !ids.includes(k));
+        const keys = visibleKeys(ziel).filter((k) => !neueKeys.includes(k) && !sel.includes(k));
         const at = keys.indexOf(targetKey);
-        keys.splice(at < 0 ? keys.length : at + (zone === 'after' ? 1 : 0), 0, ...ids);
+        keys.splice(at < 0 ? keys.length : at + (zone === 'after' ? 1 : 0), 0, ...neueKeys);
         saveOrder(ziel, keys);
         if (sort !== 'custom') { setSort('custom'); localStorage.setItem('ws.sort', 'custom'); }
       }
-      toast(`${mehr.length} Notizen verschoben`, 'success');
+      setSel([]);
+      toast(`${gueltig.length} ${gueltig.length === 1 ? 'Eintrag' : 'Einträge'} nach „${ziel || 'Hauptordner'}“`, 'success');
       return;
     }
     if (zone === 'into' && kind === 'folder') {
@@ -632,6 +675,15 @@ function FileExplorer() {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData(kind === 'note' ? 'text/x-note' : kind === 'folder' ? 'text/x-folder' : 'text/x-file', id);
       if (sel.length && !sel.includes(keyOf(item, kind))) setSel([]);   // außerhalb der Auswahl gezogen
+      else if (sel.length > 1) {
+        // Beim Ziehen einer Mehrfachauswahl das Schattenbild beschriften
+        const ghost = document.createElement('div');
+        ghost.className = 'drag-ghost';
+        ghost.textContent = `${sel.length} Einträge`;
+        document.body.appendChild(ghost);
+        e.dataTransfer.setDragImage(ghost, 12, 12);
+        setTimeout(() => ghost.remove(), 0);
+      }
       setDrag({ id, kind, over: null, zone: null });
     },
     onDragEnd: () => setDrag({ id: null, kind: null, over: null, zone: null }),
@@ -668,14 +720,21 @@ function FileExplorer() {
       const t = oben > 0 ? -Math.min(1, oben) : unten > 0 ? Math.min(1, unten) : 0;
       dy = Math.sign(t) * SCROLL_MAX * t * t;   // quadratisch: außen schneller, innen sanft
     };
+    const stop = () => { dy = 0; };
     const step = () => {
       if (dy) el()?.scrollBy(0, dy);
       raf = requestAnimationFrame(step);
     };
-    document.addEventListener('dragover', onOver);
+    // In der Abfangphase lauschen: die Zeilen stoppen das Ereignis, sonst käme es hier nie an
+    // und das Scrollen hörte nicht mehr auf, sobald der Zeiger wieder über einer Zeile ist.
+    document.addEventListener('dragover', onOver, true);
+    document.addEventListener('drop', stop, true);
+    document.addEventListener('dragend', stop, true);
     raf = requestAnimationFrame(step);
     return () => {
-      document.removeEventListener('dragover', onOver);
+      document.removeEventListener('dragover', onOver, true);
+      document.removeEventListener('drop', stop, true);
+      document.removeEventListener('dragend', stop, true);
       cancelAnimationFrame(raf);
     };
   }, [drag.id]);
@@ -1084,7 +1143,7 @@ function GmSecret({ note }) {
       ${gm ? html`<button type="button" class="icon-btn sm" title=${edit ? 'Fertig' : 'Bearbeiten'} onClick=${(e) => { e.preventDefault(); if (edit) save.flush?.(body); setEdit(!edit); }}><${Icon} name=${edit ? 'check' : 'pencil'} size=${14} /></button>` : null}
     </summary>
     <div class="inner">
-      ${!gm && doc.teaser ? html`<div class="small faint">Hier gibt es etwas – die Spielleitung hat den Text aber noch nicht freigegeben.</div>`
+      ${!gm && nurTitelFuerMich(doc) ? html`<div class="small faint">Hier gibt es etwas – die Spielleitung hat den Text aber noch nicht freigegeben.</div>`
         : edit
         ? html`<${AutoTextarea} value=${body} onInput=${(e) => { setBody(e.target.value); save(e.target.value); }} placeholder="Nur du siehst das – wahre Motive, Fallen, Wendungen … (Markdown & [[Links]] funktionieren)" />`
         : body ? html`<${MarkdownView} src=${body} />` : html`<div class="small faint">Geheimnisse, die Spieler nie sehen – außer du gibst genau dieses hier über das Personen-Symbol frei (liegt technisch getrennt, geschützt durch die Firestore-Regeln).</div>`}

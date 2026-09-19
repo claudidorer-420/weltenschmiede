@@ -50,12 +50,20 @@ const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(dat
 const oauthError = (error, description, status = 400) => json({ error, error_description: description }, status);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+// Erlaubte Rücksprungadressen: https bei bekannten KI-Anbietern, http nur lokal,
+// dazu die eigenen Adressschemata der Desktop-Programme (z. B. vscode://, cursor://).
+const DEFAULT_HOSTS = 'claude.ai,claude.com,anthropic.com,chatgpt.com,openai.com,google.com,googleusercontent.com,cursor.com,cursor.sh,vscode.dev,github.com,githubusercontent.com,windsurf.com,codeium.com,zed.dev,raycast.com,perplexity.ai,mistral.ai,localhost,127.0.0.1';
+const DEFAULT_SCHEMES = 'vscode,vscode-insiders,cursor,windsurf,zed,claude,lmstudio,raycast,msty,cherrystudio,witsy';
+
 function allowedRedirect(env, uri) {
   let u;
   try { u = new URL(uri); } catch { return false; }
-  const hosts = String(env.ALLOWED_REDIRECT_HOSTS || 'claude.ai,claude.com,localhost,127.0.0.1').split(',').map((x) => x.trim()).filter(Boolean);
-  const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
-  if (u.protocol !== 'https:' && !(local && u.protocol === 'http:')) return false;
+  const schemes = String(env.ALLOWED_REDIRECT_SCHEMES || DEFAULT_SCHEMES).split(',').map((x) => x.trim()).filter(Boolean);
+  if (schemes.includes(u.protocol.replace(':', ''))) return true;           // eigenes Schema eines Programms
+  const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]';
+  if (local) return u.protocol === 'http:' || u.protocol === 'https:';      // Schleifenadresse (Gemini CLI & Co.)
+  if (u.protocol !== 'https:') return false;
+  const hosts = String(env.ALLOWED_REDIRECT_HOSTS || DEFAULT_HOSTS).split(',').map((x) => x.trim()).filter(Boolean);
   return hosts.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`));
 }
 
@@ -258,7 +266,15 @@ async function mcp(req, env, origin) {
     const batch = Array.isArray(body);
     const out = (await Promise.all((batch ? body : [body]).map((m) => handleRpc(m, session)))).filter(Boolean);
     if (!out.length) return new Response(null, { status: 202, headers: CORS });
-    return json(batch ? out : out[0]);
+    const data = batch ? out : out[0];
+    // Manche Clients nehmen nur einen Ereignisstrom an – dann als SSE antworten (Streamable HTTP)
+    const accept = req.headers.get('accept') || '';
+    if (accept.includes('text/event-stream') && !accept.includes('application/json')) {
+      return new Response(`event: message\ndata: ${JSON.stringify(data)}\n\n`, {
+        headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache', connection: 'keep-alive', ...CORS },
+      });
+    }
+    return json(data);
   } catch (e) {
     if (e.auth) return unauthorized(origin, e.message);
     throw e;
@@ -272,8 +288,9 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...CORS, 'access-control-max-age': '86400' } });
     try {
       const path = url.pathname.replace(/\/+$/, '') || '/';
-      if (path === '/.well-known/oauth-protected-resource' || path === '/.well-known/oauth-protected-resource/mcp') return json(resourceMetadata(origin));
-      if (path === '/.well-known/oauth-authorization-server' || path === '/.well-known/openid-configuration') return json(serverMetadata(origin));
+      // Einige Clients hängen den Pfad der Ressource an (RFC 8414) – alle Varianten beantworten
+      if (path.startsWith('/.well-known/oauth-protected-resource')) return json(resourceMetadata(origin));
+      if (path.startsWith('/.well-known/oauth-authorization-server') || path.startsWith('/.well-known/openid-configuration')) return json(serverMetadata(origin));
       if (path === '/register' && req.method === 'POST') return register(req, env);
       if (path === '/authorize') return authorize(req, env);
       if (path === '/token' && req.method === 'POST') return token(req, env);

@@ -455,10 +455,17 @@ export function playerLens() {
   return a.role !== 'gm' || a.viewAsPlayer;
 }
 
-// Freigabe „ohne Inhalt“: Spieler bekommen nur die Überschrift – der Text wird hier entfernt,
-// damit er auch in Suche, Rückverweisen, Graph und Tags nicht auftaucht.
+// Freigabe „nur die Überschrift“: gilt entweder für alle (teaser) oder für einzelne Spieler (teaserOnly).
+// Der Text wird hier entfernt, damit er auch in Suche, Rückverweisen, Graph und Tags nicht auftaucht.
+export function nurTitelFuerMich(d) {
+  if (!d) return false;
+  if (d.teaser) return true;
+  const u = app.get().user?.uid;
+  return !!u && (d.teaserOnly || []).includes(u);
+}
+
 export function stripTeaser(n) {
-  return n && n.teaser && playerLens() ? { ...n, body: '', links: [], tags: [], props: {} } : n;
+  return n && playerLens() && nurTitelFuerMich(n) ? { ...n, body: '', links: [], tags: [], props: {}, teaser: true } : n;
 }
 
 export function visibleNotes() {
@@ -584,10 +591,15 @@ export async function setNoteVisibility(id, visibility, only = [], opts = {}) {
 }
 
 // Felder für die Sichtbarkeit eines Dokuments – onlyN wird für die Abfrage der Spieler gebraucht
-// future: neue Mitspieler werden später automatisch ergänzt · teaser: Spieler sehen nur die Überschrift
+// future: neue Mitspieler werden später automatisch ergänzt
+// teaser: alle sehen nur die Überschrift · teaserOnly: diese Spieler sehen nur die Überschrift
 export function visFields(visibility, only = [], opts = {}) {
   const list = visibility === 'players' ? [...new Set(only.filter(Boolean))] : [];
-  return { visibility, only: list, onlyN: list.length, future: !!opts.future, teaser: visibility === 'players' && !!opts.teaser };
+  const nurTitel = visibility === 'players' ? [...new Set((opts.teaserOnly || []).filter(Boolean))].filter((u) => !list.length || list.includes(u)) : [];
+  return {
+    visibility, only: list, onlyN: list.length, future: !!opts.future,
+    teaser: visibility === 'players' && !!opts.teaser, teaserOnly: nurTitel,
+  };
 }
 
 // Abfragen, mit denen ein Spieler seine sichtbaren Dokumente bekommt (für alle + nur für ihn)
