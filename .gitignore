@@ -6,3 +6,5 @@ tools/sdxl/models/
 tools/sdxl/out/
 tools/sdxl/uv.exe
 tools/sdxl/*.log
+tools/sdxl/out-lauf1/
+tools/sdxl/*.png

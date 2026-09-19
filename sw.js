@@ -2,7 +2,7 @@
 // - App-Dateien: "network first" (Updates greifen sofort), offline aus dem Cache
 // - CDN-Bibliotheken (versionierte URLs): "cache first"
 // tools/publish.ps1 erhöht bei jeder Veröffentlichung die VERSION und aktualisiert die Dateiliste.
-const VERSION = 'ws-2026-09-19-0306';
+const VERSION = 'ws-2026-09-19-0558';
 const CDN_CACHE = 'ws-cdn-v1';
 // Kartenbausteine (Texturen, Stempel) sind unveränderlich und überleben Updates
 const ASSET_CACHE = 'ws-assets-v1';

@@ -28,7 +28,7 @@ TEX_PROMPT = (
     "8k albedo map, uniform lighting across the whole frame"
 )
 OBJ_PROMPT = (
-    "top-down flat lay photograph of one single {en}, camera directly overhead at 90 degrees, bird's eye view: {look}. "
+    "photograph of exactly one {en} from directly above, camera overhead at 90 degrees, bird's eye view: {look}. "
     "the complete object centred with empty margin all around, isolated on a plain seamless white studio backdrop, "
     "orthographic top view, the camera looks straight down onto the object and no part is seen from the side, "
     "even soft studio daylight from above, no cast shadow, photorealistic, tack sharp focus, extremely detailed, "
@@ -41,6 +41,7 @@ NEG_COMMON = (
 NEG_OBJ = NEG_COMMON + (
     ", perspective view, side view, front view, three-quarter view, eye level, isometric, tilted camera, horizon, "
     "background scenery, floor, wall, table surface, ground, grass, multiple objects, duplicates, collage, grid of items, "
+    "flat lay, knolling, product arrangement, set of tools, camera, modern object, electronics, book stack, "
     "frame, border, vignette, drop shadow, cropped, cut off, out of frame"
 )
 NEG_TEX = NEG_COMMON + (

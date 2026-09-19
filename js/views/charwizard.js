@@ -449,6 +449,14 @@ function StepBasis({ d, set, setEdition }) {
   </div>`;
 }
 
+// Kampfstile mit vollem Regeltext – dieselbe Liste im Assistenten und beim Stufenaufstieg
+function styleItems(ed, clsKey) {
+  const nur14 = ['style-blind', 'style-interception', 'style-thrown', 'style-unarmed'];
+  return featsFor(ed, ['style'])
+    .filter((f) => ed === '2024' || !nur14.includes(f.key) || clsKey === 'kaempfer')
+    .map((f) => ({ key: f.key, name: f.name.replace('Kampfstil: ', ''), desc: f.desc }));
+}
+
 function StepKlasse({ d, set }) {
   const cls = findClass(d.cls);
   const subLvl = cls ? subclassLevel(cls.key, d.edition) : 3;
@@ -475,8 +483,8 @@ function StepKlasse({ d, set }) {
           items=${(cls.subclasses[d.edition] || cls.subclasses[2014]).map((s) => ({ key: s, name: s, desc: SUBCLASS_DESC[s] || '' }))} />
       <//>` : html`<div class="small faint">${cls.subLabel} wählst du auf Stufe ${subLvl}.</div>`}
       ${cls.style && d.level >= cls.style ? html`<${Field} label="Kampfstil">
-        <${Select} value=${d.style} onChange=${(v) => set({ style: v })} options=${[{ value: '', label: 'Bitte wählen …' }, ...featsFor(d.edition, ['style']).filter((f) => d.edition === '2024' || !['style-blind', 'style-interception', 'style-thrown', 'style-unarmed'].includes(f.key) || cls.key === 'kaempfer').map((f) => ({ value: f.key, label: f.name.replace('Kampfstil: ', '') }))]} />
-        ${d.style ? html`<div class="hint">${findFeat(d.style)?.desc}</div>` : null}
+        <${BG3Pick} compact value=${d.style || ''} onChange=${(v) => set({ style: v })} empty="Wähle links einen Kampfstil – hier steht, was er bewirkt."
+          items=${styleItems(d.edition, cls.key)} />
       <//>` : null}
       <details><summary class="small muted">Klassenmerkmale bis Stufe ${d.level}</summary>
         <div class="feat-list">${feats.map((f) => html`<div><b>St. ${f.level} · ${f.name}</b>${f.desc ? html` <span class="small muted">– ${f.desc}</span>` : null}</div>`)}</div>
@@ -501,7 +509,11 @@ function StepHerkunft({ d, set }) {
     ${sp ? html`<div class="card stack">
       <div class="card-head" style="margin:0"><h3><${Icon} name="globe" size=${18} />${sp.name}</h3></div>
       ${sp.subs ? html`<${Field} label="Unterart"><div class="pick-grid">${sp.subs.map((s) => html`<${Pick} key=${s.key} active=${d.subspeciesKey === s.key} onClick=${() => set({ subspeciesKey: s.key, asiPicks: [], tashaAssign: [], anySkills: [], variantFeat: '', variantFeatAb: '' })} title=${s.name} sub=${s.asi ? Object.entries(s.asi).map(([k, v]) => `${AB_SHORT[k]} +${v}`).join(' · ') : ''} />`)}</div><//>` : null}
-      ${sp.option ? html`<${Field} label=${sp.option.label}><${Select} value=${d.speciesOption} onChange=${(v) => set({ speciesOption: v })} options=${[{ value: '', label: 'Bitte wählen …' }, ...sp.option.list.map((o) => ({ value: o.key, label: o.name }))]} />${optionOf(d)?.note ? html`<div class="hint">${optionOf(d).note}</div>` : null}<//>` : null}
+      ${sp.option ? html`<${Field} label=${sp.option.label}>
+        <${BG3Pick} compact value=${d.speciesOption || ''} onChange=${(v) => set({ speciesOption: v })}
+          empty=${`Wähle links – hier steht, was die ${sp.option.label} mitbringt.`}
+          items=${sp.option.list.map((o) => ({ key: o.key, name: o.name, desc: o.note || '' }))} />
+      <//>` : null}
       ${st.sizeOpts.length > 1 ? html`<${Field} label="Größe"><${Segmented} value=${st.size} onChange=${(v) => set({ size: v })} options=${st.sizeOpts} /><//>` : null}
       <div class="feat-list">${[...(sp.traits || []), ...(subOf(d)?.traits || [])].map(([n, t]) => html`<div><b>${n}</b> <span class="small muted">– ${t}</span></div>`)}</div>
     </div>` : null}
@@ -1011,7 +1023,8 @@ function LevelUp({ c, close }) {
         ${needSub ? html`<${Field} label=${cls.subLabel}><${BG3Pick} compact value=${sub} onChange=${setSub}
           items=${(cls.subclasses[ed] || cls.subclasses[2014]).map((s) => ({ key: s, name: s, desc: SUBCLASS_DESC[s] || '' }))} /><//>` : null}
         ${feats.some((f) => f.kind === 'sub') && !needSub ? html`<div class="small muted">Neues Merkmal deiner Unterklasse ${entry?.subclass ? `(${entry.subclass})` : ''} – Details im Spielerhandbuch.</div>` : null}
-        ${needStyle ? html`<${Field} label="Kampfstil"><${Select} value=${style} onChange=${setStyle} options=${[{ value: '', label: 'Bitte wählen …' }, ...featsFor(ed, ['style']).map((f) => ({ value: f.key, label: f.name.replace('Kampfstil: ', '') }))]} /><//>` : null}
+        ${needStyle ? html`<${Field} label="Kampfstil"><${BG3Pick} compact value=${style} onChange=${setStyle}
+          empty="Wähle links einen Kampfstil – hier steht, was er bewirkt." items=${styleItems(ed, clsKey)} /><//>` : null}
         ${asiF ? html`<div class="stack sm">
           <div class="row"><b class="grow">${asiF.kind === 'boon' ? 'Epische Gabe' : 'Attributswerterhöhung'}</b>
             <${Segmented} value=${asi.type} onChange=${(v) => setAsi({ type: v })} options=${[{ value: 'asi', label: asiF.kind === 'boon' ? '+1 (bis 30)' : '+2 / +1+1' }, { value: 'feat', label: 'Talent' }]} /></div>

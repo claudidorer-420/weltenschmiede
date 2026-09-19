@@ -30,6 +30,14 @@ const GOALS = ['Kampf bis zum Tod', 'Hinterhalt', 'Verteidigung', 'Flucht', 'Bos
 const blankMonster = (origin = '') => ({ id: uid(6), qty: 1, name: '', origin, note: '' });
 const defaultDraft = () => ({ levels: [5, 5, 5, 5], monsters: [blankMonster()], environment: '', goal: '', extra: '', paint: false });
 
+// Alte gespeicherte Entwürfe hatten „Standard D&D (5e)“ fest vorbelegt – einmalig leeren,
+// damit die Gegnerzeile frei startet (Genre und Name sind jetzt Freitext).
+function migrateDraft(d) {
+  if (!d?.monsters?.length) return d;
+  if (!d.monsters.some((m) => m.origin === 'Standard D&D (5e)')) return d;
+  return { ...d, monsters: [blankMonster()] };
+}
+
 // Namensfeld mit Suchliste: Monster der gewählten Welt (Wiki-Listen, bei D&D SRD + offizielle Bücher) und das eigene Bestiarium
 function MonsterNameInput({ value, origin, onChange, bestiary }) {
   const [open, setOpen] = useState(false);
@@ -151,7 +159,7 @@ export function EncounterView({ tabId, params = {} }) {
   const campEd = useStore(app, (s) => s.campaign?.settings?.rulesVersion);
   const devEd = useStore(settings, (s) => s.rulesVersion);
   const version = (campEd || devEd) === '2024' ? '2024' : '2014';
-  const [draft, setDraft] = useState(() => settings.get().encounterDraft || defaultDraft());
+  const [draft, setDraft] = useState(() => migrateDraft(settings.get().encounterDraft) || defaultDraft());
   const [result, setResult] = useState(null);
   const [model, setModel] = useState(null);
   const [count, setCount] = useState(4);
