@@ -5,17 +5,8 @@
    "src": "folterbank",
    "name": "Folterbank",
    "cat": "dungeon",
-   "w": 1.541,
-   "h": 1.6,
-   "rough": 1
-  },
-  "streckbett": {
-   "id": "streckbett",
-   "src": "streckbett",
-   "name": "Streckbett",
-   "cat": "dungeon",
-   "w": 2.2,
-   "h": 2.122,
+   "w": 1.6,
+   "h": 1.298,
    "rough": 1
   },
   "opferaltar": {
@@ -23,17 +14,8 @@
    "src": "opferaltar",
    "name": "Blutopfer-Altar",
    "cat": "dungeon",
-   "w": 1.984,
-   "h": 2.0,
-   "block": 1
-  },
-  "runenstein": {
-   "id": "runenstein",
-   "src": "runenstein",
-   "name": "Runenstein",
-   "cat": "dungeon",
-   "w": 0.898,
-   "h": 1.0,
+   "w": 2.0,
+   "h": 1.953,
    "block": 1
   },
   "hexenkessel_feuer": {
@@ -41,7 +23,7 @@
    "src": "hexenkessel_feuer",
    "name": "Hexenkessel über Feuer",
    "cat": "dungeon",
-   "w": 1.098,
+   "w": 1.016,
    "h": 1.098,
    "rough": 1
   },
@@ -51,7 +33,7 @@
    "name": "Skelett am Boden",
    "cat": "dungeon",
    "w": 1.4,
-   "h": 1.361,
+   "h": 1.314,
    "layer": "floor"
   },
   "juwelentruhe": {
@@ -59,8 +41,8 @@
    "src": "juwelentruhe",
    "name": "Juwelentruhe",
    "cat": "behaelter",
-   "w": 1.0,
-   "h": 0.894,
+   "w": 0.824,
+   "h": 1.0,
    "rough": 1
   },
   "waffenstaender": {
@@ -68,8 +50,8 @@
    "src": "waffenstaender",
    "name": "Waffenständer",
    "cat": "werkzeug",
-   "w": 2.0,
-   "h": 1.945,
+   "w": 1.988,
+   "h": 2.0,
    "rough": 1
   },
   "katapult": {
@@ -77,7 +59,7 @@
    "src": "katapult",
    "name": "Katapult",
    "cat": "werkzeug",
-   "w": 2.361,
+   "w": 2.165,
    "h": 2.4,
    "block": 1
   },
@@ -86,8 +68,8 @@
    "src": "rammbock",
    "name": "Rammbock",
    "cat": "werkzeug",
-   "w": 2.914,
-   "h": 3.0,
+   "w": 3.0,
+   "h": 2.961,
    "rough": 1
   },
   "baerenfalle": {
@@ -95,16 +77,59 @@
    "src": "baerenfalle",
    "name": "Bärenfalle",
    "cat": "dungeon",
-   "w": 0.761,
-   "h": 0.8
+   "w": 0.8,
+   "h": 0.718
   },
   "kerzenleuchter_boden": {
    "id": "kerzenleuchter_boden",
    "src": "kerzenleuchter_boden",
    "name": "Bodenleuchter",
    "cat": "licht",
-   "w": 0.502,
+   "w": 0.6,
+   "h": 0.565
+  },
+  "galgen": {
+   "id": "galgen",
+   "src": "galgen",
+   "name": "Galgen",
+   "cat": "dungeon",
+   "w": 1.659,
+   "h": 2.0,
+   "block": 1
+  },
+  "pranger": {
+   "id": "pranger",
+   "src": "pranger",
+   "name": "Pranger",
+   "cat": "dungeon",
+   "w": 1.6,
+   "h": 1.243,
+   "rough": 1
+  },
+  "zauberbuch": {
+   "id": "zauberbuch",
+   "src": "zauberbuch",
+   "name": "Aufgeschlagenes Zauberbuch",
+   "cat": "moebel",
+   "w": 0.8,
+   "h": 0.714
+  },
+  "kristallkugel": {
+   "id": "kristallkugel",
+   "src": "kristallkugel",
+   "name": "Kristallkugel",
+   "cat": "moebel",
+   "w": 0.486,
    "h": 0.6
+  },
+  "goldhaufen": {
+   "id": "goldhaufen",
+   "src": "goldhaufen",
+   "name": "Goldhaufen",
+   "cat": "behaelter",
+   "w": 0.98,
+   "h": 1.0,
+   "layer": "floor"
   }
  },
  "textures": {
